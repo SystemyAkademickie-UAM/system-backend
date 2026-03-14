@@ -1,0 +1,36 @@
+name: Zbuduj i Wypchnij Obraz
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Pobranie kodu
+        uses: actions/checkout@v4
+
+      - name: Wymuszenie środowiska Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Logowanie do GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Budowanie i wysyłanie obrazu
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/SystemyAkademickie-UAM/system-backend:latest
