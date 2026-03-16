@@ -33,4 +33,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/SystemyAkademickie-UAM/system-backend:latest
+          tags: ghcr.io/systemyakademickie-uam/system-backend:latest
