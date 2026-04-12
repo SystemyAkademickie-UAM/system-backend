@@ -1,22 +1,18 @@
-# ETAP 1: Budowanie (GitHub)
+# Build stage
 FROM node:24-alpine AS builder
 WORKDIR /app
-# Kopiowaniue tylko plików z listą paczek
 COPY package*.json ./
-# Instalowanie zależności
-RUN npm install
-# Kopiowanie reszty kodu
+RUN npm ci
 COPY . .
+RUN npm run build
 
-# ETAP 2: Uruchamianie (serwer)
+# Runtime: listen on 8080 (matches host nginx location /api/ → proxy_pass http://localhost:8080)
 FROM node:24-alpine
 WORKDIR /app
-# Kopiowanie tylko gotowych paczek produkcyjnych (odchudza obraz)
+ENV NODE_ENV=production
+ENV PORT=8080
 COPY package*.json ./
-RUN npm install --omit=dev
-# Kopiowanie same kodu z Etapu 1
-COPY --from=builder /app ./
-# Serwer nasłuchuje na porcie 3000
-EXPOSE 3000
-# Komenda startowa
-CMD ["npm", "start"]
+RUN npm ci --omit=dev
+COPY --from=builder /app/dist ./dist
+EXPOSE 8080
+CMD ["node", "dist/main.js"]
