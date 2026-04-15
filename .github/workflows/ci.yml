@@ -15,11 +15,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use Node.js 24
+      - name: Use Node.js 24.14.1
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '24.14.1'
           cache: npm
+
+      - name: Use npm 11.11.0
+        run: npm install -g npm@11.11.0
 
       - name: Install dependencies
         run: npm install
