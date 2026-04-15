@@ -2,10 +2,10 @@
 
 ## Stack versions
 
-- **Node.js:** 24.x
+- **Node.js / npm:** see [prerequisites.md](./prerequisites.md) (local toolchain pin).
 - **NestJS:** 11.x
 
-Use `.nvmrc` with nvm / nvm-windows; GitHub Actions uses Node 24.
+Use `.nvmrc` with nvm / nvm-windows. CI uses Node **24.14.1** (see `.github/workflows/ci.yml`).
 
 ## Workflow
 
@@ -18,7 +18,8 @@ Exercise endpoints with any HTTP client (curl, REST client, automated tests).
 ## CI
 
 - `.github/workflows/ci.yml` — install, test, build on `push` / `pull_request` to `main`.
-- `.github/workflows/docker-image.yml` — build and push the Docker image on `push` to `main`.
+- `.github/workflows/docker-build.yml` — verify a Docker image build on `push` to `main` (no registry push).
+- `.github/workflows/docker-publish.yml` — build and push the image on `push` to `production` (GHCR).
 
 ## Environment variables
 
