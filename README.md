@@ -29,6 +29,11 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 
 - `GET /api/counter/health` — smoke check `{ "ok": true }`
 - `POST /api/counter/increment` — body `{ "currentCount": number }` → `{ "count": number }` (`201`)
+- `GET /api/auth/saml/status` — SAML configuration checklist
+- `GET /api/auth/saml/metadata` — SP metadata XML (PIONIER.id / IdP)
+- `GET /api/auth/saml/login` — start SAML SSO (`302` to IdP)
+- `POST /api/auth/saml/acs` — SAML Assertion Consumer Service
+- `GET /api/auth/saml/me` — session JWT from cookie (smoke)
 
 Details in [docs/api.md](./docs/api.md).
 
