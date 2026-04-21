@@ -2,11 +2,11 @@
 
 ## Requirements
 
-- **Node.js** 24.x (see `.nvmrc`)
-- **npm** 10+ (bundled with Node 24). Run `npm install` once to create `package-lock.json`, commit it, then prefer `npm ci` for reproducible installs (switch CI to `npm ci` after the lockfile is in the repo).
+Install the **pinned Node.js and npm versions** first: [prerequisites.md](./prerequisites.md).
+
 - **Docker Engine** (optional), if you run the service from the image instead of Node on the host
 
-Optional on Windows: **nvm-windows** to match Node 24.
+After prerequisites, run `npm install` once to create `package-lock.json`, commit it, then prefer `npm ci` for reproducible installs once the lockfile is in the repo.
 
 ## Clone and install
 

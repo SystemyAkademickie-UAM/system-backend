@@ -13,7 +13,7 @@ The process listens on **8080** inside the container (`PORT=8080`), which matche
 
 ## Helper scripts (Docker CLI only)
 
-From the repository root:
+From this service directory (`system-backend`, where this `docs/` folder lives next to `scripts/`):
 
 | Platform   | Command |
 | ---------- | ------- |
@@ -24,7 +24,10 @@ Optional: set `IMAGE_NAME` to override the image tag. For extra `docker run` fla
 
 ## CI image
 
-`.github/workflows/docker-image.yml` builds and pushes this Dockerfile (for example to GHCR). The container listens on **8080**.
+- `.github/workflows/docker-build.yml` — builds this Dockerfile on `push` to `main` (verification only).
+- `.github/workflows/docker-publish.yml` — builds and pushes on `push` to `production` (for example to GHCR).
+
+The container listens on **8080**. The `Dockerfile` uses **Node.js 24.14.1** (Alpine) and **npm 11.11.0** during install, matching [prerequisites.md](./prerequisites.md).
 
 ## CORS
 
