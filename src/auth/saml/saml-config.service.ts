@@ -111,6 +111,25 @@ export class SamlConfigService {
   }
 
   /**
+   * Whether PEM material actually loaded (paths readable / inline non-empty).
+   * When env `requirements` are true but these are false, fix paths or mount secrets (common in Docker).
+   */
+  getPemMaterialsLoaded(): {
+    idpCert: boolean;
+    spPublicCert: boolean;
+    spPrivateKey: boolean;
+  } {
+    const idpCert = this.getIdpCert();
+    const spPublicCert = this.getSpPublicCert();
+    const spPrivateKey = this.getSpPrivateKey();
+    return {
+      idpCert: idpCert !== undefined && idpCert.length > 0,
+      spPublicCert: spPublicCert !== undefined && spPublicCert.length > 0,
+      spPrivateKey: spPrivateKey !== undefined && spPrivateKey.length > 0,
+    };
+  }
+
+  /**
    * Options passed to `@node-saml/passport-saml` Strategy (extends `SamlConfig`).
    */
   buildPassportSamlOptions(): PassportSamlConfig {

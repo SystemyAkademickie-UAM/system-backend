@@ -35,6 +35,7 @@ export class SamlAuthController {
       samlReady: this.bootstrap.isReady(),
       configurationComplete: complete,
       requirements: this.samlConfig.getRequirementsPresence(),
+      pemMaterialLoaded: this.samlConfig.getPemMaterialsLoaded(),
     };
   }
 
