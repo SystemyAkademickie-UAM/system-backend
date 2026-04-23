@@ -79,6 +79,8 @@ If any required value is missing, **`/api/auth/saml/login`**, **`/api/auth/saml/
 
 Returns whether SAML is configured, plus a boolean checklist for operators.
 
+The `requirements` object only means the related **environment variables are set**. **`configurationComplete`** and **`samlReady`** additionally require **PEM material to load** (see **`pemMaterialLoaded`**). If `requirements` are all `true` but `pemMaterialLoaded` entries are `false`, fix **file paths** (e.g. use absolute paths or correct bind mounts in Docker — relative paths like `./../secrets/` depend on the process working directory).
+
 **GET `/api/auth/saml/metadata`**
 
 Returns **`200`** with **`Content-Type: application/xml`** — SP metadata for IdPs and federation registration.
