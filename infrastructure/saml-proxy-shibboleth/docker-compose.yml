@@ -1,0 +1,24 @@
+# Local SAML proxy: Shibboleth IdP (LDAP demo users) + UAM IdP metadata for federation work.
+# Browser TLS: https://localhost:14443/idp/...
+services:
+  ldap:
+    build: ./ldap
+    networks:
+      - saml
+
+  proxy-idp:
+    build: ./idp
+    depends_on:
+      - ldap
+    ports:
+      - "14443:4443"
+    environment:
+      JETTY_MAX_HEAP: 512m
+      JETTY_BROWSER_SSL_KEYSTORE_PASSWORD: changeme
+      JETTY_BACKCHANNEL_SSL_KEYSTORE_PASSWORD: changeme
+    networks:
+      - saml
+
+networks:
+  saml:
+    driver: bridge

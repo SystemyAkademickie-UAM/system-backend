@@ -21,6 +21,10 @@ Exercise endpoints with any HTTP client (curl, REST client, automated tests).
 - `.github/workflows/docker-build.yml` — verify a Docker image build on `push` to `main` (no registry push).
 - `.github/workflows/docker-publish.yml` — build and push the image on `push` to `production` (GHCR).
 
+## SAML proxy (optional)
+
+To exercise **Nest SP → Shibboleth IdP** locally (LDAP users `staff1` / `password`), see `./infrastructure/saml-proxy-shibboleth/README.md` and set `SAML_*` variables in `.env` accordingly.
+
 ## Environment variables
 
 | Variable      | Purpose                                 |

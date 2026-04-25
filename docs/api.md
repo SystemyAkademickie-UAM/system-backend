@@ -49,9 +49,17 @@ Clients send the previous value; the response carries the incremented value.
 
 ---
 
-## SAML 2.0 (PIONIER.id / institutional IdP)
+## SAML 2.0 (institutional IdP or local Shibboleth proxy)
 
-These routes implement a **Service Provider (SP)** using `@node-saml/passport-saml`. Configure federation metadata exchange with your IdP (e.g. UAM) and PIONIER.id registration as required by your institution.
+These routes implement a **Service Provider (SP)** using `@node-saml/passport-saml`.
+
+### Direct IdP (e.g. UAM SimpleSAMLphp)
+
+Point `SAML_ENTRY_POINT` and `SAML_IDP_CERT` / `SAML_IDP_CERT_PATH` at the upstream IdP (see [UAM metadata](https://sso.amu.edu.pl/simplesaml/saml2/idp/metadata.php)). Register the SP metadata from **`GET /api/auth/saml/metadata`** with the IdP operator as required by your federation (e.g. PIONIER.id).
+
+### Local proxy IdP (Nest SP → Shibboleth → LDAP demo users)
+
+For development, run the Docker stack under **`system-backend/infrastructure/saml-proxy-shibboleth/`** and aim the SP at the proxy’s SSO URL and signing certificate (see that folder’s `README.md`). UAM metadata is bundled inside the proxy IdP image for federation alignment; **live SAML delegation to UAM** needs extra Shibboleth and UAM-side configuration beyond this repo.
 
 ### Environment (required for SP to activate)
 
