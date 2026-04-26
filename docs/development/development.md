@@ -2,7 +2,7 @@
 
 ## Stack versions
 
-- **Node.js / npm:** see [prerequisites.md](./prerequisites.md) (local toolchain pin).
+- **Node.js / npm:** see [prerequisites.md](../first-setup/prerequisites.md) (local toolchain pin).
 - **NestJS:** 11.x
 
 Use `.nvmrc` with nvm / nvm-windows. CI uses Node **24.14.1** (see `.github/workflows/ci.yml`).
@@ -23,7 +23,7 @@ Exercise endpoints with any HTTP client (curl, REST client, automated tests).
 
 ## SAML proxy (optional)
 
-To exercise **Nest SP → Shibboleth IdP** locally (LDAP users `staff1` / `password`), see `./infrastructure/saml-proxy-shibboleth/README.md` and set `SAML_*` variables in `.env` accordingly.
+To exercise **Nest SP → Shibboleth IdP** locally (LDAP users `staff1` / `password`), see `../../infrastructure/saml-proxy-shibboleth/README.md` and set `SAML_*` variables in `.env` accordingly.
 
 ## Environment variables
 

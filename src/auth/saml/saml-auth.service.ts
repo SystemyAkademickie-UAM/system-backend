@@ -9,6 +9,9 @@ export type SamlSessionJwtPayload = {
   sub: string;
   email?: string;
   displayName?: string;
+  givenName?: string;
+  surname?: string;
+  uid?: string;
 };
 
 @Injectable()
@@ -23,6 +26,9 @@ export class SamlAuthService {
       sub: user.nameId,
       email: user.email,
       displayName: user.displayName,
+      givenName: user.givenName,
+      surname: user.surname,
+      uid: user.uid,
     };
     const expiresIn = this.samlConfig.getSessionJwtExpiresIn() as SignOptions['expiresIn'];
     return this.jwtService.sign(payload, { expiresIn });

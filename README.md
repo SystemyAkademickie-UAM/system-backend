@@ -12,16 +12,17 @@ npm run start:dev
 
 ## Documentation
 
-Start with **[docs/prerequisites.md](./docs/prerequisites.md)** (Node.js **24.14.1**, npm **11.11.0**), then use the guides below. All Markdown except this file lives under `docs/`.
+Start with **[docs/first-setup/prerequisites.md](./docs/first-setup/prerequisites.md)** (Node.js **24.14.1**, npm **11.11.0**), then use the index below. All Markdown except this file lives under `docs/`.
 
 | Document | Description |
 | -------- | ----------- |
-| [docs/prerequisites.md](./docs/prerequisites.md) | Toolchain versions (install before `npm install`) |
-| [docs/installation.md](./docs/installation.md) | Requirements and install |
-| [docs/running.md](./docs/running.md) | Dev server, production run, tests |
-| [docs/docker.md](./docs/docker.md) | Docker image for this service |
-| [docs/development.md](./docs/development.md) | Tooling, CI, environment variables |
-| [docs/api.md](./docs/api.md) | Requests and responses |
+| [docs/README.md](./docs/README.md) | Documentation index |
+| [docs/first-setup/prerequisites.md](./docs/first-setup/prerequisites.md) | Toolchain versions (install before `npm install`) |
+| [docs/first-setup/installation.md](./docs/first-setup/installation.md) | Requirements and install |
+| [docs/development/running.md](./docs/development/running.md) | Dev server, production run, tests |
+| [docs/docker/docker.md](./docs/docker/docker.md) | Docker image for this service |
+| [docs/development/development.md](./docs/development/development.md) | Tooling, CI, environment variables |
+| [docs/api/api.md](./docs/api/api.md) | Requests and responses |
 
 The SPA is a **separate** Git repository (**system-frontend**). Clone it alongside this repo for a full stack; its `docs/` cover UI install, `VITE_API_BASE_URL`, and Docker. Prerequisites versions match this repo by design.
 
@@ -33,9 +34,10 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/auth/saml/metadata` — SP metadata XML (PIONIER.id / IdP)
 - `GET /api/auth/saml/login` — start SAML SSO (`302` to IdP)
 - `POST /api/auth/saml/acs` — SAML Assertion Consumer Service
+- `POST /api/auth/saml/logout` — clears `maqSamlSession` cookie (app logout)
 - `GET /api/auth/saml/me` — session JWT from cookie (smoke)
 
-Details in [docs/api.md](./docs/api.md).
+Details in [docs/api/api.md](./docs/api/api.md).
 
 ## License
 

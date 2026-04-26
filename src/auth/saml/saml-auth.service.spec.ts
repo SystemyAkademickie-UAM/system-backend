@@ -47,6 +47,9 @@ describe('SamlAuthService', () => {
         sub: user.nameId,
         email: user.email,
         displayName: user.displayName,
+        givenName: undefined,
+        surname: undefined,
+        uid: undefined,
       },
       { expiresIn: '8h' },
     );

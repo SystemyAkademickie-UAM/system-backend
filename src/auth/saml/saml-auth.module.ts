@@ -7,6 +7,7 @@ import { SAML_SESSION_JWT_EXPIRES_IN } from '../../constants/saml-constants';
 import { SamlAuthController } from './saml-auth.controller';
 import { SamlAuthService } from './saml-auth.service';
 import { SamlConfigService } from './saml-config.service';
+import { SamlInstitutionRegistry } from './saml-institution.registry';
 import { SamlPassportBootstrapService } from './saml-passport-bootstrap.service';
 
 @Module({
@@ -37,7 +38,7 @@ import { SamlPassportBootstrapService } from './saml-passport-bootstrap.service'
     }),
   ],
   controllers: [SamlAuthController],
-  providers: [SamlConfigService, SamlPassportBootstrapService, SamlAuthService],
+  providers: [SamlConfigService, SamlInstitutionRegistry, SamlPassportBootstrapService, SamlAuthService],
   exports: [SamlConfigService, SamlAuthService],
 })
 export class SamlAuthModule {}

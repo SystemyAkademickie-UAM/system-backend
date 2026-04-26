@@ -84,6 +84,17 @@ describe('SAML auth (e2e)', () => {
       .expect('Location', /idp\.example\.test/);
   });
 
+  it('GET /api/auth/saml/institutions returns list (no SAML required)', () => {
+    return request(app.getHttpServer())
+      .get('/api/auth/saml/institutions')
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.samlReady).toBe(true);
+        expect(Array.isArray(res.body.institutions)).toBe(true);
+        expect(res.body.institutions.some((i: { id: string }) => i.id === 'pionier')).toBe(true);
+      });
+  });
+
   it('POST /api/auth/saml/acs without SAMLResponse is not a successful login', () => {
     return request(app.getHttpServer())
       .post('/api/auth/saml/acs')

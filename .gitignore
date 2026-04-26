@@ -137,3 +137,12 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# SAML / TLS key material — keep under workspace ../secrets/ (see infrastructure/saml-proxy-shibboleth/README.md)
+infrastructure/saml-proxy-shibboleth/certs/*.pem
+infrastructure/saml-proxy-shibboleth/idp/shibboleth-idp/credentials/**
+!infrastructure/saml-proxy-shibboleth/idp/shibboleth-idp/credentials/README.md
+
+# Agent summary files
+summary/**/*.md
+summary/*

@@ -1,6 +1,10 @@
 FROM centos:centos7
 
-MAINTAINER John Gasper <jgasper@unicon.net>
+LABEL org.opencontainers.image.authors="Unicon testbed-derived LDAP (vault repos for CentOS 7 EOL)"
+
+# CentOS 7 is EOL: mirrorlist.centos.org no longer serves repos. Use vault before any yum.
+RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*.repo \
+    && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
 
 RUN yum install -y epel-release \
     && yum update -y \
