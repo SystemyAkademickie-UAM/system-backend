@@ -7,3 +7,6 @@ coverage
 .env
 .env.*
 !.env.example
+# Local SAML proxy stack and notes — not needed inside the API runtime image
+infrastructure/
+summary/

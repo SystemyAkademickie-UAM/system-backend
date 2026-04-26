@@ -27,4 +27,4 @@ CI runs unit tests, e2e tests, and build. After lockfiles are committed, prefer 
 
 ## Container (this repository only)
 
-See [docker.md](./docker.md).
+See [docker.md](../docker/docker.md).

@@ -25,4 +25,23 @@ describe('mapSamlProfileToSessionUser', () => {
     expect(user.nameId).toBe('');
     expect(user.rawProfileKeys).toEqual([]);
   });
+
+  it('maps givenName, sn, and uid when present', () => {
+    const profile = {
+      nameID: 'abc123',
+      attributes: {
+        givenName: ['Anna'],
+        sn: ['Nowak'],
+        uid: ['anowak'],
+        mail: ['anna@example.edu'],
+      },
+    } as unknown as Profile;
+
+    const user = mapSamlProfileToSessionUser(profile);
+
+    expect(user.givenName).toBe('Anna');
+    expect(user.surname).toBe('Nowak');
+    expect(user.uid).toBe('anowak');
+    expect(user.displayName).toBe('Anna Nowak');
+  });
 });

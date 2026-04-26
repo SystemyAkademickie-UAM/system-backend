@@ -1,0 +1,44 @@
+# Local full stack for developers: API + static UI (build from source).
+# Prerequisite: clone **system-frontend** next to **system-backend** (sibling directories).
+#
+# Usage (from this directory, i.e. system-backend/):
+#   cp .env.example .env   # once; edit SAML_SESSION_JWT_SECRET
+#   # One-time: copy SAML PEMs into ../secrets/saml/ (see ../secrets/README.md — outside Git repos).
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# UI: http://127.0.0.1:3000  |  API: http://127.0.0.1:8080/api
+#
+# Optional Shibboleth proxy (separate compose): infrastructure/saml-proxy-shibboleth/
+services:
+  backend:
+    build: .
+    image: system-backend:dev
+    container_name: maq-backend-dev
+    env_file:
+      - .env
+    environment:
+      # Override host-relative PEM paths from .env — container sees workspace mount at /app/secrets.
+      SAML_IDP_CERT_PATH: /app/secrets/saml/proxy-idp-signing.pem
+      SAML_SP_PUBLIC_CERT_PATH: /app/secrets/saml/nest-sp-cert.pem
+      SAML_SP_PRIVATE_KEY_PATH: /app/secrets/saml/nest-sp-key.pem
+      CORS_ORIGIN: http://127.0.0.1:3000,http://localhost:3000
+      # In-memory AuthnRequest cache is empty after restarts; "never" avoids ACS 500 after IdP consent.
+      SAML_VALIDATE_IN_RESPONSE_TO: never
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # Workspace-only PEMs (parent of system-backend — not part of this Git repo).
+      - ../secrets:/app/secrets:ro
+
+  frontend:
+    build:
+      context: ../system-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://127.0.0.1:8080/api
+    image: system-frontend:dev
+    container_name: maq-frontend-dev
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:3000:3000"

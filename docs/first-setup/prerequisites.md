@@ -1,6 +1,6 @@
 # Prerequisites (before installation)
 
-This Git repository (**system-backend**) uses a **pinned Node.js and npm** baseline. Install the toolchain **before** [installation.md](./installation.md). The companion UI is maintained in a **separate** Git repository (**system-frontend**); it uses the **same** Node and npm versions, so one toolchain serves both if you work on both locally. The documentation index for this repo is the root [README.md](../README.md).
+This Git repository (**system-backend**) uses a **pinned Node.js and npm** baseline. Install the toolchain **before** [installation.md](./installation.md). The companion UI is maintained in a **separate** Git repository (**system-frontend**); it uses the **same** Node and npm versions, so one toolchain serves both if you work on both locally. The documentation index for this repo is the root [README.md](../../README.md).
 
 ## Required versions (pin these)
 
@@ -39,7 +39,7 @@ Use this when you manage multiple Node versions on Windows or need to match the 
    npm install -g npm@11.11.0
    ```
 
-3. Confirm with `node -v` and `npm -v`, then continue from the root [README.md](../README.md) **Documentation** section.
+3. Confirm with `node -v` and `npm -v`, then continue from the root [README.md](../../README.md) **Documentation** section.
 
 ### A.2 — You do not have nvm-windows yet
 
@@ -74,8 +74,8 @@ You may install Node **24.14.1** from [nodejs.org](https://nodejs.org/) or anoth
 
 ## After the toolchain is ready
 
-1. Open the root [README.md](../README.md) and follow the **Documentation** links (**Installation**, **Running**, **Development**) as needed.
-2. For containers, see [docker.md](./docker.md).
+1. Open the root [README.md](../../README.md) and follow the **Documentation** links (**Installation**, **Running**, **Development**) as needed.
+2. For containers, see [docker.md](../docker/docker.md).
 
 ---
 
@@ -84,7 +84,7 @@ You may install Node **24.14.1** from [nodejs.org](https://nodejs.org/) or anoth
 Example prompt for **this** repository only:
 
 ```text
-Run the installation and development setup for this backend repository. Follow README.md and docs/ (prerequisites, installation, running, development, Docker). Use Node.js 24.14.1 and npm 11.11.0 exactly as in docs/prerequisites.md. Then run the dev server and tests as a smoke test, and build the Docker image as a smoke test.
+Run the installation and development setup for this backend repository. Follow README.md and docs/ (first-setup, development, docker, api). Use Node.js 24.14.1 and npm 11.11.0 exactly as in docs/first-setup/prerequisites.md. Then run the dev server and tests as a smoke test, and build the Docker image as a smoke test.
 ```
 
-If you also clone **system-frontend**, repeat its `docs/prerequisites.md` (same versions) and its install/run docs there. Keep version pins **exactly** as documented so installs stay reproducible.
+If you also clone **system-frontend**, repeat its `docs/first-setup/prerequisites.md` (same versions) and its install/run docs there. Keep version pins **exactly** as documented so installs stay reproducible.

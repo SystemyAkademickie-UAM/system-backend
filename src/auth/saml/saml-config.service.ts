@@ -5,7 +5,24 @@ import * as fs from 'node:fs';
 import type { PassportSamlConfig } from '@node-saml/passport-saml';
 import { ValidateInResponseTo } from '@node-saml/node-saml';
 
-import { SAML_SESSION_JWT_EXPIRES_IN } from '../../constants/saml-constants';
+function parseValidateInResponseTo(raw: string | undefined): ValidateInResponseTo {
+  const v = raw?.trim().toLowerCase();
+  if (v === 'never') {
+    return ValidateInResponseTo.never;
+  }
+  if (v === 'always') {
+    return ValidateInResponseTo.always;
+  }
+  if (v === 'ifpresent' || v === 'if_present') {
+    return ValidateInResponseTo.ifPresent;
+  }
+  return ValidateInResponseTo.ifPresent;
+}
+
+import {
+  SAML_IDENTIFIER_FORMAT_DEFAULT,
+  SAML_SESSION_JWT_EXPIRES_IN,
+} from '../../constants/saml-constants';
 
 function readPemFromEnv(valueKey: string, pathKey: string, config: ConfigService): string | undefined {
   const inline = config.get<string>(valueKey)?.trim();
@@ -54,7 +71,7 @@ export class SamlConfigService {
   }
 
   getLoginSuccessRedirectUrl(): string {
-    const fallback = 'http://127.0.0.1:3000/';
+    const fallback = 'http://127.0.0.1:3000/home';
     const fromEnv = this.config.get<string>('SAML_LOGIN_SUCCESS_REDIRECT_URL')?.trim();
     return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : fallback;
   }
@@ -70,6 +87,24 @@ export class SamlConfigService {
   getSessionJwtExpiresIn(): string {
     const fromEnv = this.config.get<string>('SAML_SESSION_JWT_EXPIRES_IN')?.trim();
     return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : SAML_SESSION_JWT_EXPIRES_IN;
+  }
+
+  /**
+   * How strictly to match SAML `InResponseTo` against the in-memory AuthnRequest cache.
+   * Use `never` for local Shibboleth / `npm run start:dev --watch` (restarts clear the cache → ACS 500).
+   * Production clusters should prefer `ifPresent` or `always` with a shared `cacheProvider`.
+   */
+  getValidateInResponseTo(): ValidateInResponseTo {
+    return parseValidateInResponseTo(this.config.get<string>('SAML_VALIDATE_IN_RESPONSE_TO'));
+  }
+
+  /**
+   * SAML NameIDPolicy `@Format` sent on AuthnRequest. Shibboleth dev IdP only supports **transient**
+   * in metadata — `emailAddress` (node-saml default) yields `InvalidNameIDPolicy` on the Response.
+   */
+  getIdentifierFormat(): string {
+    const fromEnv = this.config.get<string>('SAML_IDENTIFIER_FORMAT')?.trim();
+    return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : SAML_IDENTIFIER_FORMAT_DEFAULT;
   }
 
   getSpEntityId(): string {
@@ -150,11 +185,19 @@ export class SamlConfigService {
       callbackUrl: acsUrl,
       entryPoint,
       issuer: this.getSpEntityId(),
+      identifierFormat: this.getIdentifierFormat(),
       idpCert,
       privateKey,
       publicCert,
-      wantAssertionsSigned: true,
-      validateInResponseTo: ValidateInResponseTo.always,
+      /**
+       * Both **false**: `@node-saml` verifies a **Response** signature if present, otherwise the **Assertion**
+       * signature (`validatePostResponseAsync`: `wantAssertionsSigned || !validSignature`).
+       * Shibboleth IdP 3 often signs the **outer Response only**; `wantAssertionsSigned: true` then fails ACS
+       * with `Invalid signature` because the Assertion has no `ds:Signature` child.
+       */
+      wantAssertionsSigned: false,
+      wantAuthnResponseSigned: false,
+      validateInResponseTo: this.getValidateInResponseTo(),
       disableRequestedAuthnContext: true,
       signatureAlgorithm: 'sha256',
       digestAlgorithm: 'sha256',

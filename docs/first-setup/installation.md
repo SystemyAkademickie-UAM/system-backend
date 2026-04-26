@@ -20,4 +20,4 @@ cp .env.example .env   # optional
 
 ## Debian / production host
 
-Use the same Node major version as development, or run the process from the [Dockerfile](../Dockerfile). See [docker.md](./docker.md).
+Use the same Node major version as development, or run the process from the [Dockerfile](../../Dockerfile). See [docker.md](../docker/docker.md).

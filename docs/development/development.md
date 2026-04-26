@@ -2,7 +2,7 @@
 
 ## Stack versions
 
-- **Node.js / npm:** see [prerequisites.md](./prerequisites.md) (local toolchain pin).
+- **Node.js / npm:** see [prerequisites.md](../first-setup/prerequisites.md) (local toolchain pin).
 - **NestJS:** 11.x
 
 Use `.nvmrc` with nvm / nvm-windows. CI uses Node **24.14.1** (see `.github/workflows/ci.yml`).
@@ -20,6 +20,10 @@ Exercise endpoints with any HTTP client (curl, REST client, automated tests).
 - `.github/workflows/ci.yml` — install, test, build on `push` / `pull_request` to `main`.
 - `.github/workflows/docker-build.yml` — verify a Docker image build on `push` to `main` (no registry push).
 - `.github/workflows/docker-publish.yml` — build and push the image on `push` to `production` (GHCR).
+
+## SAML proxy (optional)
+
+To exercise **Nest SP → Shibboleth IdP** locally (LDAP users `staff1` / `password`), see `../../infrastructure/saml-proxy-shibboleth/README.md` and set `SAML_*` variables in `.env` accordingly.
 
 ## Environment variables
 

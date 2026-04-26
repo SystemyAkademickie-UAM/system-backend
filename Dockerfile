@@ -1,4 +1,4 @@
-# Build stage (Node/npm versions align with docs/prerequisites.md)
+# Build stage (Node/npm versions align with docs/first-setup/prerequisites.md)
 FROM node:24.14.1-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
