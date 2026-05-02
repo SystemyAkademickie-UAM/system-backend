@@ -1,5 +1,7 @@
 import type { Profile } from '@node-saml/node-saml';
 
+import { SAML_LOGOUT_FALLBACK_NAME_ID_FORMAT } from '../../constants/saml-constants';
+
 import type { SamlSessionUser } from './saml.types';
 
 const URN_MAIL = 'urn:oid:0.9.2342.19200300.100.1.3';
@@ -22,6 +24,29 @@ export function mapSamlProfileToSessionUser(profile: Profile | null | undefined)
   const attrs = (profileRecord.attributes ?? profileRecord) as Record<string, unknown>;
 
   const nameId = String(profile.nameID ?? profile.nameId ?? profileRecord.nameID ?? '');
+
+  const nameIDFormat =
+    typeof profile.nameIDFormat === 'string' && profile.nameIDFormat.length > 0
+      ? profile.nameIDFormat
+      : SAML_LOGOUT_FALLBACK_NAME_ID_FORMAT;
+
+  const sessionIndex =
+    typeof profile.sessionIndex === 'string' && profile.sessionIndex.length > 0
+      ? profile.sessionIndex
+      : undefined;
+
+  const nameQualifier =
+    typeof profile.nameQualifier === 'string' && profile.nameQualifier.length > 0
+      ? profile.nameQualifier
+      : undefined;
+
+  const spNameQualifier =
+    typeof profile.spNameQualifier === 'string' && profile.spNameQualifier.length > 0
+      ? profile.spNameQualifier
+      : undefined;
+
+  const idpIssuer =
+    typeof profile.issuer === 'string' && profile.issuer.length > 0 ? profile.issuer : undefined;
 
   const pickString = (...keys: string[]): string | undefined => {
     for (const key of keys) {
@@ -52,5 +77,10 @@ export function mapSamlProfileToSessionUser(profile: Profile | null | undefined)
     email: email ?? eppn,
     displayName,
     rawProfileKeys: keys,
+    nameIDFormat,
+    sessionIndex,
+    nameQualifier,
+    spNameQualifier,
+    idpIssuer,
   };
 }

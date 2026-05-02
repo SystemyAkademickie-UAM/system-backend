@@ -9,6 +9,13 @@ export type SamlSessionJwtPayload = {
   sub: string;
   email?: string;
   displayName?: string;
+  /** SAML NameIDFormat — stored for single logout. */
+  nameIDFormat?: string;
+  sessionIndex?: string;
+  nameQualifier?: string;
+  spNameQualifier?: string;
+  /** IdP entity ID from SAML assertion issuer. */
+  idpIssuer?: string;
 };
 
 @Injectable()
@@ -23,6 +30,11 @@ export class SamlAuthService {
       sub: user.nameId,
       email: user.email,
       displayName: user.displayName,
+      nameIDFormat: user.nameIDFormat,
+      sessionIndex: user.sessionIndex,
+      nameQualifier: user.nameQualifier,
+      spNameQualifier: user.spNameQualifier,
+      idpIssuer: user.idpIssuer,
     };
     const expiresIn = this.samlConfig.getSessionJwtExpiresIn() as SignOptions['expiresIn'];
     return this.jwtService.sign(payload, { expiresIn });

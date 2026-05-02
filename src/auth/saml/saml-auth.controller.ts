@@ -1,19 +1,56 @@
 import { Controller, Get, Next, Post, Req, Res } from '@nestjs/common';
+import type { Profile, SAML } from '@node-saml/node-saml';
+import type { Strategy as SamlPassportStrategy } from '@node-saml/passport-saml';
 import passport from 'passport';
 import type { NextFunction, Request, Response } from 'express';
 
 import { SAML_CONTROLLER_PATH, SAML_SESSION_COOKIE_NAME, SAML_STRATEGY_NAME } from '../../constants/saml-constants';
 import { jwtExpiresInToCookieMaxAgeMs } from './saml-jwt-expiry.util';
 import { SamlAuthService, type SamlSessionJwtPayload } from './saml-auth.service';
+import { toComparableLogoutProfileFromJwt } from './saml-logout-comparable.util';
 import { SamlPassportBootstrapService } from './saml-passport-bootstrap.service';
 import { SamlConfigService } from './saml-config.service';
+import { generateDefaultSpStyleMetadataXml } from './saml-sp-metadata.generator';
 import type { SamlSessionUser } from './saml.types';
+
+function getSamlFromPassportStrategy(strategy: SamlPassportStrategy): SAML {
+  return (strategy as unknown as { _saml: SAML })._saml;
+}
+
+function clearSamlSessionCookie(res: Response): void {
+  const isProd = process.env.NODE_ENV === 'production';
+  res.clearCookie(SAML_SESSION_COOKIE_NAME, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProd,
+    path: '/',
+  });
+}
+
+/** Passport calls `req.logout` during IdP-initiated SLO; we do not use persistent passport sessions. */
+function attachNoopPassportLogout(req: Request): void {
+  Object.assign(req as Request & { logout: (cb?: unknown) => void }, {
+    logout(cb?: unknown): void {
+      if (typeof cb === 'function') {
+        (cb as (err?: Error) => void)();
+      }
+    },
+  });
+}
 
 function samlNotConfiguredResponse() {
   return {
     error: 'SAML_NOT_CONFIGURED',
     message:
       'SAML 2.0 Service Provider environment is incomplete. Set variables listed under docs/api.md (SAML_*).',
+  };
+}
+
+function samlMetadataExportIncompleteResponse() {
+  return {
+    error: 'SAML_METADATA_EXPORT_INCOMPLETE',
+    message:
+      'SP metadata uses the UAM default-sp XML shape: set SAML_METADATA_SLO_REDIRECT_URL (e.g. .../api/auth/saml/logout) and SAML_METADATA_TECH_CONTACT_GIVEN_NAME / SAML_METADATA_TECH_CONTACT_EMAIL. See docs/api.md.',
   };
 }
 
@@ -36,6 +73,8 @@ export class SamlAuthController {
       configurationComplete: complete,
       requirements: this.samlConfig.getRequirementsPresence(),
       pemMaterialLoaded: this.samlConfig.getPemMaterialsLoaded(),
+      metadataExportReady: this.samlConfig.isMetadataExportReady(),
+      metadataArtifactAcsAdvertised: this.samlConfig.includeArtifactAssertionConsumerServiceInMetadata(),
     };
   }
 
@@ -46,15 +85,61 @@ export class SamlAuthController {
       res.status(503).json(samlNotConfiguredResponse());
       return;
     }
-    const strategy = this.bootstrap.getStrategy();
-    const signingCert = this.samlConfig.getSpPublicCert();
-    if (strategy === null || signingCert === undefined) {
+    if (!this.samlConfig.isMetadataExportReady()) {
+      res.status(503).json(samlMetadataExportIncompleteResponse());
+      return;
+    }
+    const sloRedirectUrl = this.samlConfig.getMetadataSloRedirectUrl();
+    const technicalContact = this.samlConfig.getSpMetadataTechnicalContact();
+    if (sloRedirectUrl === undefined || technicalContact === null) {
+      res.status(503).json(samlMetadataExportIncompleteResponse());
+      return;
+    }
+    const xml = generateDefaultSpStyleMetadataXml({
+      entityId: this.samlConfig.getSpEntityId(),
+      acsUrl: this.samlConfig.getAcsUrl(),
+      sloRedirectUrl,
+      technicalContact,
+      includeArtifactAssertionConsumerService:
+        this.samlConfig.includeArtifactAssertionConsumerServiceInMetadata(),
+    });
+    res.type('application/xml');
+    res.send(xml);
+  }
+
+  /**
+   * Single Logout Service (HTTP-Redirect / HTTP-POST): SP-initiated, IdP-initiated (`SAMLRequest`),
+   * and completion (`SAMLResponse` LogoutResponse).
+   */
+  @Get('logout')
+  @Post('logout')
+  logout(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction): void {
+    if (!this.bootstrap.isReady()) {
       res.status(503).json(samlNotConfiguredResponse());
       return;
     }
-    const xml = strategy.generateServiceProviderMetadata(signingCert, signingCert);
-    res.type('application/xml');
-    res.send(xml);
+    const strategy = this.bootstrap.getStrategy();
+    if (strategy === null) {
+      res.status(503).json(samlNotConfiguredResponse());
+      return;
+    }
+
+    const query = req.query as Record<string, string | undefined>;
+    const body = req.body as Record<string, string | undefined> | undefined;
+    const samlResponse = query.SAMLResponse ?? body?.SAMLResponse;
+    const samlRequest = query.SAMLRequest ?? body?.SAMLRequest;
+
+    if (samlResponse !== undefined && samlResponse.length > 0) {
+      void this.finalizeWithLogoutResponse(req, strategy, res, next);
+      return;
+    }
+
+    if (samlRequest !== undefined && samlRequest.length > 0) {
+      this.handleIdpLogoutRequest(req, res, next, strategy);
+      return;
+    }
+
+    this.handleSpInitiatedLogout(req, res, next, strategy);
   }
 
   /** Starts SAML login — redirects browser to the IdP (HTTP-Redirect binding). */
@@ -119,5 +204,84 @@ export class SamlAuthController {
       return { authenticated: false };
     }
     return { authenticated: true, user };
+  }
+
+  private async finalizeWithLogoutResponse(
+    req: Request,
+    strategy: SamlPassportStrategy,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const saml = getSamlFromPassportStrategy(strategy);
+      const body = req.body as Record<string, string> | undefined;
+      if (req.method === 'POST' && body?.SAMLResponse !== undefined) {
+        await saml.validatePostResponseAsync(body);
+      } else {
+        const q = req.query as Record<string, string>;
+        const originalQuery = req.url.includes('?') ? req.url.slice(req.url.indexOf('?') + 1) : '';
+        await saml.validateRedirectAsync(q, originalQuery);
+      }
+      clearSamlSessionCookie(res);
+      res.redirect(this.samlConfig.getLoginSuccessRedirectUrl());
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private handleIdpLogoutRequest(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    strategy: SamlPassportStrategy,
+  ): void {
+    const token = req.cookies?.[SAML_SESSION_COOKIE_NAME];
+    if (token !== undefined && token.length > 0) {
+      const payload = this.samlAuth.decodeSessionTokenOrNull(token);
+      if (payload !== null) {
+        (req as Request & { user: Profile }).user = toComparableLogoutProfileFromJwt(payload);
+      }
+    }
+    attachNoopPassportLogout(req);
+    passport.authenticate(SAML_STRATEGY_NAME, { session: false }, (err: unknown) => {
+      if (err !== null && err !== undefined) {
+        next(err);
+        return;
+      }
+      clearSamlSessionCookie(res);
+      res.redirect(this.samlConfig.getLoginSuccessRedirectUrl());
+    })(req, res, next);
+  }
+
+  private handleSpInitiatedLogout(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    strategy: SamlPassportStrategy,
+  ): void {
+    const token = req.cookies?.[SAML_SESSION_COOKIE_NAME];
+    if (token === undefined || token.length === 0) {
+      res.redirect(this.samlConfig.getLoginSuccessRedirectUrl());
+      return;
+    }
+    const payload = this.samlAuth.decodeSessionTokenOrNull(token);
+    if (payload === null) {
+      clearSamlSessionCookie(res);
+      res.redirect(this.samlConfig.getLoginSuccessRedirectUrl());
+      return;
+    }
+    (req as Request & { user: Profile }).user = toComparableLogoutProfileFromJwt(payload);
+    strategy.logout(req as never, (err: Error | null, url?: string | null) => {
+      if (err !== null && err !== undefined) {
+        next(err);
+        return;
+      }
+      if (url === null || url === undefined) {
+        next(new Error('SAML SP-initiated logout failed: missing redirect URL'));
+        return;
+      }
+      clearSamlSessionCookie(res);
+      res.redirect(url);
+    });
   }
 }
