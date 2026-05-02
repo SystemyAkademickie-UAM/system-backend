@@ -31,6 +31,9 @@ describe('SAML auth (e2e)', () => {
     process.env.SAML_SP_PUBLIC_CERT_PATH = certPath;
     process.env.SAML_SP_PRIVATE_KEY_PATH = keyPath;
     process.env.SAML_SESSION_JWT_SECRET = 'e2e-saml-jwt-secret';
+    process.env.SAML_METADATA_SLO_REDIRECT_URL = 'http://127.0.0.1:8080/api/auth/saml/logout';
+    process.env.SAML_METADATA_TECH_CONTACT_GIVEN_NAME = 'E2E';
+    process.env.SAML_METADATA_TECH_CONTACT_EMAIL = 'e2e-saml@example.test';
   });
 
   beforeEach(async () => {
@@ -63,6 +66,9 @@ describe('SAML auth (e2e)', () => {
         expect(res.body.configurationComplete).toBe(true);
         expect(res.body.samlReady).toBe(true);
         expect(res.body.requirements.SAML_SP_ENTITY_ID).toBe(true);
+        expect(res.body.requirements.SAML_METADATA_TECH_CONTACT).toBe(true);
+        expect(res.body.metadataExportReady).toBe(true);
+        expect(res.body.metadataArtifactAcsAdvertised).toBe(false);
       });
   });
 
@@ -72,8 +78,13 @@ describe('SAML auth (e2e)', () => {
       .expect(200)
       .expect('Content-Type', /application\/xml/)
       .expect((res) => {
-        expect(res.text).toContain('EntityDescriptor');
+        expect(res.text).toContain('<md:EntityDescriptor xmlns:md=');
+        expect(res.text).not.toContain('xmlns:ds');
+        expect(res.text).not.toContain('X509Certificate');
         expect(res.text).toContain(process.env.SAML_SP_ENTITY_ID ?? '');
+        expect(res.text).toContain('<md:SingleLogoutService ');
+        expect(res.text).toContain('<md:ContactPerson contactType="technical">');
+        expect(res.text).not.toContain('HTTP-Artifact');
       });
   });
 
@@ -82,6 +93,14 @@ describe('SAML auth (e2e)', () => {
       .get('/api/auth/saml/login')
       .expect(302)
       .expect('Location', /idp\.example\.test/);
+  });
+
+  it('GET /api/auth/saml/logout clears session and redirects', async () => {
+    const logoutRes = await request(app.getHttpServer())
+      .get('/api/auth/saml/logout')
+      .redirects(0)
+      .expect(302);
+    expect(logoutRes.headers.location).toMatch(/^http:\/\/127\.0\.0\.1:3000\/?$/);
   });
 
   it('POST /api/auth/saml/acs without SAMLResponse is not a successful login', () => {

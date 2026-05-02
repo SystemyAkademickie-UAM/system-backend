@@ -5,7 +5,12 @@ import * as fs from 'node:fs';
 import type { PassportSamlConfig } from '@node-saml/passport-saml';
 import { ValidateInResponseTo } from '@node-saml/node-saml';
 
-import { SAML_SESSION_JWT_EXPIRES_IN } from '../../constants/saml-constants';
+import {
+  SAML_DEFAULT_UAM_IDP_SINGLE_LOGOUT_SERVICE_URL,
+  SAML_METADATA_INCLUDE_ARTIFACT_ACS_ENV_KEY,
+  SAML_SESSION_JWT_EXPIRES_IN,
+} from '../../constants/saml-constants';
+import type { SamlSpMetadataTechnicalContact } from './saml-sp-metadata.generator';
 
 function readPemFromEnv(valueKey: string, pathKey: string, config: ConfigService): string | undefined {
   const inline = config.get<string>(valueKey)?.trim();
@@ -76,6 +81,59 @@ export class SamlConfigService {
     return this.config.getOrThrow<string>('SAML_SP_ENTITY_ID').trim();
   }
 
+  getAcsUrl(): string {
+    return this.config.getOrThrow<string>('SAML_ACS_URL').trim();
+  }
+
+  /**
+   * IdP single logout service URL (`SingleLogoutService` in IdP metadata).
+   * Defaults to UAM SimpleSAMLphp; override with `SAML_IDP_LOGOUT_URL` for other IdPs.
+   */
+  getIdpLogoutUrl(): string {
+    const raw = this.config.get<string>('SAML_IDP_LOGOUT_URL')?.trim();
+    return raw !== undefined && raw.length > 0 ? raw : SAML_DEFAULT_UAM_IDP_SINGLE_LOGOUT_SERVICE_URL;
+  }
+
+  /**
+   * Optional technical contact embedded in SP metadata (`md:ContactPerson`) for IdP admins / SimpleSAMLphp.
+   */
+  getSpMetadataTechnicalContact(): SamlSpMetadataTechnicalContact | null {
+    const email = this.config.get<string>('SAML_METADATA_TECH_CONTACT_EMAIL')?.trim();
+    const givenName = this.config.get<string>('SAML_METADATA_TECH_CONTACT_GIVEN_NAME')?.trim();
+    if (
+      email === undefined ||
+      email.length === 0 ||
+      givenName === undefined ||
+      givenName.length === 0
+    ) {
+      return null;
+    }
+    return { givenName, emailAddress: email };
+  }
+
+  /**
+   * Optional `<md:SingleLogoutService>` Redirect URL in exported SP metadata (must match UAM `default-sp` shape).
+   * Point at **`GET /api/auth/saml/logout`** unless you implement full SAML SLO elsewhere.
+   */
+  getMetadataSloRedirectUrl(): string | undefined {
+    const raw = this.config.get<string>('SAML_METADATA_SLO_REDIRECT_URL')?.trim();
+    return raw !== undefined && raw.length > 0 ? raw : undefined;
+  }
+
+  /**
+   * When true, exported metadata includes `AssertionConsumerService` HTTP-Artifact (`index="1"`).
+   * Default false (UAM-safe): ACS runtime is POST-only until SOAP artifact resolution exists.
+   */
+  includeArtifactAssertionConsumerServiceInMetadata(): boolean {
+    const raw = this.config.get<string>(SAML_METADATA_INCLUDE_ARTIFACT_ACS_ENV_KEY)?.trim().toLowerCase();
+    return raw === 'true' || raw === '1' || raw === 'yes';
+  }
+
+  /** Whether `/api/auth/saml/metadata` can return XML (UAM-style template needs SLO URL + technical contact). */
+  isMetadataExportReady(): boolean {
+    return this.getMetadataSloRedirectUrl() !== undefined && this.getSpMetadataTechnicalContact() !== null;
+  }
+
   getIdpCert(): string | undefined {
     return readPemFromEnv('SAML_IDP_CERT', 'SAML_IDP_CERT_PATH', this.config);
   }
@@ -107,6 +165,12 @@ export class SamlConfigService {
             this.config.get<string>('SAML_SP_PRIVATE_KEY_PATH')?.trim()),
       ),
       SAML_SESSION_JWT_SECRET: Boolean(this.config.get<string>('SAML_SESSION_JWT_SECRET')?.trim()),
+      SAML_METADATA_SLO_REDIRECT_URL: Boolean(this.config.get<string>('SAML_METADATA_SLO_REDIRECT_URL')?.trim()),
+      SAML_METADATA_TECH_CONTACT: Boolean(
+        this.config.get<string>('SAML_METADATA_TECH_CONTACT_EMAIL')?.trim() &&
+          this.config.get<string>('SAML_METADATA_TECH_CONTACT_GIVEN_NAME')?.trim(),
+      ),
+      SAML_METADATA_INCLUDE_ARTIFACT_ACS: this.includeArtifactAssertionConsumerServiceInMetadata(),
     };
   }
 
@@ -149,6 +213,7 @@ export class SamlConfigService {
       passReqToCallback: false,
       callbackUrl: acsUrl,
       entryPoint,
+      logoutUrl: this.getIdpLogoutUrl(),
       issuer: this.getSpEntityId(),
       idpCert,
       privateKey,

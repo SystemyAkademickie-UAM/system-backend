@@ -5,6 +5,9 @@ import type { Strategy as PassportStrategyType } from 'passport';
 import passport from 'passport';
 
 import { SAML_STRATEGY_NAME } from '../../constants/saml-constants';
+import {
+  toComparableLogoutProfileFromIdpRequest,
+} from './saml-logout-comparable.util';
 import { mapSamlProfileToSessionUser } from './saml-profile.mapper';
 import { SamlConfigService } from './saml-config.service';
 import { isAcceptableSamlSessionUser } from './saml-subject.util';
@@ -39,8 +42,12 @@ export class SamlPassportBootstrapService implements OnModuleInit {
         }
         done(null, { ...user });
       };
-      const logoutVerify = (_profile: Profile | null, done: VerifiedCallback): void => {
-        done(null, undefined);
+      const logoutVerify = (profile: Profile | null, done: VerifiedCallback): void => {
+        if (profile === null) {
+          done(null, undefined);
+          return;
+        }
+        done(null, toComparableLogoutProfileFromIdpRequest(profile));
       };
       this.strategyInstance = new Strategy(options, signonVerify, logoutVerify);
       passport.use(SAML_STRATEGY_NAME, this.strategyInstance as unknown as PassportStrategyType);
