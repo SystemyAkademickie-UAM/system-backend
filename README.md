@@ -29,6 +29,8 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 
 - `GET /api/counter/health` — smoke check `{ "ok": true }`
 - `POST /api/counter/increment` — body `{ "currentCount": number }` → `{ "count": number }` (`201`)
+- `POST /api/groups/new` — lecturer session; header `X-Browser-ID`; JSON `{ "auth", "group": { ... } }` → `{ "status", "group" }` (see [docs/api.md](./docs/api.md))
+- `POST /api/drive` — lecturer session; `multipart/form-data` fields `json` (string) and `banner` (file for `post`); see [docs/api.md](./docs/api.md)
 - `GET /api/auth/saml/status` — SAML configuration checklist
 - `GET /api/auth/saml/metadata` — SP metadata XML (PIONIER.id / IdP)
 - `GET /api/auth/saml/login` — start SAML SSO (`302` to IdP)
