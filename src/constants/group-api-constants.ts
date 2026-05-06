@@ -6,6 +6,3 @@ export const GROUP_RESPONSE_GROUP_NOT_CREATED_ID = 0;
 
 /** Response `group` field when token, browser, or lecturer role check fails. */
 export const GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID = 1;
-
-/** Role name stored in `user_roles.role` for Game Master / lecturer flows. */
-export const LECTURER_ROLE_NAME = 'lecturer';

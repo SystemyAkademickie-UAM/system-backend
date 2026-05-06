@@ -15,7 +15,7 @@ git clone <your-system-backend-url>
 cd system-backend
 nvm use    # optional
 npm install
-cp .env.example .env   # optional
+cp .env.example .env   # optional — set DATABASE_* and run `npm run typeorm:migration:run` when TYPEORM_SYNC=false
 ```
 
 ## Debian / production host

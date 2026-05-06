@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 
-import { LecturerAuthModule } from '../lecturer-auth/lecturer-auth-module';
+import { AuthTokenSessionModule } from '../auth/api-token/auth-token-session-module';
+import { UserRolesModule } from '../user-roles/user-roles-module';
 import { DriveController } from './drive-controller';
 import { DriveService } from './drive-service';
 
 @Module({
-  imports: [LecturerAuthModule],
+  imports: [AuthTokenSessionModule, UserRolesModule],
   controllers: [DriveController],
   providers: [DriveService],
 })

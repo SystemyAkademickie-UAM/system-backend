@@ -10,7 +10,7 @@ import {
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 
-import { DRIVE_MAX_FILE_BYTES } from '../constants/drive-storage-constants';
+import { DRIVE_MAX_FILE_BYTES } from '../constants/drive-service-constants';
 import { DriveHandleResponseBody, DriveService } from './drive-service';
 
 type MulterBannerFiles = {

@@ -4,15 +4,15 @@ import { dirname, join } from 'node:path';
 
 import { BadRequestException, Injectable } from '@nestjs/common';
 
+import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import {
   DRIVE_API_JSON_STATUS_FORBIDDEN,
   DRIVE_API_JSON_STATUS_OK,
-} from '../constants/drive-api-constants';
-import {
   DRIVE_DEFAULT_ORGANIZATION_ID,
   resolveDriveStorageRoot,
-} from '../constants/drive-storage-constants';
-import { LecturerSessionAuthService } from '../lecturer-auth/lecturer-session-auth-service';
+} from '../constants/drive-service-constants';
+import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+import { UserRolesService } from '../user-roles/user-roles-service';
 
 type DriveHttpMethod = 'post' | 'remove';
 
@@ -109,19 +109,25 @@ function buildAbsoluteDriveObjectPath(organizationId: number, objectId: string):
  */
 @Injectable()
 export class DriveService {
-  constructor(private readonly lecturerSessionAuthService: LecturerSessionAuthService) {}
+  constructor(
+    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly userRolesService: UserRolesService,
+  ) {}
 
   async handleDrive(input: DriveHandleInput): Promise<DriveHandleResponseBody> {
     const payload = parseDriveCommandJson(input.jsonField);
     if (!payload) {
       throw new BadRequestException('json form field must be a valid JSON string');
     }
-    const session = await this.lecturerSessionAuthService.tryGetLecturerSession(
+    const subject = await this.authTokenSessionService.resolveSubjectStrong(
       payload.auth,
       input.browserIdHeader,
     );
     const organizationId = resolveOrganizationId(payload);
-    if (!session) {
+    const isAllowed =
+      subject !== null &&
+      (await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME));
+    if (!isAllowed) {
       return {
         status: DRIVE_API_JSON_STATUS_FORBIDDEN,
         method: payload.drive.method,

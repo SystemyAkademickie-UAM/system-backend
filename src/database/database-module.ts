@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -14,6 +16,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
         const databasePortRaw = configService.get<string>('DATABASE_PORT', '5432');
         const databasePort = Number.parseInt(databasePortRaw, 10);
         const typeOrmSync = configService.get<string>('TYPEORM_SYNC', 'false');
+        const migrationsRun = configService.get<string>('TYPEORM_MIGRATIONS_RUN', 'false') === 'true';
         return {
           type: 'postgres' as const,
           host: configService.get<string>('DATABASE_HOST', '127.0.0.1'),
@@ -23,6 +26,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
           database: configService.get<string>('DATABASE_NAME', 'maq'),
           autoLoadEntities: true,
           synchronize: typeOrmSync === 'true',
+          migrations: [join(__dirname, 'migrations', '*.js')],
+          migrationsRun,
         };
       },
     }),

@@ -49,6 +49,43 @@ Clients send the previous value; the response carries the incremented value.
 
 ---
 
+## Login (opaque API bearer issuance)
+
+Issues a **plaintext** bearer string for `{ "auth": "..." }` field used by `/api/groups/new` and `/api/drive`. The server persists only **`hex(HMAC-SHA256(API_TOKEN_HMAC_SECRET, plaintext))`** in Postgres (`auth_tokens.token_hmac`) plus `user_id`, `browser_uuid`, `created_at`, `expires_at` — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
+
+**Prerequisite:** authenticate via **SAML** so the browser holds HTTP-only **`maqSamlSession`** (see SAML section).
+
+**Endpoint:** `POST /api/login`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Required. Binds issuance (and downstream **strong** checks) to `auth_tokens.browser_uuid`. |
+
+**Request body**
+
+Optional JSON is **reserved for future email/password provisioning** — omit the body entirely for the SAML-exchange flow today.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string | One-time-visible opaque token (transport over **HTTPS only** outside local dev). |
+
+**Errors:**
+
+| Situation | HTTP | Notes |
+| --------- | ---: | ----- |
+| Missing `X-Browser-ID` | `400` | Validation error envelope. |
+| Missing / invalid SSO cookie | `401` | JSON body includes `error` codes `SAML_SESSION_REQUIRED` / `SAML_SESSION_INVALID`. |
+
+Rotate previous rows for `(user_id, browser_uuid)` on each issuance (single active bearer per browser install).
+
+Configure **`API_TOKEN_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=production`**) and optional **`API_TOKEN_TTL_SECONDS`**.
+
+---
+
 ## Groups (lecturer)
 
 Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATABASE_*`, optional `TYPEORM_SYNC=true` for local schema sync).
@@ -65,7 +102,7 @@ Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATA
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `auth` | string | Token value looked up in `auth_tokens.token`. |
+| `auth` | string | Plaintext bearer; server matches `hex(HMAC-SHA256(secret, auth))` against `auth_tokens.token_hmac`. |
 | `group.name` | string | Group display name. |
 | `group.description` | string | Description text. |
 | `group.currency` | string | Custom currency label. |
@@ -74,7 +111,7 @@ Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATA
 | `group.lifeIcon` | integer | Icon reference id (≥ 0). |
 | `group.bannerRef` | string (optional) | Drive / asset reference (e.g. UUID). |
 
-**Authorization:** the token must exist, `X-Browser-ID` must match `auth_tokens.browser_uuid`, and `user_roles` must contain role `lecturer` for `auth_tokens.user_id`.
+**Authorization:** **strong** check — plaintext `auth` must map to a non-expired stored HMAC row, and `X-Browser-ID` must match `browser_uuid`. Then a separate **role** check: `user_roles` must contain role `lecturer` for that user. (Internally: `AuthTokenSessionService.resolveSubjectStrong` + `UserRolesService`; other endpoints can reuse **soft** token-only resolution via `resolveSubjectSoft` where browser binding is not required.)
 
 **Response:** `200 OK` with JSON body:
 

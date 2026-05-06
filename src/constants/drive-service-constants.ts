@@ -1,5 +1,11 @@
 import { join } from 'node:path';
 
+/** JSON `status` on successful drive `post` / `remove` responses (matches API examples). */
+export const DRIVE_API_JSON_STATUS_OK = 200;
+
+/** JSON `status` when the session is missing or not a lecturer session. */
+export const DRIVE_API_JSON_STATUS_FORBIDDEN = 403;
+
 const parsedMaxBytes = Number.parseInt(process.env.DRIVE_MAX_FILE_BYTES ?? '', 10);
 
 /** Maximum uploaded file size in bytes (multipart `banner`). */
