@@ -49,6 +49,138 @@ Clients send the previous value; the response carries the incremented value.
 
 ---
 
+## Login (opaque API bearer issuance)
+
+Issues a **plaintext** bearer string for `{ "auth": "..." }` field used by `/api/groups/new` and `/api/drive`. The server persists only **`hex(HMAC-SHA256(API_TOKEN_HMAC_SECRET, plaintext))`** in Postgres (`auth_tokens.token_hmac`) plus `user_id`, `browser_uuid`, `created_at`, `expires_at` — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
+
+**Prerequisite:** authenticate via **SAML** so the browser holds HTTP-only **`maqSamlSession`** (see SAML section).
+
+**Endpoint:** `POST /api/login`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Required. Binds issuance (and downstream **strong** checks) to `auth_tokens.browser_uuid`. |
+
+**Request body**
+
+Optional JSON is **reserved for future email/password provisioning** — omit the body entirely for the SAML-exchange flow today.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string | One-time-visible opaque token (transport over **HTTPS only** outside local dev). |
+
+**Errors:**
+
+| Situation | HTTP | Notes |
+| --------- | ---: | ----- |
+| Missing `X-Browser-ID` | `400` | Validation error envelope. |
+| Missing / invalid SSO cookie | `401` | JSON body includes `error` codes `SAML_SESSION_REQUIRED` / `SAML_SESSION_INVALID`. |
+
+Rotate previous rows for `(user_id, browser_uuid)` on each issuance (single active bearer per browser install).
+
+Configure **`API_TOKEN_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=production`**) and optional **`API_TOKEN_TTL_SECONDS`**.
+
+---
+
+## Groups (lecturer)
+
+Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATABASE_*`, optional `TYPEORM_SYNC=true` for local schema sync).
+
+**Endpoint:** `POST /api/groups/new`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Must match the `browser_uuid` stored with the auth token row. |
+
+**Request body (JSON):**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string | Plaintext bearer; server matches `hex(HMAC-SHA256(secret, auth))` against `auth_tokens.token_hmac`. |
+| `group.name` | string | Group display name. |
+| `group.description` | string | Description text. |
+| `group.currency` | string | Custom currency label. |
+| `group.currencyIcon` | integer | Icon reference id (≥ 0). |
+| `group.life` | string | “Lives” label. |
+| `group.lifeIcon` | integer | Icon reference id (≥ 0). |
+| `group.bannerRef` | string (optional) | Drive / asset reference (e.g. UUID). |
+
+**Authorization:** **strong** check — plaintext `auth` must map to a non-expired stored HMAC row, and `X-Browser-ID` must match `browser_uuid`. Then a separate **role** check: `user_roles` must contain role `lecturer` for that user. (Internally: `AuthTokenSessionService.resolveSubjectStrong` + `UserRolesService`; other endpoints can reuse **soft** token-only resolution via `resolveSubjectSoft` where browser binding is not required.)
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `status` | integer | Example contract uses `200` on success. |
+| `group` | integer | New row id in `groups`, or `0` if creation failed, or `1` if not authorized. |
+
+**Example**
+
+```http
+POST /api/groups/new HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+X-Browser-ID: <BrowserUUID>
+
+{"auth":"<token>","group":{"name":"...","description":"...","currency":"...","currencyIcon":21,"life":"...","lifeIcon":13,"bannerRef":"<uuid>"}}
+```
+
+```json
+{ "status": 200, "group": 538137 }
+```
+
+---
+
+## Drive (lecturer, multipart)
+
+**Endpoint:** `POST /api/drive`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Same browser binding as for `/api/groups/new`. |
+
+**Request:** `Content-Type: multipart/form-data`
+
+| Field | Type | Rules |
+| ----- | ---- | ----- |
+| `json` | string | Stringified JSON (see below). |
+| `banner` | file | Required when `drive.method` is `post` (image bytes). |
+
+**`json` string content**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string | Auth token (same validation as groups). |
+| `drive.method` | string | `post` (upload) or `remove` (delete). |
+| `drive.driveRef` | string | Empty for `post`; object id / UUID for `remove`. |
+| `drive.size` | number | Client-reported size (validated/logic TBD); responses use stored or `0`. |
+| `drive.organizationId` | number (optional) | Path segment; defaults to `DRIVE_DEFAULT_ORGANIZATION_ID` from env. |
+
+On **`post`**, the server writes the file to:
+
+`<DRIVE_STORAGE_ROOT>/drive/<organizationId>/<uuid>`
+
+using a new random UUID as the filename (and returns that value as `driveRef`).
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `status` | integer | `200` on success; `403` in JSON when the session is not a lecturer session (browser binding / token / role). |
+| `method` | string | Echoes `post` or `remove`. |
+| `driveRef` | string | Stored object id (UUID for `post`). |
+| `size` | integer | Byte length on disk after `post`; `0` for `remove`. |
+
+---
+
 ## SAML 2.0 (PIONIER.id / institutional IdP)
 
 These routes implement a **Service Provider (SP)** using `@node-saml/passport-saml`. Configure federation metadata exchange with your IdP (e.g. UAM) and PIONIER.id registration as required by your institution.
