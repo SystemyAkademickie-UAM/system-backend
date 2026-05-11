@@ -69,8 +69,61 @@ export class SamlController {
       return;
     }
     const cert = this.samlConfig.getSpCert();
-    const metadata = this.strategy.generateServiceProviderMetadata(cert, cert);
+    const rawMetadata = this.strategy.generateServiceProviderMetadata(cert, cert);
+    const metadata = this.transformMetadataForSimpleSaml(rawMetadata);
     res.type('application/xml').send(metadata);
+  }
+
+  /**
+   * Transform SAML metadata XML to use explicit md: prefix for SAML metadata namespace.
+   * SimpleSAML parsers often require the md: prefix instead of default namespace.
+   */
+  private transformMetadataForSimpleSaml(xml: string): string {
+    let result = xml;
+    
+    // Step 0: Add encoding declaration to XML header
+    result = result.replace(
+      '<?xml version="1.0"?>',
+      '<?xml version="1.0" encoding="UTF-8"?>',
+    );
+    
+    // Step 1: Change default xmlns to xmlns:md
+    result = result.replace(
+      'xmlns="urn:oasis:names:tc:SAML:2.0:metadata"',
+      'xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"',
+    );
+    
+    // Step 2: Remove xmlns:ds from root element (will add to KeyInfo)
+    result = result.replace(
+      / xmlns:ds="http:\/\/www\.w3\.org\/2000\/09\/xmldsig#"/g,
+      '',
+    );
+    
+    // Step 3: Add md: prefix to all SAML metadata elements
+    const mdElements = [
+      'EntityDescriptor',
+      'SPSSODescriptor',
+      'KeyDescriptor',
+      'SingleLogoutService',
+      'NameIDFormat',
+      'AssertionConsumerService',
+    ];
+    
+    for (const el of mdElements) {
+      // Opening tags
+      result = result.replace(new RegExp(`<${el}([ >])`, 'g'), `<md:${el}$1`);
+      result = result.replace(new RegExp(`<${el}$`, 'gm'), `<md:${el}`);
+      // Closing tags
+      result = result.replace(new RegExp(`</${el}>`, 'g'), `</md:${el}>`);
+    }
+    
+    // Step 4: Add xmlns:ds to ds:KeyInfo element
+    result = result.replace(
+      '<ds:KeyInfo>',
+      '<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">',
+    );
+    
+    return result;
   }
 
   @Get('login')
