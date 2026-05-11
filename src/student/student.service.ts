@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class StudentService {
-  
+
   // Returns mock data for the student profile
   getStudentProfile() {
     return {

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class GroupsService {
-  
+
   // Function to generate a random code
   generateCode(type: string) {
     // Generate a simple 6-character code
@@ -11,7 +11,7 @@ export class GroupsService {
     for (let i = 0; i < 6; i++) {
       code += characters.charAt(Math.floor(Math.random() * characters.length));
     }
-    
+
     return {
       wiadomosc: 'Udalo sie wygenerowac kod',
       kod: code,
