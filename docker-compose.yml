@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=dev_user
+      - DB_PASSWORD=dev_password
+      - DB_NAME=maq_dev
+    depends_on:
+      - db
+
+  db:
+    image: postgres:13.16-alpine
+    environment:
+      - POSTGRES_USER=dev_user
+      - POSTGRES_PASSWORD=dev_password
+      - POSTGRES_DB=maq_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      # Zachowanie danych w bazie po wyłączeniu kontenerów
+      - pg_data:/var/lib/postgresql/data
+
+volumes:
+  pg_data:
