@@ -6,11 +6,11 @@ export class StudentController {
   
   constructor(private readonly studentService: StudentService) {}
 
-  // Endpoint dla profilu (GET, bo tylko POBIERAMY dane)
-  // Pełny adres: GET /api/student/profile
+  // Profile endpoint (GET, because we only FETCH data)
+  // Full address: GET /api/student/profile
   @Get('profile')
-  pobierzProfil() {
-    // Prosimy serwis o nasze sztuczne dane i odsyłamy do Pawła
-    return this.studentService.pobierzProfilStudenta();
+  getProfile() {
+    // Ask the service for mock data
+    return this.studentService.getStudentProfile();
   }
 }
