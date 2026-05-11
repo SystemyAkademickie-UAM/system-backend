@@ -57,15 +57,21 @@ These routes implement a **Service Provider (SP)** using `@node-saml/passport-sa
 
 | Variable | Purpose |
 | -------- | ------- |
-| `SAML_SP_ENTITY_ID` | SP `entityID` — public URI, often your metadata URL. |
-| `SAML_ACS_URL` | Full URL of the Assertion Consumer Service (must match deployed host). |
-| `SAML_ENTRY_POINT` | IdP single sign-on URL (from IdP metadata). |
-| `SAML_IDP_CERT` **or** `SAML_IDP_CERT_PATH` | IdP signing certificate (PEM). |
+| `SAML_SP_ENTITY_ID` | SP `entityID` — public URI, often your metadata URL (`…/api/auth/saml/metadata`). |
+| `SAML_ACS_URL` | Full URL of the Assertion Consumer Service (**POST** binding; must match metadata and how clients reach the API). |
+| `SAML_ENTRY_POINT` | IdP SSO URL — from IdP metadata (`SingleSignOnService`, **Redirect** binding), e.g. `…/idp/profile/SAML2/Redirect/SSO`. |
+| `SAML_IDP_CERT` **or** `SAML_IDP_CERT_PATH` | IdP **signing** certificate (PEM). |
 | `SAML_SP_PUBLIC_CERT` **or** `SAML_SP_PUBLIC_CERT_PATH` | SP public certificate (PEM). |
-| `SAML_SP_PRIVATE_KEY` **or** `SAML_SP_PRIVATE_KEY_PATH` | SP private key (PEM). |
+| `SAML_SP_PRIVATE_KEY` **or** `SAML_SP_PRIVATE_KEY_PATH` | SP private key (PEM). Used to sign **AuthnRequests** (Redirect) and to advertise `AuthnRequestsSigned` in SP metadata. |
 | `SAML_SESSION_JWT_SECRET` | Secret for signing the HTTP-only session JWT. **Required whenever SAML SP routes should activate** (including non-production). |
-| `SAML_LOGIN_SUCCESS_REDIRECT_URL` | Optional. Browser redirect after successful ACS (default `http://127.0.0.1:3000/`). |
+| `SAML_LOGIN_SUCCESS_REDIRECT_URL` | **Required.** Browser redirect after successful ACS (e.g. SPA origin). Use the same host you use in the browser (`127.0.0.1` vs `localhost` — pick one and use it in `CORS_ORIGIN` too). |
 | `SAML_SESSION_JWT_EXPIRES_IN` | Optional. JWT lifetime and cookie `maxAge` (default `8h`). Same format as `jsonwebtoken` / `ms` (e.g. `8h`, `15m`, or seconds as a number string). |
+| `SAML_NAMEID_FORMAT` | Optional. NameIDPolicy format (default **transient**, typical for eduGAIN). Set to `omit` or `none` to omit a fixed format (some Shibboleth setups). |
+| `SAML_ACCEPT_CLOCK_SKEW_MS` | Optional. Clock skew in ms for assertion validity (default `5000`). |
+| `SAML_WANT_AUTHN_RESPONSE_SIGNED` | Optional. Default `true` — require signed `Response` (usual for Shibboleth). |
+| `SAML_WANT_ASSERTIONS_SIGNED` | Optional. Default `true` — require signed `Assertion`. |
+| `SAML_DISABLE_REQUESTED_AUTHN_CONTEXT` | Optional. Default `true` — do not send requested `AuthnContext` (avoids IdP rejecting unknown contexts). |
+| `SAML_SKIP_REQUEST_COMPRESSION` | Optional. Default `false`. Set `true` only if debugging a broken intermediary. |
 
 If any required value is missing, **`/api/auth/saml/login`**, **`/api/auth/saml/metadata`**, and **`/api/auth/saml/acs`** respond with **`503`** and a JSON body with `error: "SAML_NOT_CONFIGURED"` (except **`/api/auth/saml/status`**, which always returns **`200`**).
 
@@ -91,7 +97,7 @@ Starts SAML **Web SSO** — responds with **`302`** to the IdP `entryPoint` when
 
 **POST `/api/auth/saml/acs`**
 
-Assertion Consumer Service — accepts `SAMLResponse` (HTTP-POST). On success, sets an HTTP-only cookie `maqSamlSession` with a JWT and redirects to `SAML_LOGIN_SUCCESS_REDIRECT_URL`.
+Assertion Consumer Service — accepts `SAMLResponse` (**HTTP-POST**). On success, sets an HTTP-only cookie `maqSamlSession` with a JWT and redirects to `SAML_LOGIN_SUCCESS_REDIRECT_URL` (required in `.env`).
 
 **GET `/api/auth/saml/me`**
 
