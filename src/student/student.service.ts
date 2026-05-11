@@ -3,13 +3,19 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class StudentService {
   
-  // Zwracamy sztuczne dane (mocki) dla profilu studenta
-  pobierzProfilStudenta() {
+  // Returns mock data for the student profile
+  getStudentProfile() {
     return {
-      zycia: 3,                 // Student ma 3 życia
-      waluta: 1500,             // Waluta z tabeli statystyk
-      ranga: 'Poczatkujacy',    // Jego ranga
-      odznaki: ['Szybki Start'] // Pierwsza odznaka zdobyta
+      id: 1,
+      imie: 'Jacek',
+      nazwisko: 'Testowy',
+      album: '123456',
+      email: 'student.test@st.amu.edu.pl',
+      rola: 1,                 // Student role
+      zycia: 3,                 // Remaining lives
+      waluta: 1500,             // Currency
+      ranga: 'Poczatkujacy',    // Rank
+      odznaki: ['Szybki Start'] // Earned badges
     };
   }
 }
