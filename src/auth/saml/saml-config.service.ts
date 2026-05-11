@@ -1,163 +1,161 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 
-import type { PassportSamlConfig } from '@node-saml/passport-saml';
-import { ValidateInResponseTo } from '@node-saml/node-saml';
-
-import { SAML_SESSION_JWT_EXPIRES_IN } from '../../constants/saml-constants';
-
-function readPemFromEnv(valueKey: string, pathKey: string, config: ConfigService): string | undefined {
-  const inline = config.get<string>(valueKey)?.trim();
-  if (inline !== undefined && inline.length > 0) {
-    return inline.replace(/\\n/g, '\n');
-  }
-  const filePath = config.get<string>(pathKey)?.trim();
-  if (filePath === undefined || filePath.length === 0) {
-    return undefined;
-  }
-  try {
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    return undefined;
-  }
-}
+import { ValidateInResponseTo, type SamlConfig } from '@node-saml/node-saml';
 
 @Injectable()
 export class SamlConfigService {
   constructor(private readonly config: ConfigService) {}
 
-  isConfigurationComplete(): boolean {
-    const entityId = this.config.get<string>('SAML_SP_ENTITY_ID')?.trim();
-    const acsUrl = this.config.get<string>('SAML_ACS_URL')?.trim();
-    const entryPoint = this.config.get<string>('SAML_ENTRY_POINT')?.trim();
-    const idpCert = this.getIdpCert();
-    const spPub = this.getSpPublicCert();
-    const spKey = this.getSpPrivateKey();
-    const jwtSecret = this.config.get<string>('SAML_SESSION_JWT_SECRET')?.trim();
-    return (
-      entityId !== undefined &&
-      entityId.length > 0 &&
-      acsUrl !== undefined &&
-      acsUrl.length > 0 &&
-      entryPoint !== undefined &&
-      entryPoint.length > 0 &&
-      idpCert !== undefined &&
-      idpCert.length > 0 &&
-      spPub !== undefined &&
-      spPub.length > 0 &&
-      spKey !== undefined &&
-      spKey.length > 0 &&
-      jwtSecret !== undefined &&
-      jwtSecret.length > 0
-    );
-  }
-
-  getLoginSuccessRedirectUrl(): string {
-    const fallback = 'http://127.0.0.1:3000/';
-    const fromEnv = this.config.get<string>('SAML_LOGIN_SUCCESS_REDIRECT_URL')?.trim();
-    return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : fallback;
-  }
-
-  getSessionJwtSecret(): string {
-    const raw = this.config.get<string>('SAML_SESSION_JWT_SECRET')?.trim();
-    if (raw === undefined || raw.length === 0) {
-      throw new Error('SAML_SESSION_JWT_SECRET is not set');
-    }
-    return raw;
-  }
-
-  getSessionJwtExpiresIn(): string {
-    const fromEnv = this.config.get<string>('SAML_SESSION_JWT_EXPIRES_IN')?.trim();
-    return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : SAML_SESSION_JWT_EXPIRES_IN;
-  }
-
   getSpEntityId(): string {
-    return this.config.getOrThrow<string>('SAML_SP_ENTITY_ID').trim();
+    return this.config.getOrThrow<string>('SAML_SP_ENTITY_ID');
   }
 
-  getIdpCert(): string | undefined {
-    return readPemFromEnv('SAML_IDP_CERT', 'SAML_IDP_CERT_PATH', this.config);
+  getAcsUrl(): string {
+    return this.config.getOrThrow<string>('SAML_ACS_URL');
   }
 
-  getSpPublicCert(): string | undefined {
-    return readPemFromEnv('SAML_SP_PUBLIC_CERT', 'SAML_SP_PUBLIC_CERT_PATH', this.config);
+  getIdpEntryPoint(): string {
+    return this.config.getOrThrow<string>('SAML_IDP_ENTRY_POINT');
   }
 
-  getSpPrivateKey(): string | undefined {
-    return readPemFromEnv('SAML_SP_PRIVATE_KEY', 'SAML_SP_PRIVATE_KEY_PATH', this.config);
-  }
-
-  /**
-   * Presence flags for operators (`GET /auth/saml/status`) without treating unreadable paths as “missing env”.
-   */
-  getRequirementsPresence(): Record<string, boolean> {
-    return {
-      SAML_SP_ENTITY_ID: Boolean(this.config.get<string>('SAML_SP_ENTITY_ID')?.trim()),
-      SAML_ACS_URL: Boolean(this.config.get<string>('SAML_ACS_URL')?.trim()),
-      SAML_ENTRY_POINT: Boolean(this.config.get<string>('SAML_ENTRY_POINT')?.trim()),
-      SAML_IDP_CERT_OR_PATH: Boolean(
-        this.config.get<string>('SAML_IDP_CERT')?.trim() ||
-          this.config.get<string>('SAML_IDP_CERT_PATH')?.trim(),
-      ),
-      SAML_SP_KEYS: Boolean(
-        (this.config.get<string>('SAML_SP_PUBLIC_CERT')?.trim() ||
-          this.config.get<string>('SAML_SP_PUBLIC_CERT_PATH')?.trim()) &&
-          (this.config.get<string>('SAML_SP_PRIVATE_KEY')?.trim() ||
-            this.config.get<string>('SAML_SP_PRIVATE_KEY_PATH')?.trim()),
-      ),
-      SAML_SESSION_JWT_SECRET: Boolean(this.config.get<string>('SAML_SESSION_JWT_SECRET')?.trim()),
-    };
-  }
-
-  /**
-   * Whether PEM material actually loaded (paths readable / inline non-empty).
-   * When env `requirements` are true but these are false, fix paths or mount secrets (common in Docker).
-   */
-  getPemMaterialsLoaded(): {
-    idpCert: boolean;
-    spPublicCert: boolean;
-    spPrivateKey: boolean;
-  } {
-    const idpCert = this.getIdpCert();
-    const spPublicCert = this.getSpPublicCert();
-    const spPrivateKey = this.getSpPrivateKey();
-    return {
-      idpCert: idpCert !== undefined && idpCert.length > 0,
-      spPublicCert: spPublicCert !== undefined && spPublicCert.length > 0,
-      spPrivateKey: spPrivateKey !== undefined && spPrivateKey.length > 0,
-    };
-  }
-
-  /**
-   * Options passed to `@node-saml/passport-saml` Strategy (extends `SamlConfig`).
-   */
-  buildPassportSamlOptions(): PassportSamlConfig {
-    if (!this.isConfigurationComplete()) {
-      throw new Error('SAML environment is incomplete; refusing to build SAML options.');
+  getIdpCert(): string {
+    const certPath = this.config.get<string>('SAML_IDP_CERT_PATH');
+    const certInline = this.config.get<string>('SAML_IDP_CERT');
+    
+    if (certInline) {
+      return this.normalizePem(certInline);
     }
-    const acsUrl = this.config.getOrThrow<string>('SAML_ACS_URL').trim();
-    const entryPoint = this.config.getOrThrow<string>('SAML_ENTRY_POINT').trim();
-    const idpCert = this.getIdpCert();
-    const privateKey = this.getSpPrivateKey();
-    const publicCert = this.getSpPublicCert();
-    if (idpCert === undefined || privateKey === undefined || publicCert === undefined) {
-      throw new Error('SAML certificate or key material resolved to empty content.');
+    if (certPath) {
+      return this.readPemFile(certPath);
     }
+    throw new Error('SAML_IDP_CERT or SAML_IDP_CERT_PATH required');
+  }
 
+  getSpPrivateKey(): string {
+    const keyPath = this.config.get<string>('SAML_SP_PRIVATE_KEY_PATH');
+    const keyInline = this.config.get<string>('SAML_SP_PRIVATE_KEY');
+    
+    if (keyInline) {
+      return this.normalizePem(keyInline);
+    }
+    if (keyPath) {
+      return this.readPemFile(keyPath);
+    }
+    throw new Error('SAML_SP_PRIVATE_KEY or SAML_SP_PRIVATE_KEY_PATH required');
+  }
+
+  getSpCert(): string {
+    const certPath = this.config.get<string>('SAML_SP_CERT_PATH');
+    const certInline = this.config.get<string>('SAML_SP_CERT');
+    
+    if (certInline) {
+      return this.normalizePem(certInline);
+    }
+    if (certPath) {
+      return this.readPemFile(certPath);
+    }
+    throw new Error('SAML_SP_CERT or SAML_SP_CERT_PATH required');
+  }
+
+  getJwtSecret(): string {
+    return this.config.getOrThrow<string>('SAML_JWT_SECRET');
+  }
+
+  getJwtExpiresIn(): string {
+    return this.config.get<string>('SAML_JWT_EXPIRES_IN') || '8h';
+  }
+
+  getLoginSuccessUrl(): string {
+    return this.config.getOrThrow<string>('SAML_LOGIN_SUCCESS_URL');
+  }
+
+  getLogoutUrl(): string {
+    return this.config.get<string>('SAML_LOGOUT_URL') || this.getLoginSuccessUrl();
+  }
+
+  getIdpLogoutUrl(): string | undefined {
+    return this.config.get<string>('SAML_IDP_LOGOUT_URL');
+  }
+
+  getSloCallbackUrl(): string {
+    const baseUrl = this.getAcsUrl().replace('/acs', '/slo');
+    return this.config.get<string>('SAML_SLO_CALLBACK_URL') || baseUrl;
+  }
+
+  /**
+   * Build passport-saml configuration matching PIONIER.id requirements.
+   * - Signed AuthnRequest (SHA-256)
+   * - Transient NameID format
+   * - Signed assertions required
+   * - HTTP-Redirect for AuthnRequest, HTTP-POST for ACS
+   */
+  buildSamlConfig(): SamlConfig {
     return {
-      passReqToCallback: false,
-      callbackUrl: acsUrl,
-      entryPoint,
+      callbackUrl: this.getAcsUrl(),
+      entryPoint: this.getIdpEntryPoint(),
       issuer: this.getSpEntityId(),
-      idpCert,
-      privateKey,
-      publicCert,
-      wantAssertionsSigned: true,
-      validateInResponseTo: ValidateInResponseTo.always,
-      disableRequestedAuthnContext: true,
+      idpCert: this.getIdpCert(),
+      privateKey: this.getSpPrivateKey(),
+      publicCert: this.getSpCert(),
+      
+      // PIONIER.id: transient NameID format (typical for eduGAIN)
+      identifierFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
+      
+      // Signed AuthnRequest with SHA-256 (PIONIER requirement)
       signatureAlgorithm: 'sha256',
       digestAlgorithm: 'sha256',
+      
+      // Require signed assertions (security requirement)
+      wantAssertionsSigned: true,
+      wantAuthnResponseSigned: true,
+      
+      // Do not request specific authn context (let IdP decide)
+      disableRequestedAuthnContext: true,
+      
+      // Clock skew tolerance (5 seconds)
+      acceptedClockSkewMs: 5000,
+      
+      // Validate InResponseTo - disabled for test IdP compatibility
+      validateInResponseTo: ValidateInResponseTo.never,
+      
+      // Single Logout (SLO) configuration
+      logoutUrl: this.getIdpLogoutUrl(),
+      logoutCallbackUrl: this.getSloCallbackUrl(),
     };
+  }
+
+  isConfigured(): boolean {
+    try {
+      this.getSpEntityId();
+      this.getAcsUrl();
+      this.getIdpEntryPoint();
+      this.getIdpCert();
+      this.getSpPrivateKey();
+      this.getSpCert();
+      this.getJwtSecret();
+      this.getLoginSuccessUrl();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private readPemFile(filePath: string): string {
+    const absolutePath = path.isAbsolute(filePath)
+      ? filePath
+      : path.resolve(process.cwd(), filePath);
+    return this.normalizePem(fs.readFileSync(absolutePath, 'utf-8'));
+  }
+
+  private normalizePem(pem: string): string {
+    return pem
+      .replace(/^\uFEFF/, '')
+      .replace(/\\n/g, '\n')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .trim();
   }
 }
