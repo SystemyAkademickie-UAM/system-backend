@@ -1,0 +1,10 @@
+# GitGuardian configuration
+# Ignore files with intentional non-secret values
+#
+# - .env.example: empty placeholder values for documentation
+# - ci.yml: ephemeral test database credentials (destroyed after CI run)
+
+secret:
+  ignored-paths:
+    - ".env.example"
+    - ".github/workflows/ci.yml"
