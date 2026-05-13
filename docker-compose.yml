@@ -1,17 +1,17 @@
-version: '3.8'
-
 services:
   backend:
     build:
       context: .
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=dev_user
-      - DB_PASSWORD=dev_password
-      - DB_NAME=maq_dev
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_USER=dev_user
+      - DATABASE_PASSWORD=dev_password
+      - DATABASE_NAME=maq_dev
     depends_on:
       - db
 
@@ -22,9 +22,9 @@ services:
       - POSTGRES_PASSWORD=dev_password
       - POSTGRES_DB=maq_dev
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./test_db.sql:/docker-entrypoint-initdb.d/test_db.sql
       # Zachowanie danych w bazie po wyłączeniu kontenerów
       - pg_data:/var/lib/postgresql/data
 
