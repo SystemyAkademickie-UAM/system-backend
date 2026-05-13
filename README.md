@@ -44,3 +44,15 @@ Details in [docs/api.md](./docs/api.md).
 ## License
 
 [LICENSE.md](./LICENSE.md) (all rights reserved).
+
+## Docker
+
+Uruchomienie z testową bazą danych:
+```bash
+docker compose up --build
+```
+
+Uruchomienie testów e2e:
+```bash
+docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
+```
