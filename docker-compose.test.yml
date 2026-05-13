@@ -1,0 +1,33 @@
+services:
+  test-backend:
+    build:
+      context: .
+      target: builder
+    env_file:
+      - .env
+    environment:
+      - DATABASE_HOST=test-db
+      - DATABASE_PORT=5432
+      - DATABASE_USER=dev_user
+      - DATABASE_PASSWORD=dev_password
+      - DATABASE_NAME=maq_dev
+    depends_on:
+      test-db:
+        condition: service_healthy
+    # Nadpisujemy domyślny skrypt startowy na uruchomienie testów e2e
+    command: ["npm", "run", "test:e2e"]
+
+  test-db:
+    image: postgres:13.16-alpine
+    environment:
+      - POSTGRES_USER=dev_user
+      - POSTGRES_PASSWORD=dev_password
+      - POSTGRES_DB=maq_dev
+    volumes:
+      - ./test_db.sql:/docker-entrypoint-initdb.d/test_db.sql
+    healthcheck:
+      # Upewniamy się, że baza zainicjalizuje się zanim odpalimy testy
+      test: ["CMD-SHELL", "pg_isready -U dev_user -d maq_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
