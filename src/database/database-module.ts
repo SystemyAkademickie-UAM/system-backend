@@ -4,6 +4,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { resolvePostgresSslOption } from './postgres-ssl.config';
+
 /**
  * Registers TypeORM against PostgreSQL (`DATABASE_*`, `TYPEORM_SYNC`).
  */
@@ -17,6 +19,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
         const databasePort = Number.parseInt(databasePortRaw, 10);
         const typeOrmSync = configService.get<string>('TYPEORM_SYNC', 'false');
         const migrationsRun = configService.get<string>('TYPEORM_MIGRATIONS_RUN', 'false') === 'true';
+        const ssl = resolvePostgresSslOption((key) => configService.get<string>(key));
         return {
           type: 'postgres' as const,
           host: configService.get<string>('DATABASE_HOST', '127.0.0.1'),
@@ -24,6 +27,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
           username: configService.get<string>('DATABASE_USER', ''),
           password: configService.get<string>('DATABASE_PASSWORD', ''),
           database: configService.get<string>('DATABASE_NAME', ''),
+          ssl: ssl === false ? undefined : ssl,
           autoLoadEntities: true,
           synchronize: typeOrmSync === 'true',
           migrations: [join(__dirname, 'migrations', '*.js')],
