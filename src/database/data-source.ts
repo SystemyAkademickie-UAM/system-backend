@@ -9,8 +9,11 @@ import { EnrollmentEntity } from './entities/enrollment.entity';
 import { GroupEntity } from './entities/group.entity';
 import { OrganizationEntity } from './entities/organization.entity';
 import { UserEntity } from './entities/user.entity';
+import { resolvePostgresSslOption } from './postgres-ssl.config';
 
 const parsedPort = Number.parseInt(process.env.DATABASE_PORT ?? '5432', 10);
+
+const ssl = resolvePostgresSslOption((key) => process.env[key]);
 
 const isTypeScriptContext = __filename.endsWith('.ts');
 
@@ -24,6 +27,7 @@ export default new DataSource({
   username: process.env.DATABASE_USER ?? 'postgres',
   password: process.env.DATABASE_PASSWORD ?? 'postgres',
   database: process.env.DATABASE_NAME ?? 's494657_proj',
+  ssl: ssl === false ? undefined : ssl,
   entities: [
     UserEntity,
     AuthTokenEntity,
