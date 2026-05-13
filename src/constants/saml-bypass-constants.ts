@@ -14,6 +14,8 @@ export const SAML_BYPASS_DEV_STUDENT_USER: SamlUser = {
   nameId: SAML_BYPASS_DEV_STUDENT_SUB,
   email: 'dev.student@localhost.invalid',
   displayName: 'Dev Student',
+  affiliations: ['student', 'member'],
+  role: 'student',
 };
 
 /** Synthetic IdP user with lecturer wiring (`auth.accounts`). */
@@ -21,4 +23,6 @@ export const SAML_BYPASS_DEV_LECTURER_USER: SamlUser = {
   nameId: SAML_BYPASS_DEV_LECTURER_SUB,
   email: 'dev.lecturer@localhost.invalid',
   displayName: 'Dev Lecturer',
+  affiliations: ['faculty', 'employee'],
+  role: 'lecturer',
 };

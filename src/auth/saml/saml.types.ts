@@ -1,4 +1,18 @@
 /**
+ * eduPersonAffiliation values from SAML IdP.
+ * @see https://wiki.refeds.org/display/STAN/eduPerson
+ */
+export type EduPersonAffiliation =
+  | 'student'
+  | 'faculty'
+  | 'staff'
+  | 'employee'
+  | 'member'
+  | 'affiliate'
+  | 'alum'
+  | 'library-walk-in';
+
+/**
  * User session data stored in JWT after successful SAML authentication.
  * Maps to eduPerson / SCHAC attributes from PIONIER.id federation.
  */
@@ -10,9 +24,12 @@ export interface SamlUser {
   readonly givenName?: string;
   readonly surname?: string;
   readonly displayName?: string;
-  readonly studentId?: string;
   readonly eduPersonPrincipalName?: string;
   readonly schacPersonalUniqueCode?: string;
+  /** Raw eduPersonAffiliation values from IdP (e.g. ["student", "member"]). */
+  readonly affiliations?: readonly EduPersonAffiliation[];
+  /** Derived system role based on affiliations (student | lecturer | administrator). */
+  readonly role?: string;
 }
 
 export interface SamlSessionPayload {
@@ -23,5 +40,8 @@ export interface SamlSessionPayload {
   givenName?: string;
   surname?: string;
   displayName?: string;
-  studentId?: string;
+  /** Raw eduPersonAffiliation values from IdP. */
+  affiliations?: readonly EduPersonAffiliation[];
+  /** Derived system role (student | lecturer | administrator). */
+  role?: string;
 }
