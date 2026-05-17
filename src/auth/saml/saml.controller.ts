@@ -4,12 +4,13 @@ import type { Profile } from '@node-saml/node-saml';
 import type { Request, Response } from 'express';
 import passport from 'passport';
 
+import { SAML_SESSION_COOKIE_NAME } from '../../constants/saml-constants';
+import { jwtExpiresInToCookieMaxAgeMs } from './saml-jwt-expiry.util';
 import { SamlConfigService } from './saml-config.service';
 import { SamlService } from './saml.service';
 import type { SamlUser } from './saml.types';
 
 const SAML_STRATEGY_NAME = 'saml';
-const SESSION_COOKIE_NAME = 'saml_session';
 
 @Controller('auth/saml')
 export class SamlController {
@@ -69,8 +70,61 @@ export class SamlController {
       return;
     }
     const cert = this.samlConfig.getSpCert();
-    const metadata = this.strategy.generateServiceProviderMetadata(cert, cert);
+    const rawMetadata = this.strategy.generateServiceProviderMetadata(cert, cert);
+    const metadata = this.transformMetadataForSimpleSaml(rawMetadata);
     res.type('application/xml').send(metadata);
+  }
+
+  /**
+   * Transform SAML metadata XML to use explicit md: prefix for SAML metadata namespace.
+   * SimpleSAML parsers often require the md: prefix instead of default namespace.
+   */
+  private transformMetadataForSimpleSaml(xml: string): string {
+    let result = xml;
+    
+    // Step 0: Add encoding declaration to XML header
+    result = result.replace(
+      '<?xml version="1.0"?>',
+      '<?xml version="1.0" encoding="UTF-8"?>',
+    );
+    
+    // Step 1: Change default xmlns to xmlns:md
+    result = result.replace(
+      'xmlns="urn:oasis:names:tc:SAML:2.0:metadata"',
+      'xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"',
+    );
+    
+    // Step 2: Remove xmlns:ds from root element (will add to KeyInfo)
+    result = result.replace(
+      / xmlns:ds="http:\/\/www\.w3\.org\/2000\/09\/xmldsig#"/g,
+      '',
+    );
+    
+    // Step 3: Add md: prefix to all SAML metadata elements
+    const mdElements = [
+      'EntityDescriptor',
+      'SPSSODescriptor',
+      'KeyDescriptor',
+      'SingleLogoutService',
+      'NameIDFormat',
+      'AssertionConsumerService',
+    ];
+    
+    for (const el of mdElements) {
+      // Opening tags
+      result = result.replace(new RegExp(`<${el}([ >])`, 'g'), `<md:${el}$1`);
+      result = result.replace(new RegExp(`<${el}$`, 'gm'), `<md:${el}`);
+      // Closing tags
+      result = result.replace(new RegExp(`</${el}>`, 'g'), `</md:${el}>`);
+    }
+    
+    // Step 4: Add xmlns:ds to ds:KeyInfo element
+    result = result.replace(
+      '<ds:KeyInfo>',
+      '<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">',
+    );
+    
+    return result;
   }
 
   @Get('login')
@@ -111,11 +165,11 @@ export class SamlController {
         const token = this.samlService.signSessionToken(user as SamlUser);
         const isProd = process.env.NODE_ENV === 'production';
         
-        res.cookie(SESSION_COOKIE_NAME, token, {
+        res.cookie(SAML_SESSION_COOKIE_NAME, token, {
           httpOnly: true,
           secure: isProd,
           sameSite: 'lax',
-          maxAge: 8 * 60 * 60 * 1000, // 8 hours
+          maxAge: jwtExpiresInToCookieMaxAgeMs(this.samlConfig.getJwtExpiresIn()),
         });
 
         res.redirect(this.samlConfig.getLoginSuccessUrl());
@@ -125,7 +179,7 @@ export class SamlController {
 
   @Get('me')
   getMe(@Req() req: Request): { authenticated: boolean; user?: unknown } {
-    const token = req.cookies?.[SESSION_COOKIE_NAME];
+    const token = req.cookies?.[SAML_SESSION_COOKIE_NAME];
     if (!token) {
       return { authenticated: false };
     }
@@ -138,7 +192,7 @@ export class SamlController {
 
   @Post('logout')
   logout(@Req() req: Request, @Res() res: Response): void {
-    res.clearCookie(SESSION_COOKIE_NAME);
+    res.clearCookie(SAML_SESSION_COOKIE_NAME);
     res.json({ success: true });
   }
 
@@ -148,11 +202,11 @@ export class SamlController {
    */
   @Get('logout')
   samlLogout(@Req() req: Request, @Res() res: Response): void {
-    const token = req.cookies?.[SESSION_COOKIE_NAME];
+    const token = req.cookies?.[SAML_SESSION_COOKIE_NAME];
     const session = token ? this.samlService.verifySessionToken(token) : null;
     
     // Clear local session first
-    res.clearCookie(SESSION_COOKIE_NAME);
+    res.clearCookie(SAML_SESSION_COOKIE_NAME);
 
     // If no strategy or no IdP logout configured, just redirect
     if (!this.strategy || !this.samlConfig.getIdpLogoutUrl()) {
@@ -213,7 +267,7 @@ export class SamlController {
 
   private handleSloCallback(_req: Request, res: Response): void {
     // Clear session cookie and redirect to frontend
-    res.clearCookie(SESSION_COOKIE_NAME);
+    res.clearCookie(SAML_SESSION_COOKIE_NAME);
     res.redirect(this.samlConfig.getLogoutUrl());
   }
 }

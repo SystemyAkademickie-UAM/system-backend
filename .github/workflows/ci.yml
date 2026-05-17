@@ -11,6 +11,32 @@ on:
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
+
+    # Ephemeral test database - credentials are intentionally simple for CI container
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci_test_user
+          POSTGRES_PASSWORD: ci_test_pass
+          POSTGRES_DB: ci_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: 5432
+      DATABASE_USER: ci_test_user
+      DATABASE_PASSWORD: ci_test_pass
+      DATABASE_NAME: ci_test_db
+      TYPEORM_SYNC: true
+      SAML_JWT_SECRET: ${{ secrets.CI_SAML_JWT_SECRET }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,6 +52,13 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Create PostgreSQL schemas
+        run: |
+          PGPASSWORD=ci_test_pass psql -h 127.0.0.1 -U ci_test_user -d ci_test_db -c "CREATE SCHEMA IF NOT EXISTS auth;"
+          PGPASSWORD=ci_test_pass psql -h 127.0.0.1 -U ci_test_user -d ci_test_db -c "CREATE SCHEMA IF NOT EXISTS education;"
+          PGPASSWORD=ci_test_pass psql -h 127.0.0.1 -U ci_test_user -d ci_test_db -c "CREATE SCHEMA IF NOT EXISTS gamification;"
+          PGPASSWORD=ci_test_pass psql -h 127.0.0.1 -U ci_test_user -d ci_test_db -c "CREATE SCHEMA IF NOT EXISTS services;"
 
       - name: Test
         run: npm test
