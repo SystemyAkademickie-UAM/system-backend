@@ -11,6 +11,8 @@ docker run --rm -p 8080:8080 -e PORT=8080 system-backend:local
 
 The process listens on **8080** inside the container (`PORT=8080`), which matches a host nginx `location /api/ { proxy_pass http://localhost:8080; ... }` when you publish `-p 127.0.0.1:8080:8080` (or equivalent).
 
+The image sets **`NODE_ENV=production`**. **`docker-compose.yml` in this repo overrides it** with **`NODE_ENV=${NODE_ENV:-development}`** so dev SAML bypass (`SAML_BYPASS_ENABLED=true`) is allowed when using Compose locally. For a hardened production stack, set **`NODE_ENV=production`** in the Compose `.env` file (variable substitution) or equivalent orchestration env.
+
 ## Helper scripts (Docker CLI only)
 
 From this service directory (`system-backend`, where this `docs/` folder lives next to `scripts/`):

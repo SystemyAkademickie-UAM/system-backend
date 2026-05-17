@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthTokenSessionModule } from '../auth/api-token/auth-token-session-module';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
+import { GamificationModule } from '../gamification/gamification-module';
 import { UserRolesModule } from '../user-roles/user-roles-module';
 import { GroupsEnrollmentService } from './groups-enrollment-service';
 import { GroupsController } from './groups-controller';
@@ -14,6 +15,7 @@ import { GroupsService } from './groups-service';
     TypeOrmModule.forFeature([GroupEntity, EnrollmentEntity]),
     AuthTokenSessionModule,
     UserRolesModule,
+    GamificationModule,
   ],
   controllers: [GroupsController],
   providers: [GroupsService, GroupsEnrollmentService],

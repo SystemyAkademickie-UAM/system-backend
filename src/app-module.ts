@@ -6,6 +6,7 @@ import { CounterModule } from './counter/counter-module';
 import { DatabaseModule } from './database/database-module';
 import { LoginModule } from './auth/login/login-module';
 import { DriveModule } from './drive/drive-module';
+import { GamificationModule } from './gamification/gamification-module';
 import { GroupsModule } from './groups/groups-module';
 
 @Module({
@@ -15,6 +16,7 @@ import { GroupsModule } from './groups/groups-module';
     SamlModule,
     LoginModule,
     CounterModule,
+    GamificationModule,
     GroupsModule,
     DriveModule,
   ],
