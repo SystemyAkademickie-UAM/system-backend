@@ -1,6 +1,10 @@
 import { Body, Controller, Headers, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req, Get, Query } from '@nestjs/common';
 import type { Request } from 'express';
 
+import { BadgesService } from '../gamification/badges-service';
+import { CreateBadgeDto } from '../gamification/dto/create-badge.dto';
+import { CreateRankDto } from '../gamification/dto/create-rank.dto';
+import { RanksService } from '../gamification/ranks-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
@@ -16,6 +20,8 @@ export class GroupsController {
   constructor(
     private readonly groupsService: GroupsService,
     private readonly groupsEnrollmentService: GroupsEnrollmentService,
+    private readonly badgesService: BadgesService,
+    private readonly ranksService: RanksService,
   ) {}
 
   /**
@@ -66,5 +72,31 @@ export class GroupsController {
     @Query() query: JoinGroupBodyDto,
   ) {
     return this.groupsEnrollmentService.enrollStudentByCode(req, query, browserId);
+  }
+  
+  /**
+   * Creates a badge definition for the given course group.
+   * POST /groups/:groupId/badges
+   */
+  @Post(':groupId/badges')
+  @HttpCode(HttpStatus.CREATED)
+  createBadge(
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Body() dto: CreateBadgeDto,
+  ) {
+    return this.badgesService.createBadge(groupId, dto);
+  }
+
+  /**
+   * Creates a rank definition for the given course group.
+   * POST /groups/:groupId/ranks
+   */
+  @Post(':groupId/ranks')
+  @HttpCode(HttpStatus.CREATED)
+  createRank(
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Body() dto: CreateRankDto,
+  ) {
+    return this.ranksService.createRank(groupId, dto);
   }
 }

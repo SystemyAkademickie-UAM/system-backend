@@ -6,8 +6,9 @@ import { CounterModule } from './counter/counter-module';
 import { DatabaseModule } from './database/database-module';
 import { LoginModule } from './auth/login/login-module';
 import { DriveModule } from './drive/drive-module';
-import { GroupsModule } from './groups/groups-module';
+import { GamificationModule } from './gamification/gamification-module';
 import { StudentProfileModule } from './student-profile/student-profile-module';
+import { GroupsModule } from './groups/groups-module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { StudentProfileModule } from './student-profile/student-profile-module';
     SamlModule,
     LoginModule,
     CounterModule,
+    GamificationModule,
     GroupsModule,
     DriveModule,
     StudentProfileModule,
