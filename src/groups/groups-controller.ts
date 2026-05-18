@@ -1,6 +1,8 @@
 import { Body, Controller, Headers, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req, Get, Query } from '@nestjs/common';
 import type { Request } from 'express';
 
+import { toInternalGroupId } from '../constants/group-api-constants';
+
 import { BadgesService } from '../gamification/badges-service';
 import { CreateBadgeDto } from '../gamification/dto/create-badge.dto';
 import { CreateRankDto } from '../gamification/dto/create-rank.dto';
@@ -52,8 +54,8 @@ export class GroupsController {
   ): Promise<EnrollGroupResponseBody> {
     return this.groupsEnrollmentService.enrollStudentInGroup(req, groupId, body, browserId);
   }
-
-  /**
+  
+   /**
    * Generates a 6-character random code for joining a group.
    */
   @Post('generate-code')
@@ -73,7 +75,7 @@ export class GroupsController {
   ) {
     return this.groupsEnrollmentService.enrollStudentByCode(req, query, browserId);
   }
-  
+
   /**
    * Creates a badge definition for the given course group.
    * POST /groups/:groupId/badges
@@ -81,10 +83,10 @@ export class GroupsController {
   @Post(':groupId/badges')
   @HttpCode(HttpStatus.CREATED)
   createBadge(
-    @Param('groupId', ParseIntPipe) groupId: number,
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Body() dto: CreateBadgeDto,
   ) {
-    return this.badgesService.createBadge(groupId, dto);
+    return this.badgesService.createBadge(toInternalGroupId(publicGroupId), dto);
   }
 
   /**
@@ -94,9 +96,9 @@ export class GroupsController {
   @Post(':groupId/ranks')
   @HttpCode(HttpStatus.CREATED)
   createRank(
-    @Param('groupId', ParseIntPipe) groupId: number,
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Body() dto: CreateRankDto,
   ) {
-    return this.ranksService.createRank(groupId, dto);
+    return this.ranksService.createRank(toInternalGroupId(publicGroupId), dto);
   }
 }
