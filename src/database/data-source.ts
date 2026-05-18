@@ -4,10 +4,12 @@ import { DataSource } from 'typeorm';
 
 import { AccountEntity } from './entities/account.entity';
 import { AuthTokenEntity } from './entities/auth-token.entity';
+import { BadgeEntity } from './entities/badge.entity';
 import { DriveEntity } from './entities/drive.entity';
 import { EnrollmentEntity } from './entities/enrollment.entity';
 import { GroupEntity } from './entities/group.entity';
 import { OrganizationEntity } from './entities/organization.entity';
+import { RankEntity } from './entities/rank.entity';
 import { UserEntity } from './entities/user.entity';
 import { resolvePostgresSslOption } from './postgres-ssl.config';
 
@@ -36,6 +38,8 @@ export default new DataSource({
     GroupEntity,
     EnrollmentEntity,
     DriveEntity,
+    BadgeEntity,
+    RankEntity,
   ],
   migrations: [join(__dirname, 'migrations', isTypeScriptContext ? '*.ts' : '*.js')],
   synchronize: false,
