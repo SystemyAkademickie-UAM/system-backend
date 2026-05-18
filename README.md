@@ -31,9 +31,12 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `POST /api/counter/increment` — body `{ "currentCount": number }` → `{ "count": number }` (`201`)
 - `POST /api/login` — SAML session cookie (`maqSamlSession`) + `X-Browser-ID` → `{ "auth": "<plaintext_opaque_once>" }; see [docs/api.md](./docs/api.md)`
 - `POST /api/groups/new` — lecturer opaque bearer + JSON group payload → `{ "status", "group" }; see [docs/api.md](./docs/api.md)`
+- `POST /api/groups/generate-code` — lecturer session → `{ "status", "code" }`; see [docs/api.md](./docs/api.md)
+- `GET /api/groups/invite` — student entry code validation `?code=...` → `{ "status", "code", "group" }`; see [docs/api.md](./docs/api.md)
 - `POST /api/groups/enroll` — student opaque bearer + `groupId` → `{ "status", "zapis" }` (`grywalizacja.zapisy`); see [docs/api.md](./docs/api.md)
 - `POST /api/groups/:id/post` — lecturer opaque bearer + post payload → `{ "status", "post" }`; see [docs/api.md](./docs/api.md)
 - `GET /api/groups/:id/post` — lecturer/student opaque bearer → `{ "status", "posts" }`; see [docs/api.md](./docs/api.md)
+- `GET /api/groups/:groupId/student-profile` — student group-scoped profile → `{ "studentAccountId", "groupId", "lives", "currency", ... }`; see [docs/api.md](./docs/api.md)
 - `POST /api/drive` — lecturer session; `multipart/form-data` fields `json` (string) and `banner` (file for `post`); see [docs/api.md](./docs/api.md)
 - `GET /api/auth/saml/status` — SAML configuration checklist
 - `GET /api/auth/saml/metadata` — SP metadata XML (PIONIER.id / IdP)

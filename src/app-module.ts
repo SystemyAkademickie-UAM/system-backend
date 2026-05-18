@@ -7,6 +7,7 @@ import { DatabaseModule } from './database/database-module';
 import { LoginModule } from './auth/login/login-module';
 import { DriveModule } from './drive/drive-module';
 import { GamificationModule } from './gamification/gamification-module';
+import { StudentProfileModule } from './student-profile/student-profile-module';
 import { GroupsModule } from './groups/groups-module';
 
 @Module({
@@ -19,6 +20,7 @@ import { GroupsModule } from './groups/groups-module';
     GamificationModule,
     GroupsModule,
     DriveModule,
+    StudentProfileModule,
   ],
 })
 export class AppModule {}
