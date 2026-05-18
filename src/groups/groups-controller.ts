@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req } from '@nestjs/common';
+import { Body, Controller, Headers, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req, Get, Query } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { BadgesService } from '../gamification/badges-service';
@@ -7,6 +7,8 @@ import { CreateRankDto } from '../gamification/dto/create-rank.dto';
 import { RanksService } from '../gamification/ranks-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
+import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
+import { JoinGroupBodyDto } from './dto/join-group-body.dto';
 import { EnrollGroupResponseBody, GroupsEnrollmentService } from './groups-enrollment-service';
 import { CreateGroupResponseBody, GroupsService } from './groups-service';
 
@@ -51,6 +53,27 @@ export class GroupsController {
     return this.groupsEnrollmentService.enrollStudentInGroup(req, groupId, body, browserId);
   }
 
+  /**
+   * Generates a 6-character random code for joining a group.
+   */
+  @Post('generate-code')
+  @HttpCode(HttpStatus.OK)
+  generateCode(@Body() body: GenerateCodeBodyDto) {
+    return this.groupsService.generateCode(body.type);
+  }
+
+  /**
+   * Enrolls a student in a group using an entry code.
+   */
+  @Get('invite')
+  joinGroup(
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+    @Query() query: JoinGroupBodyDto,
+  ) {
+    return this.groupsEnrollmentService.enrollStudentByCode(req, query, browserId);
+  }
+  
   /**
    * Creates a badge definition for the given course group.
    * POST /groups/:groupId/badges
