@@ -25,5 +25,14 @@ export const EDUCATION_GROUP_VARCHAR_MAX_LENGTH = 255;
 /** Max length for `education.groups.entry_code`. */
 export const EDUCATION_GROUP_ENTRY_CODE_MAX_LENGTH = 10;
 
+/** Max length for `gamification.badges.name` / `gamification.ranks.name`. */
+export const GAMIFICATION_BADGE_NAME_MAX_LENGTH = 100;
+
+/** Max length for `gamification.ranks.name`. */
+export const GAMIFICATION_RANK_NAME_MAX_LENGTH = 100;
+
+/** Max length for icon reference columns on gamification tables. */
+export const GAMIFICATION_ICON_MAX_LENGTH = 255;
+
 /** Max length for `services.drive.mime_type`. */
 export const SERVICES_DRIVE_MIME_TYPE_MAX_LENGTH = 4;
