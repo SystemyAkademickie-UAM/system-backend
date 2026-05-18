@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { QueryFailedError, Repository } from 'typeorm';
+import * as crypto from 'crypto';
 
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import {
@@ -109,5 +110,14 @@ export class GroupsService {
       return;
     }
     this.logger.error(`Group creation failed: ${String(err)}`);
+  }
+
+  generateCode(type?: string) {
+    // Generates a 6-character random hex string safely using crypto
+    const code = crypto.randomBytes(3).toString('hex').toUpperCase();
+    return {
+      status: GROUP_API_JSON_STATUS_OK,
+      code: code,
+    };
   }
 }
