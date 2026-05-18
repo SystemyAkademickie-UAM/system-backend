@@ -32,11 +32,13 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `POST /api/login` — SAML session cookie (`maqSamlSession`) + `X-Browser-ID` → `{ "auth": "<plaintext_opaque_once>" }; see [docs/api.md](./docs/api.md)`
 - `POST /api/groups/new` — lecturer opaque bearer + JSON group payload → `{ "status", "group" }; see [docs/api.md](./docs/api.md)`
 - `POST /api/groups/enroll` — student opaque bearer + `groupId` → `{ "status", "zapis" }` (`grywalizacja.zapisy`); see [docs/api.md](./docs/api.md)
+- `POST /api/groups/:id/post` — lecturer opaque bearer + post payload → `{ "status", "post" }`; see [docs/api.md](./docs/api.md)
+- `GET /api/groups/:id/post` — lecturer/student opaque bearer → `{ "status", "posts" }`; see [docs/api.md](./docs/api.md)
 - `POST /api/drive` — lecturer session; `multipart/form-data` fields `json` (string) and `banner` (file for `post`); see [docs/api.md](./docs/api.md)
 - `GET /api/auth/saml/status` — SAML configuration checklist
 - `GET /api/auth/saml/metadata` — SP metadata XML (PIONIER.id / IdP)
 - `GET /api/auth/saml/login` — start SAML SSO (`302` to IdP)
-- `POST /api/auth/saml/acs` — SAML Assertion Consumer Service
+- `POST /api/auth/saml/acs` — SAML Consumer Service
 - `GET /api/auth/saml/me` — session JWT from cookie (smoke)
 
 Details in [docs/api.md](./docs/api.md).

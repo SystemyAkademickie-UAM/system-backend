@@ -160,6 +160,71 @@ X-Browser-ID: <BrowserUUID>
 
 ---
 
+## Group posts management (lecturer & student)
+
+Manages announcements / posts in **`edukacja.posts`** for a given course group.
+
+### Create post (lecturer)
+
+**Endpoint:** `POST /api/groups/:id/post`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | UUID; must match `autoryzacja.tokens.browser_uuid` for this bearer. |
+
+**Request body (JSON):**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string | Plaintext bearer (same HMAC rules as groups). |
+| `title` | string | Title of the announcement (non-empty). |
+| `content` | string | Body text of the announcement (non-empty). |
+
+**Authorization:** **strong** token + browser binding. Caller must have **`autoryzacja.konta`** with **`rola = lecturer`** and must own the group (`edukacja.grupy.teacher_account_id`). Missing lecturer account, invalid token, browser mismatch, or ownership mismatch yields `{ "status": 200, "post": 1 }`.
+
+**Response example:**
+```json
+{ "status": 200, "post": 15 }
+```
+
+---
+
+### Get posts (lecturer & student)
+
+**Endpoint:** `GET /api/groups/:id/post` (also aliased as `GET /api/groups/:id/posts`)
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | UUID; must match `autoryzacja.tokens.browser_uuid` for this bearer. |
+
+**Query parameters:**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string | Plaintext bearer (optional if passed via `maq_auth` cookie). |
+
+**Authorization:** **strong** token + browser binding. Caller must either be the lecturer owning the group OR a student enrolled in the group (`grywalizacja.zapisy`). Unauthorized callers receive an empty posts array.
+
+**Response example:**
+```json
+{
+  "status": 200,
+  "posts": [
+    {
+      "id": 15,
+      "title": "Zmiana terminu zajęć",
+      "content": "Zajęcia w czwartek zostają odwołane."
+    }
+  ]
+}
+```
+
+---
+
 ## Group enrollment (student)
 
 Inserts a **`grywalizacja.zapisy`** row linking the caller’s **student** `autoryzacja.konta` id to **`edukacja.grupy.id`**. Invite-code acceptance and **`/api/groups/invite`** validation are implemented separately; call this endpoint **after** those succeed.
