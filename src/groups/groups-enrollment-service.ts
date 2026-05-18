@@ -16,6 +16,7 @@ import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
+import { JoinGroupBodyDto } from './dto/join-group-body.dto';
 
 /**
  * HTTP response body for enrollment endpoint.
@@ -27,6 +28,12 @@ export type EnrollGroupResponseBody = {
   status: number;
   enrollmentId: number;
   groupId?: number;
+};
+
+export type InviteGroupResponseBody = {
+  status: number;
+  code: string;
+  group: number;
 };
 
 /**
@@ -65,7 +72,7 @@ export class GroupsEnrollmentService {
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
-  ) {}
+  ) { }
 
   /**
    * Core enrollment logic - use when you already have studentAccountId and groupId.
@@ -131,6 +138,43 @@ export class GroupsEnrollmentService {
       };
     }
     return { status: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: result.enrollmentId };
+  }
+
+  /**
+   * HTTP handler: resolves auth and enrolls the student using an entry code.
+   */
+  async enrollStudentByCode(
+    req: Request,
+    query: JoinGroupBodyDto,
+    browserIdHeader: string | undefined,
+  ): Promise<InviteGroupResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      query.auth,
+    );
+    if (!subject) {
+      return { status: 200, code: query.code, group: 1 }; // Code expired / Not authorized
+    }
+    const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
+    if (studentAccountId === null) {
+      return { status: 200, code: query.code, group: 1 }; // Not authorized
+    }
+
+    const groupObj = await this.groupRepository.findOne({ where: { entryCode: query.code } });
+    if (!groupObj) {
+      return { status: 200, code: query.code, group: 0 }; // Code not found
+    }
+
+    const result = await this.enrollStudentById(studentAccountId, groupObj.id);
+    if (result.enrollmentId > 0) {
+      return {
+        status: 200,
+        code: query.code,
+        group: groupObj.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
+      };
+    }
+    return { status: 200, code: query.code, group: 0 };
   }
 
   private logEnrollmentFailure(err: unknown): void {
