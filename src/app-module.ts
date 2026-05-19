@@ -9,6 +9,8 @@ import { DriveModule } from './drive/drive-module';
 import { GamificationModule } from './gamification/gamification-module';
 import { StudentProfileModule } from './student-profile/student-profile-module';
 import { GroupsModule } from './groups/groups-module';
+import { StagesModule } from './stages/stages-module';
+import { ActivitiesModule } from './activities/activities-module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { GroupsModule } from './groups/groups-module';
     CounterModule,
     GamificationModule,
     GroupsModule,
+    StagesModule,
+    ActivitiesModule,
     DriveModule,
     StudentProfileModule,
   ],

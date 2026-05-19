@@ -24,7 +24,7 @@ services:
       - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
       - POSTGRES_DB=${DATABASE_NAME}
     ports:
-      - "24680:5432"
+      - "${DATABASE_PORT:-24680}:5432"
     volumes:
       - ./db_v2.sql:/docker-entrypoint-initdb.d/db_v2.sql
       # Zachowanie danych w bazie po wyłączeniu kontenerów

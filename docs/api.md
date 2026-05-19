@@ -102,6 +102,22 @@ Configure **`API_TOKEN_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=
 
 ---
 
+## Logout (clear API auth cookies)
+
+Clears HTTP-only **`maq_auth`** and SAML session cookies for this browser origin. Does **not** perform IdP single logout — use **`GET /api/auth/saml/logout`** for institutional SSO sign-out.
+
+**Endpoint:** `POST /api/logout`
+
+**Request body:** none.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `success` | boolean | Always `true` when cookies were cleared. |
+
+---
+
 ## Groups (lecturer)
 
 Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATABASE_*`, optional `TYPEORM_SYNC=true` for local schema sync).
@@ -341,6 +357,183 @@ X-Browser-ID: <BrowserUUID>
 
 ```json
 { "status": 200, "code": "A1B2C3" }
+```
+
+---
+
+## Stages (lecturer)
+
+Manage stages within groups. Each stage belongs to a group and contains activities.
+
+**Endpoint:** `POST /api/stages`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Required for `post` (strong auth); optional for `modify`/`remove`/`retrieve` (soft auth). |
+
+**Request body (JSON):**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string (optional) | Plaintext bearer token (can also be passed via `maq_auth` cookie). |
+| `method` | string | One of: `post`, `modify`, `remove`, `retrieve`. |
+| `stageId` | integer (optional) | Stage primary key (`education.stages.id`). Required for `modify`/`remove`. |
+| `groupId` | integer (optional) | Public group ID (includes `GROUP_RESPONSE_GROUP_ID_OFFSET = 100000`). Required for `post`. |
+| `name` | string (optional) | Stage name. Required for `post`. |
+
+**Authorization:**
+- `post`: **strong** auth (token + browser binding) + lecturer role.
+- `modify`/`remove`: **soft** auth (token only) + lecturer role.
+- `retrieve`: **soft** auth (any authenticated user).
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `status` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
+| `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
+| `stage` | integer | For `post`/`modify`: stage DB id (positive); for `remove`: the removed id; for `retrieve`: count of stages returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = invalid request. |
+| `stages` | array (optional) | For `retrieve`: array of `{ id, groupId, name }` — `id` is DB id; `groupId` is public (with offset). |
+
+All responses use this flat JSON shape only (no Nest `message` / `error` fields).
+
+**Examples**
+
+Invalid request (bad `stageId` type):
+```http
+POST /api/stages HTTP/1.1
+Content-Type: application/json
+
+{"method":"modify","stageId":-1}
+```
+
+```json
+{ "status": 400, "method": "modify", "stage": -4 }
+```
+
+Create a stage:
+```http
+POST /api/stages HTTP/1.1
+Content-Type: application/json
+X-Browser-ID: <BrowserUUID>
+
+{"auth":"<token>","method":"post","groupId":100001,"name":"Week 1"}
+```
+
+```json
+{ "status": 200, "method": "post", "stage": 1 }
+```
+
+Retrieve stages for a group:
+```http
+POST /api/stages HTTP/1.1
+Content-Type: application/json
+
+{"auth":"<token>","method":"retrieve","groupId":100001}
+```
+
+```json
+{
+  "status": 200,
+  "method": "retrieve",
+  "stage": 2,
+  "stages": [
+    { "id": 1, "groupId": 100001, "name": "Week 1" },
+    { "id": 2, "groupId": 100001, "name": "Week 2" }
+  ]
+}
+```
+
+---
+
+## Activities (lecturer)
+
+Manage activities within stages. Each activity belongs to a stage and has currency rewards.
+
+**Endpoint:** `POST /api/activities`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Required for `post` (strong auth); optional for `modify`/`remove`/`retrieve` (soft auth). |
+
+**Request body (JSON):**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string (optional) | Plaintext bearer token (can also be passed via `maq_auth` cookie). |
+| `method` | string | One of: `post`, `modify`, `remove`, `retrieve`. |
+| `activityId` | integer (optional) | Activity primary key (`education.activities.id`). Required for `modify`/`remove`. |
+| `stageId` | integer (optional) | Stage primary key (`education.stages.id`). Required for `post`. |
+| `name` | string (optional) | Activity name. Required for `post`. |
+| `currency` | integer (optional) | Currency reward (≥ 0). Required for `post`. |
+| `educationalDescription` | string (optional) | Educational description text. |
+| `storyDescription` | string (optional) | Story/narrative description text. |
+
+**Authorization:**
+- `post`: **strong** auth (token + browser binding) + lecturer role.
+- `modify`/`remove`: **soft** auth (token only) + lecturer role.
+- `retrieve`: **soft** auth (any authenticated user).
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `status` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
+| `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
+| `activity` | integer | For `post`/`modify`: activity DB id (positive); for `remove`: the removed id; for `retrieve`: count of activities returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = stage not found, `-5` = invalid request. |
+| `activities` | array (optional) | For `retrieve`: array of `{ id, stageId, name, currency, educationalDescription, storyDescription }` (DB ids). |
+
+All responses use this flat JSON shape only (no Nest `message` / `error` fields).
+
+**Examples**
+
+Invalid request (bad `stageId` type):
+```http
+POST /api/activities HTTP/1.1
+Content-Type: application/json
+
+{"method":"post","stageId":"abc"}
+```
+
+```json
+{ "status": 400, "method": "post", "activity": -5 }
+```
+
+Create an activity:
+```http
+POST /api/activities HTTP/1.1
+Content-Type: application/json
+X-Browser-ID: <BrowserUUID>
+
+{"auth":"<token>","method":"post","stageId":1,"name":"Quiz 1","currency":100,"educationalDescription":"Test your knowledge","storyDescription":"The hero faces a challenge"}
+```
+
+```json
+{ "status": 200, "method": "post", "activity": 1 }
+```
+
+Retrieve activities for a stage:
+```http
+POST /api/activities HTTP/1.1
+Content-Type: application/json
+
+{"auth":"<token>","method":"retrieve","stageId":1}
+```
+
+```json
+{
+  "status": 200,
+  "method": "retrieve",
+  "activity": 2,
+  "activities": [
+    { "id": 1, "stageId": 1, "name": "Quiz 1", "currency": 100, "educationalDescription": "Test your knowledge", "storyDescription": "The hero faces a challenge" },
+    { "id": 2, "stageId": 1, "name": "Assignment 1", "currency": 50, "educationalDescription": "Practice problems", "storyDescription": "Training montage" }
+  ]
+}
 ```
 
 ---
