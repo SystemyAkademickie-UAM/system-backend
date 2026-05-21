@@ -5,6 +5,11 @@ import { IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-val
  * Frontend sends camelCase; service maps to snake_case columns.
  */
 export class CreateRankDto {
+  /** Optional when using `maq_auth` cookie (browser clients). */
+  @IsOptional()
+  @IsString()
+  auth?: string;
+
   @IsString()
   @IsNotEmpty()
   name: string;
