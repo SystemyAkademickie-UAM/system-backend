@@ -1,10 +1,10 @@
-/** JSON `status` field for stage API responses. */
+/** JSON `statusCode` field for stage API responses. */
 export const STAGE_API_JSON_STATUS_OK = 200;
 
-/** JSON `status` field when authorization fails. */
+/** JSON `statusCode` field when authorization fails. */
 export const STAGE_API_JSON_STATUS_FORBIDDEN = 403;
 
-/** JSON `status` field when request body or field values are invalid. */
+/** JSON `statusCode` field when request body or field values are invalid. */
 export const STAGE_API_JSON_STATUS_BAD_REQUEST = 400;
 
 /** Response `stage` field when creation/modification failed. */

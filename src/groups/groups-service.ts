@@ -16,7 +16,7 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 
-export type CreateGroupResponseBody = { status: number; group: number };
+export type CreateGroupResponseBody = { statusCode: number; group: number };
 
 function nullableTrimmedString(value: unknown): string | null {
   if (value === undefined || value === null) {
@@ -64,17 +64,17 @@ export class GroupsService {
       body.auth,
     );
     if (!subject) {
-      return { status: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID };
+      return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID };
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
-      return { status: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID };
+      return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID };
     }
     try {
       const groupPayload = body.group;
       const nameTrimmed = String(groupPayload.name ?? '').trim();
       if (nameTrimmed === '') {
-        return { status: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID };
+        return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID };
       }
       const entity = this.groupRepository.create({
         teacherAccountId: lecturerAccountId,
@@ -89,12 +89,12 @@ export class GroupsService {
       });
       const saved = await this.groupRepository.save(entity);
       return {
-        status: GROUP_API_JSON_STATUS_OK,
+        statusCode: GROUP_API_JSON_STATUS_OK,
         group: saved.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
       };
     } catch (err: unknown) {
       this.logGroupCreationFailure(err);
-      return { status: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID };
+      return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID };
     }
   }
 
@@ -116,7 +116,7 @@ export class GroupsService {
     // Generates a 6-character random hex string safely using crypto
     const code = crypto.randomBytes(3).toString('hex').toUpperCase();
     return {
-      status: GROUP_API_JSON_STATUS_OK,
+      statusCode: GROUP_API_JSON_STATUS_OK,
       code: code,
     };
   }

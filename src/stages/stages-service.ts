@@ -21,7 +21,7 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 import { parseStageRequest, type ParsedStageRequest } from './stage-request-parser';
 
 export type StageResponseBody = {
-  status: number;
+  statusCode: number;
   method: StageMethod;
   stage: number;
   stages?: Array<{ id: number; groupId: number; name: string }>;
@@ -58,7 +58,7 @@ export class StagesService {
     const parsed = parseStageRequest(body);
     if (!parsed.ok) {
       return {
-        status: STAGE_API_JSON_STATUS_BAD_REQUEST,
+        statusCode: STAGE_API_JSON_STATUS_BAD_REQUEST,
         method: parsed.method,
         stage: parsed.stage,
       };
@@ -88,19 +88,19 @@ export class StagesService {
       body.auth,
     );
     if (!subject) {
-      return { status: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'post', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'post', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
-      return { status: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'post', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'post', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
     if (!body.groupId || !body.name) {
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'post', stage: STAGE_RESPONSE_NOT_CREATED_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'post', stage: STAGE_RESPONSE_NOT_CREATED_ID };
     }
     const internalGroupId = toInternalGroupId(body.groupId);
     const groupExists = await this.groupRepository.exist({ where: { id: internalGroupId } });
     if (!groupExists) {
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'post', stage: STAGE_RESPONSE_NOT_CREATED_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'post', stage: STAGE_RESPONSE_NOT_CREATED_ID };
     }
     try {
       const entity = this.stageRepository.create({
@@ -108,10 +108,10 @@ export class StagesService {
         name: body.name.trim(),
       });
       const saved = await this.stageRepository.save(entity);
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'post', stage: saved.id };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'post', stage: saved.id };
     } catch (err) {
       this.logger.error(`Stage creation failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'post', stage: STAGE_RESPONSE_NOT_CREATED_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'post', stage: STAGE_RESPONSE_NOT_CREATED_ID };
     }
   }
 
@@ -122,18 +122,18 @@ export class StagesService {
   ): Promise<StageResponseBody> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
     if (!subject) {
-      return { status: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'modify', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'modify', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
-      return { status: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'modify', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'modify', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
     if (!body.stageId) {
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: STAGE_RESPONSE_NOT_FOUND_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: STAGE_RESPONSE_NOT_FOUND_ID };
     }
     const existing = await this.stageRepository.findOne({ where: { id: body.stageId } });
     if (!existing) {
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: STAGE_RESPONSE_NOT_FOUND_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: STAGE_RESPONSE_NOT_FOUND_ID };
     }
     try {
       if (body.name !== undefined) {
@@ -143,10 +143,10 @@ export class StagesService {
         existing.groupId = toInternalGroupId(body.groupId);
       }
       await this.stageRepository.save(existing);
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: existing.id };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: existing.id };
     } catch (err) {
       this.logger.error(`Stage modification failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: STAGE_RESPONSE_NOT_FOUND_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: STAGE_RESPONSE_NOT_FOUND_ID };
     }
   }
 
@@ -157,24 +157,24 @@ export class StagesService {
   ): Promise<StageResponseBody> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
     if (!subject) {
-      return { status: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'remove', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'remove', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
-      return { status: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'remove', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'remove', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
     if (!body.stageId) {
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
     }
     try {
       const result = await this.stageRepository.delete({ id: body.stageId });
       if (result.affected === 0) {
-        return { status: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
+        return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
       }
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: body.stageId };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: body.stageId };
     } catch (err) {
       this.logger.error(`Stage removal failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
     }
   }
 
@@ -185,7 +185,7 @@ export class StagesService {
   ): Promise<StageResponseBody> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
     if (!subject) {
-      return { status: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'retrieve', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'retrieve', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
     try {
       let stages: StageEntity[];
@@ -199,7 +199,7 @@ export class StagesService {
         stages = await this.stageRepository.find({ order: { id: 'ASC' } });
       }
       return {
-        status: STAGE_API_JSON_STATUS_OK,
+        statusCode: STAGE_API_JSON_STATUS_OK,
         method: 'retrieve',
         stage: stages.length,
         stages: stages.map((s) => ({
@@ -210,7 +210,7 @@ export class StagesService {
       };
     } catch (err) {
       this.logger.error(`Stage retrieval failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { status: STAGE_API_JSON_STATUS_OK, method: 'retrieve', stage: 0, stages: [] };
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'retrieve', stage: 0, stages: [] };
     }
   }
 }

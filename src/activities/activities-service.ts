@@ -21,7 +21,7 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 import { parseActivityRequest, type ParsedActivityRequest } from './activity-request-parser';
 
 export type ActivityResponseBody = {
-  status: number;
+  statusCode: number;
   method: ActivityMethod;
   activity: number;
   activities?: Array<{
@@ -55,7 +55,7 @@ export class ActivitiesService {
     const parsed = parseActivityRequest(body);
     if (!parsed.ok) {
       return {
-        status: ACTIVITY_API_JSON_STATUS_BAD_REQUEST,
+        statusCode: ACTIVITY_API_JSON_STATUS_BAD_REQUEST,
         method: parsed.method,
         activity: parsed.activity,
       };
@@ -85,18 +85,18 @@ export class ActivitiesService {
       body.auth,
     );
     if (!subject) {
-      return { status: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'post', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'post', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
-      return { status: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'post', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'post', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
     if (!body.stageId || !body.name || body.currency === undefined) {
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: ACTIVITY_RESPONSE_NOT_CREATED_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: ACTIVITY_RESPONSE_NOT_CREATED_ID };
     }
     const stageExists = await this.stageRepository.exist({ where: { id: body.stageId } });
     if (!stageExists) {
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: ACTIVITY_RESPONSE_STAGE_NOT_FOUND_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: ACTIVITY_RESPONSE_STAGE_NOT_FOUND_ID };
     }
     try {
       const entity = this.activityRepository.create({
@@ -107,10 +107,10 @@ export class ActivitiesService {
         storyDescription: body.storyDescription?.trim() ?? '',
       });
       const saved = await this.activityRepository.save(entity);
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: saved.id };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: saved.id };
     } catch (err) {
       this.logger.error(`Activity creation failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: ACTIVITY_RESPONSE_NOT_CREATED_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: ACTIVITY_RESPONSE_NOT_CREATED_ID };
     }
   }
 
@@ -121,18 +121,18 @@ export class ActivitiesService {
   ): Promise<ActivityResponseBody> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
     if (!subject) {
-      return { status: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
-      return { status: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
     if (!body.activityId) {
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
     }
     const existing = await this.activityRepository.findOne({ where: { id: body.activityId } });
     if (!existing) {
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
     }
     try {
       if (body.name !== undefined) {
@@ -151,10 +151,10 @@ export class ActivitiesService {
         existing.storyDescription = body.storyDescription.trim();
       }
       await this.activityRepository.save(existing);
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: existing.id };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: existing.id };
     } catch (err) {
       this.logger.error(`Activity modification failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
     }
   }
 
@@ -165,24 +165,24 @@ export class ActivitiesService {
   ): Promise<ActivityResponseBody> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
     if (!subject) {
-      return { status: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'remove', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'remove', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
-      return { status: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'remove', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'remove', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
     if (!body.activityId) {
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'remove', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'remove', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
     }
     try {
       const result = await this.activityRepository.delete({ id: body.activityId });
       if (result.affected === 0) {
-        return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'remove', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
+        return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'remove', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
       }
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'remove', activity: body.activityId };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'remove', activity: body.activityId };
     } catch (err) {
       this.logger.error(`Activity removal failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'remove', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'remove', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
     }
   }
 
@@ -193,7 +193,7 @@ export class ActivitiesService {
   ): Promise<ActivityResponseBody> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
     if (!subject) {
-      return { status: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'retrieve', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'retrieve', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
     try {
       let activities: ActivityEntity[];
@@ -206,7 +206,7 @@ export class ActivitiesService {
         activities = await this.activityRepository.find({ order: { id: 'ASC' } });
       }
       return {
-        status: ACTIVITY_API_JSON_STATUS_OK,
+        statusCode: ACTIVITY_API_JSON_STATUS_OK,
         method: 'retrieve',
         activity: activities.length,
         activities: activities.map((a) => ({
@@ -220,7 +220,7 @@ export class ActivitiesService {
       };
     } catch (err) {
       this.logger.error(`Activity retrieval failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { status: ACTIVITY_API_JSON_STATUS_OK, method: 'retrieve', activity: 0, activities: [] };
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'retrieve', activity: 0, activities: [] };
     }
   }
 }

@@ -1,10 +1,10 @@
-/** JSON `status` field for activity API responses. */
+/** JSON `statusCode` field for activity API responses. */
 export const ACTIVITY_API_JSON_STATUS_OK = 200;
 
-/** JSON `status` field when authorization fails. */
+/** JSON `statusCode` field when authorization fails. */
 export const ACTIVITY_API_JSON_STATUS_FORBIDDEN = 403;
 
-/** JSON `status` field when request body or field values are invalid. */
+/** JSON `statusCode` field when request body or field values are invalid. */
 export const ACTIVITY_API_JSON_STATUS_BAD_REQUEST = 400;
 
 /** Response `activity` field when creation/modification failed. */

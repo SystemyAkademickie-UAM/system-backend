@@ -67,7 +67,7 @@ If bypass is disabled or **`NODE_ENV=production`**, these routes return **`403`*
 
 ## Login (opaque API bearer issuance)
 
-Issues a **plaintext** bearer string for `{ "auth": "..." }` field used by `/api/groups/new`, `/api/groups/enroll`, and `/api/drive`. The server persists only **`hex(HMAC-SHA256(API_TOKEN_HMAC_SECRET, plaintext))`** in Postgres **`autoryzacja.tokens.token_hmac`** plus **`user_id`**, **`browser_uuid`** (**PostgreSQL `uuid`** — clients MUST send an RFC 4122 UUID in **`X-Browser-ID`**), **`created_at`**, **`expired_at`** — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
+Issues a **plaintext** bearer string for `{ "auth": "..." }` field used by `/api/groups/new`, `/api/groups/enroll`, `/api/drive`, `/api/stages`, `/api/activities`, `/api/groups/:groupId/badges`, and `/api/groups/:groupId/ranks`. The server persists only **`hex(HMAC-SHA256(API_TOKEN_HMAC_SECRET, plaintext))`** in Postgres **`autoryzacja.tokens.token_hmac`** plus **`user_id`**, **`browser_uuid`** (**PostgreSQL `uuid`** — clients MUST send an RFC 4122 UUID in **`X-Browser-ID`**), **`created_at`**, **`expired_at`** — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
 
 **Prerequisite:** authenticate via **SAML** so the browser holds HTTP-only **`maqSamlSession`** (see SAML section).
 
@@ -152,7 +152,7 @@ Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATA
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `status` | integer | Example contract uses `200` on success. |
+| `statusCode` | integer | Example contract uses `200` on success. |
 | `group` | integer | Success: **`edukacja.grupy.id` + 100 000** (see constant `GROUP_RESPONSE_GROUP_ID_OFFSET`); `0` if creation failed; `1` if not authorized. |
 
 **Note:** The offset keeps API `group` values distinct from reserved codes `0` and `1`. Use this value as **`groupId`** when calling **`POST /api/groups/enroll`**.
@@ -169,7 +169,7 @@ X-Browser-ID: <BrowserUUID>
 ```
 
 ```json
-{ "status": 200, "group": 100137 }
+{ "statusCode": 200, "group": 100137 }
 ```
 
 *(Example: database row id `137` → JSON `group` `100137` when offset is `100000`.)*
@@ -203,7 +203,7 @@ Inserts a **`grywalizacja.zapisy`** row linking the caller’s **student** `auto
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `status` | integer | Example contract uses `200` on success. |
+| `statusCode` | integer | Example contract uses `200` on success. |
 | `zapis` | integer | New or existing **`grywalizacja.zapisy.id`**, or **`0`** if the row could not be created, or **`1`** if not authorized as a student. |
 
 **Example**
@@ -218,7 +218,7 @@ X-Browser-ID: <BrowserUUID>
 ```
 
 ```json
-{ "status": 200, "zapis": 42 }
+{ "statusCode": 200, "zapis": 42 }
 ```
 
 ---
@@ -248,7 +248,7 @@ Validates an entry code and enrolls the student into the corresponding group. Ma
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `status` | integer | Always `200`. |
+| `statusCode` | integer | Always `200`. |
 | `code` | string | Echoes the requested entry code. |
 | `group` | integer | `100000 + ID` on success; `0` if code not found; `1` if expired / unauthorized. |
 
@@ -261,7 +261,7 @@ X-Browser-ID: <BrowserUUID>
 ```
 
 ```json
-{ "status": 200, "code": "ABCDEF", "group": 100137 }
+{ "statusCode": 200, "code": "ABCDEF", "group": 100137 }
 ```
 
 ---
@@ -341,7 +341,7 @@ Generates a secure 6-character random hex entry code using Node's crypto module.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `status` | integer | Always `200`. |
+| `statusCode` | integer | Always `200`. |
 | `code` | string | 6-character uppercase hex string (e.g. `A1B2C3`). |
 
 **Example**
@@ -356,7 +356,7 @@ X-Browser-ID: <BrowserUUID>
 ```
 
 ```json
-{ "status": 200, "code": "A1B2C3" }
+{ "statusCode": 200, "code": "A1B2C3" }
 ```
 
 ---
@@ -392,7 +392,7 @@ Manage stages within groups. Each stage belongs to a group and contains activiti
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `status` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
+| `statusCode` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
 | `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
 | `stage` | integer | For `post`/`modify`: stage DB id (positive); for `remove`: the removed id; for `retrieve`: count of stages returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = invalid request. |
 | `stages` | array (optional) | For `retrieve`: array of `{ id, groupId, name }` — `id` is DB id; `groupId` is public (with offset). |
@@ -410,7 +410,7 @@ Content-Type: application/json
 ```
 
 ```json
-{ "status": 400, "method": "modify", "stage": -4 }
+{ "statusCode": 400, "method": "modify", "stage": -4 }
 ```
 
 Create a stage:
@@ -423,7 +423,7 @@ X-Browser-ID: <BrowserUUID>
 ```
 
 ```json
-{ "status": 200, "method": "post", "stage": 1 }
+{ "statusCode": 200, "method": "post", "stage": 1 }
 ```
 
 Retrieve stages for a group:
@@ -436,7 +436,7 @@ Content-Type: application/json
 
 ```json
 {
-  "status": 200,
+  "statusCode": 200,
   "method": "retrieve",
   "stage": 2,
   "stages": [
@@ -482,7 +482,7 @@ Manage activities within stages. Each activity belongs to a stage and has curren
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `status` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
+| `statusCode` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
 | `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
 | `activity` | integer | For `post`/`modify`: activity DB id (positive); for `remove`: the removed id; for `retrieve`: count of activities returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = stage not found, `-5` = invalid request. |
 | `activities` | array (optional) | For `retrieve`: array of `{ id, stageId, name, currency, educationalDescription, storyDescription }` (DB ids). |
@@ -500,7 +500,7 @@ Content-Type: application/json
 ```
 
 ```json
-{ "status": 400, "method": "post", "activity": -5 }
+{ "statusCode": 400, "method": "post", "activity": -5 }
 ```
 
 Create an activity:
@@ -513,7 +513,7 @@ X-Browser-ID: <BrowserUUID>
 ```
 
 ```json
-{ "status": 200, "method": "post", "activity": 1 }
+{ "statusCode": 200, "method": "post", "activity": 1 }
 ```
 
 Retrieve activities for a stage:
@@ -526,13 +526,111 @@ Content-Type: application/json
 
 ```json
 {
-  "status": 200,
+  "statusCode": 200,
   "method": "retrieve",
   "activity": 2,
   "activities": [
     { "id": 1, "stageId": 1, "name": "Quiz 1", "currency": 100, "educationalDescription": "Test your knowledge", "storyDescription": "The hero faces a challenge" },
     { "id": 2, "stageId": 1, "name": "Assignment 1", "currency": 50, "educationalDescription": "Practice problems", "storyDescription": "Training montage" }
   ]
+}
+```
+
+---
+
+## Badges (lecturer)
+
+Creates a badge definition in `gamification.badges` for a course group.
+
+**Endpoint:** `POST /api/groups/:groupId/badges`
+
+**Auth:** **Soft** token resolution — `maq_auth` cookie **or** body `auth`; **`X-Browser-ID` is not required**. Caller must have the **lecturer** role.
+
+**Path parameter:**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `groupId` | integer | Public group id (includes **`GROUP_RESPONSE_GROUP_ID_OFFSET`**). |
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | — | Opaque bearer when not using cookie. |
+| `name` | string | required | Badge name. |
+| `icon` | string | required | Icon (emoji or id). |
+| `educationalDescription` | string | required | Educational text. |
+| `storyDescription` | string (optional) | — | Narrative text. |
+| `rewardAmount` | integer (optional) | ≥ 0 | Reward points (default `0`). |
+
+**Response:** `201 Created` — persisted badge entity (camelCase fields).
+
+**Errors:** `403 Forbidden` when token is missing/invalid or caller is not a lecturer; `404 Not Found` when the group does not exist.
+
+**Example**
+
+```http
+POST /api/groups/100001/badges HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+Cookie: maq_auth=…
+
+{
+  "name": "Odznaka Pierwszych Kroków",
+  "icon": "🏅",
+  "educationalDescription": "Przyznawana za ukończenie pierwszego etapu kursu.",
+  "storyDescription": "Bohater stawia pierwsze kroki w Akademii Magii...",
+  "rewardAmount": 50
+}
+```
+
+---
+
+## Ranks (lecturer)
+
+Creates a rank definition in `gamification.ranks` for a course group.
+
+**Endpoint:** `POST /api/groups/:groupId/ranks`
+
+**Auth:** **Soft** token resolution — `maq_auth` cookie **or** body `auth`; **`X-Browser-ID` is not required**. Caller must have the **lecturer** role.
+
+**Path parameter:**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `groupId` | integer | Public group id (includes **`GROUP_RESPONSE_GROUP_ID_OFFSET`**). |
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | — | Opaque bearer when not using cookie. |
+| `name` | string | required | Rank name. |
+| `icon` | string | required | Icon (emoji or id). |
+| `requiredPoints` | integer | required, ≥ 0 | Points threshold. |
+| `storyDescription` | string (optional) | — | Narrative text. |
+| `storeDiscount` | integer (optional) | ≥ 0 | Shop discount (default `0`). |
+| `uniqueStoreItems` | string[] (optional) | — | Exclusive shop item names. |
+
+**Response:** `201 Created` — persisted rank entity (camelCase fields).
+
+**Errors:** `403 Forbidden` when token is missing/invalid or caller is not a lecturer; `404 Not Found` when the group does not exist.
+
+**Example**
+
+```http
+POST /api/groups/100001/ranks HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+Cookie: maq_auth=…
+
+{
+  "name": "Adept",
+  "icon": "⭐",
+  "requiredPoints": 100,
+  "storyDescription": "Adept to ktoś, kto opanował podstawy magii arkanowej.",
+  "storeDiscount": 5,
+  "uniqueStoreItems": ["Zwój Mądrości", "Eliksir Skupienia"]
 }
 ```
 
@@ -575,7 +673,7 @@ using a new random UUID as the filename (and returns that value as `driveRef`).
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `status` | integer | `200` on success; `403` in JSON when the session is not a lecturer session (browser binding / token / role). |
+| `statusCode` | integer | `200` on success; `403` in JSON when the session is not a lecturer session (browser binding / token / role). |
 | `method` | string | Echoes `post` or `remove`. |
 | `driveRef` | string | Stored object id (UUID for `post`). |
 | `size` | integer | Byte length on disk after `post`; `0` for `remove`. |
