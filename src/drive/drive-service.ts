@@ -28,7 +28,7 @@ type DriveCommandPayload = {
 };
 
 export type DriveHandleResponseBody = {
-  status: number;
+  statusCode: number;
   method: DriveHttpMethod;
   driveRef: string;
   size: number;
@@ -135,7 +135,7 @@ export class DriveService {
       (await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME));
     if (!isAllowed) {
       return {
-        status: DRIVE_API_JSON_STATUS_FORBIDDEN,
+        statusCode: DRIVE_API_JSON_STATUS_FORBIDDEN,
         method: payload.drive.method,
         driveRef: '',
         size: 0,
@@ -160,7 +160,7 @@ export class DriveService {
     await writeFile(absolutePath, bannerFile.buffer);
     const stats = await stat(absolutePath);
     return {
-      status: DRIVE_API_JSON_STATUS_OK,
+      statusCode: DRIVE_API_JSON_STATUS_OK,
       method: 'post',
       driveRef: objectId,
       size: stats.size,
@@ -179,7 +179,7 @@ export class DriveService {
       // ignore missing files — removal is idempotent for clients
     }
     return {
-      status: DRIVE_API_JSON_STATUS_OK,
+      statusCode: DRIVE_API_JSON_STATUS_OK,
       method: 'remove',
       driveRef: trimmedRef,
       size: 0,

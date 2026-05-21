@@ -80,4 +80,11 @@ export class LoginApiService {
     });
     return { auth: plaintext };
   }
+
+  /** Clears opaque auth and SAML session cookies for browser clients. */
+  clearAuthCookies(res: Response): { success: true } {
+    res.clearCookie(MAQ_AUTH_COOKIE_NAME, { path: '/' });
+    res.clearCookie(SAML_SESSION_COOKIE_NAME, { path: '/' });
+    return { success: true };
+  }
 }
