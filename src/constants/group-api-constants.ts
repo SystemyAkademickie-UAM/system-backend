@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
-/** JSON `status` field for group and drive contract examples. */
+/** JSON `statusCode` field for group and drive contract examples. */
 export const GROUP_API_JSON_STATUS_OK = 200;
 
 /** Response `group` field when creation failed (business / validation / DB). */

@@ -78,27 +78,31 @@ export class GroupsController {
 
   /**
    * Creates a badge definition for the given course group.
+   * Auth is read from `maq_auth` cookie OR body `auth` field (soft token resolution).
    * POST /groups/:groupId/badges
    */
   @Post(':groupId/badges')
   @HttpCode(HttpStatus.CREATED)
   createBadge(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
     @Body() dto: CreateBadgeDto,
   ) {
-    return this.badgesService.createBadge(toInternalGroupId(publicGroupId), dto);
+    return this.badgesService.createBadge(req, toInternalGroupId(publicGroupId), dto);
   }
 
   /**
    * Creates a rank definition for the given course group.
+   * Auth is read from `maq_auth` cookie OR body `auth` field (soft token resolution).
    * POST /groups/:groupId/ranks
    */
   @Post(':groupId/ranks')
   @HttpCode(HttpStatus.CREATED)
   createRank(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
     @Body() dto: CreateRankDto,
   ) {
-    return this.ranksService.createRank(toInternalGroupId(publicGroupId), dto);
+    return this.ranksService.createRank(req, toInternalGroupId(publicGroupId), dto);
   }
 }

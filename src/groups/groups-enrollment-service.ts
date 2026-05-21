@@ -25,13 +25,13 @@ import { JoinGroupBodyDto } from './dto/join-group-body.dto';
  * - `groupId`: included on success as proof of enrollment target
  */
 export type EnrollGroupResponseBody = {
-  status: number;
+  statusCode: number;
   enrollmentId: number;
   groupId?: number;
 };
 
 export type InviteGroupResponseBody = {
-  status: number;
+  statusCode: number;
   code: string;
   group: number;
 };
@@ -118,11 +118,11 @@ export class GroupsEnrollmentService {
       body.auth,
     );
     if (!subject) {
-      return { status: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
+      return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }
     const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
     if (studentAccountId === null) {
-      return { status: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
+      return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }
     const groupId =
       publicGroupId >= GROUP_RESPONSE_GROUP_ID_OFFSET
@@ -132,12 +132,12 @@ export class GroupsEnrollmentService {
     const publicGroupIdForResponse = groupId + GROUP_RESPONSE_GROUP_ID_OFFSET;
     if (result.enrollmentId > 0) {
       return {
-        status: GROUP_ENROLL_API_JSON_STATUS_OK,
+        statusCode: GROUP_ENROLL_API_JSON_STATUS_OK,
         enrollmentId: result.enrollmentId,
         groupId: publicGroupIdForResponse,
       };
     }
-    return { status: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: result.enrollmentId };
+    return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: result.enrollmentId };
   }
 
   /**
@@ -154,27 +154,27 @@ export class GroupsEnrollmentService {
       query.auth,
     );
     if (!subject) {
-      return { status: 200, code: query.code, group: 1 }; // Code expired / Not authorized
+      return { statusCode: 200, code: query.code, group: 1 }; // Code expired / Not authorized
     }
     const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
     if (studentAccountId === null) {
-      return { status: 200, code: query.code, group: 1 }; // Not authorized
+      return { statusCode: 200, code: query.code, group: 1 }; // Not authorized
     }
 
     const groupObj = await this.groupRepository.findOne({ where: { entryCode: query.code } });
     if (!groupObj) {
-      return { status: 200, code: query.code, group: 0 }; // Code not found
+      return { statusCode: 200, code: query.code, group: 0 }; // Code not found
     }
 
     const result = await this.enrollStudentById(studentAccountId, groupObj.id);
     if (result.enrollmentId > 0) {
       return {
-        status: 200,
+        statusCode: 200,
         code: query.code,
         group: groupObj.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
       };
     }
-    return { status: 200, code: query.code, group: 0 };
+    return { statusCode: 200, code: query.code, group: 0 };
   }
 
   private logEnrollmentFailure(err: unknown): void {
