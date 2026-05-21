@@ -1,4 +1,4 @@
-/** JSON `status` field for group enrollment contract (matches groups pattern). */
+/** JSON `statusCode` field for group enrollment contract (matches groups pattern). */
 export const GROUP_ENROLL_API_JSON_STATUS_OK = 200;
 
 /**

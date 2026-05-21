@@ -1,9 +1,13 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { Request } from 'express';
 import { Repository } from 'typeorm';
 
+import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { BadgeEntity } from '../database/entities/badge.entity';
 import { GroupEntity } from '../database/entities/group.entity';
+import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateBadgeDto } from './dto/create-badge.dto';
 
 /**
@@ -14,6 +18,8 @@ export class BadgesService {
   private readonly logger = new Logger(BadgesService.name);
 
   constructor(
+    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly userRolesService: UserRolesService,
     @InjectRepository(BadgeEntity)
     private readonly badgeRepository: Repository<BadgeEntity>,
     @InjectRepository(GroupEntity)
@@ -22,11 +28,22 @@ export class BadgesService {
 
   /**
    * Creates a new badge bound to the given group.
+   * Auth is read from `maq_auth` cookie OR body `auth` field (soft token resolution).
+   * @param req     - Express request (cookie / body auth)
    * @param groupId - Internal `education.groups.id`
    * @param dto     - Validated payload from the controller
    * @returns The persisted badge entity
    */
-  async createBadge(groupId: number, dto: CreateBadgeDto): Promise<BadgeEntity> {
+  async createBadge(req: Request, groupId: number, dto: CreateBadgeDto): Promise<BadgeEntity> {
+    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    if (!subject) {
+      throw new ForbiddenException('Not authorized');
+    }
+    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
+    if (!isLecturer) {
+      throw new ForbiddenException('Not authorized');
+    }
+
     await this.assertGroupExists(groupId);
 
     const entity = this.badgeRepository.create({
