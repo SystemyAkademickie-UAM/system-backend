@@ -11,6 +11,7 @@ import { StudentProfileModule } from './student-profile/student-profile-module';
 import { GroupsModule } from './groups/groups-module';
 import { StagesModule } from './stages/stages-module';
 import { ActivitiesModule } from './activities/activities-module';
+import { StudentManagementModule } from './student-management/student-management-module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ActivitiesModule } from './activities/activities-module';
     ActivitiesModule,
     DriveModule,
     StudentProfileModule,
+    StudentManagementModule,
   ],
 })
 export class AppModule {}
