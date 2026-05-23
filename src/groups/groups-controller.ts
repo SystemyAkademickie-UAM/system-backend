@@ -27,6 +27,19 @@ export class GroupsController {
   ) {}
 
   /**
+   * Zwraca listę grup (wraz ze zmapowanymi danymi prowadzącego), do których należy użytkownik.
+   * Autoryzacja jest pobierana z ciasteczka lub nagłówka.
+   */
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  getUserGroups(
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+  ) {
+    return this.groupsService.getUserGroups(req, browserId);
+  }
+
+  /**
    * Creates a group row when the caller presents a valid lecturer-bound session.
    * Auth is read from `maq_auth` cookie OR body `auth` field.
    */
