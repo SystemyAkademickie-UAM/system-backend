@@ -9,6 +9,11 @@ export const GROUP_RESPONSE_GROUP_NOT_CREATED_ID = 0;
 /** Response `group` field when token, browser, or lecturer role check fails. */
 export const GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID = 1;
 
+/** Response `post` field when token, browser, or student/lecturer role check fails. */
+export const POST_ERROR_CODE_NOT_AUTHORIZED = -1;
+
+/** Response `post` field when creation failed (business / validation / DB). */
+export const POST_ERROR_CODE_NOT_CREATED = -2;
 
 /** Response `group` field offset for group ID. */
 export const GROUP_RESPONSE_GROUP_ID_OFFSET = 100000;
