@@ -11,8 +11,11 @@ import {
   GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
   GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
 } from '../constants/group-api-constants';
-import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { GroupEntity } from '../database/entities/group.entity';
+import { AccountEntity } from '../database/entities/account.entity';
+import { UserEntity } from '../database/entities/user.entity';
+import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 
@@ -51,7 +54,7 @@ export class GroupsService {
     private readonly userRolesService: UserRolesService,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
-  ) {}
+  ) { }
 
   async createGroup(
     req: Request,
@@ -119,5 +122,69 @@ export class GroupsService {
       statusCode: GROUP_API_JSON_STATUS_OK,
       code: code,
     };
+  }
+
+  async getUserGroups(req: Request, browserIdHeader: string | undefined) {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+    );
+    if (!subject) {
+      return { statusCode: GROUP_API_JSON_STATUS_OK, groups: [] };
+    }
+
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
+    const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
+
+    if (lecturerAccountId === null && studentAccountId === null) {
+      return { statusCode: GROUP_API_JSON_STATUS_OK, groups: [] };
+    }
+
+    const qb = this.groupRepository.createQueryBuilder('group');
+    
+    qb.leftJoin(AccountEntity, 'account', 'group.teacher_account_id = account.id')
+      .leftJoin(UserEntity, 'user', 'account.user_id = user.id')
+      .select([
+        'group.id AS id',
+        'group.name AS name',
+        'group.image_ref AS image_ref',
+        'group.description AS description',
+        'user.name AS teacher_name',
+        'user.surname AS teacher_surname'
+      ]);
+
+    if (studentAccountId !== null) {
+      qb.leftJoin(EnrollmentEntity, 'enrollment', 'enrollment.group_id = group.id AND enrollment.student_account_id = :studentId', { studentId: studentAccountId });
+    }
+
+    const whereConditions = [];
+    if (lecturerAccountId !== null) {
+      whereConditions.push('group.teacher_account_id = :lecturerId');
+      qb.setParameter('lecturerId', lecturerAccountId);
+    }
+    if (studentAccountId !== null) {
+      whereConditions.push('enrollment.id IS NOT NULL');
+    }
+
+    qb.where(`(${whereConditions.join(' OR ')})`);
+
+    const rawGroups = await qb.getRawMany();
+
+    const mappedGroups = rawGroups.map(row => {
+      const teacherName = row.teacher_name ? String(row.teacher_name).trim() : '';
+      const teacherSurname = row.teacher_surname ? String(row.teacher_surname).trim() : '';
+      const lecturers = `${teacherName} ${teacherSurname}`.trim();
+
+      return {
+        id: row.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        groupName: row.name,
+        subjectName: row.name, // Zmapowane podwójnie
+        bannerId: row.image_ref ?? null, // Zmapowane imageRef jako bannerId
+        lecturers: lecturers || 'Brak danych',
+        description: row.description ?? null
+      };
+    });
+
+    return { statusCode: GROUP_API_JSON_STATUS_OK, groups: mappedGroups };
   }
 }
