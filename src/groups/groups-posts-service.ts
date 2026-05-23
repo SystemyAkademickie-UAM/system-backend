@@ -7,6 +7,8 @@ import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-se
 import {
   GROUP_API_JSON_STATUS_OK,
   GROUP_RESPONSE_GROUP_ID_OFFSET,
+  POST_ERROR_CODE_NOT_AUTHORIZED,
+  POST_ERROR_CODE_NOT_CREATED,
 } from '../constants/group-api-constants';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
@@ -48,14 +50,14 @@ export class GroupsPostsService {
       body.auth,
     );
     if (!subject) {
-      return { status: GROUP_API_JSON_STATUS_OK, post: 1 }; // 1 = Not authorized
+      return { status: GROUP_API_JSON_STATUS_OK, post: POST_ERROR_CODE_NOT_AUTHORIZED }; // -1 = Not authorized
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
       LECTURER_ROLE_NAME,
     );
     if (lecturerAccountId === null) {
-      return { status: GROUP_API_JSON_STATUS_OK, post: 1 }; // 1 = Not authorized
+      return { status: GROUP_API_JSON_STATUS_OK, post: POST_ERROR_CODE_NOT_AUTHORIZED }; // -1 = Not authorized
     }
 
     const groupId =
@@ -67,7 +69,7 @@ export class GroupsPostsService {
       where: { id: groupId, teacherAccountId: lecturerAccountId },
     });
     if (!ownsGroup) {
-      return { status: GROUP_API_JSON_STATUS_OK, post: 1 }; // 1 = Not authorized
+      return { status: GROUP_API_JSON_STATUS_OK, post: POST_ERROR_CODE_NOT_AUTHORIZED }; // -1 = Not authorized
     }
 
     try {
@@ -80,7 +82,7 @@ export class GroupsPostsService {
       return { status: GROUP_API_JSON_STATUS_OK, post: saved.id };
     } catch (err: unknown) {
       this.logger.error(`Post creation failed: ${String(err)}`);
-      return { status: GROUP_API_JSON_STATUS_OK, post: 0 }; // 0 = Error / could not be created
+      return { status: GROUP_API_JSON_STATUS_OK, post: POST_ERROR_CODE_NOT_CREATED }; // -2 = Error / could not be created
     }
   }
 
