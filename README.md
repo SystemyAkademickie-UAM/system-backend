@@ -38,6 +38,8 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `POST /api/groups/generate-code` — lecturer session → `{ "statusCode", "code" }`; see [docs/api.md](./docs/api.md)
 - `GET /api/groups/invite` — student entry code validation `?code=...` → `{ "statusCode", "code", "group" }`; see [docs/api.md](./docs/api.md)
 - `POST /api/groups/enroll` — student opaque bearer + `groupId` → `{ "statusCode", "zapis" }` (`grywalizacja.zapisy`); see [docs/api.md](./docs/api.md)
+- `POST /api/groups/:id/post` — lecturer opaque bearer + post payload → `{ "status", "post" }`; see [docs/api.md](./docs/api.md)
+- `GET /api/groups/:id/post` — lecturer/student opaque bearer → `{ "status", "posts" }`; see [docs/api.md](./docs/api.md)
 - `GET /api/groups/:groupId/student-profile` — student group-scoped profile → `{ "studentAccountId", "groupId", "lives", "currency", ... }`; see [docs/api.md](./docs/api.md)
 - `POST /api/drive` — lecturer session; `multipart/form-data` fields `json` (string) and `banner` (file for `post`); see [docs/api.md](./docs/api.md)
 - `POST /api/stages` — stage CRUD (method: post/modify/remove/retrieve); see [docs/api.md](./docs/api.md)
