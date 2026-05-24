@@ -4,6 +4,7 @@ import { DataSource } from 'typeorm';
 
 import { AccountEntity } from './entities/account.entity';
 import { AuthTokenEntity } from './entities/auth-token.entity';
+import { AvatarEntity } from './entities/avatar.entity';
 import { BadgeEntity } from './entities/badge.entity';
 import { DriveEntity } from './entities/drive.entity';
 import { EnrollmentEntity } from './entities/enrollment.entity';
@@ -33,6 +34,7 @@ export default new DataSource({
   entities: [
     UserEntity,
     AuthTokenEntity,
+    AvatarEntity,
     AccountEntity,
     OrganizationEntity,
     GroupEntity,
