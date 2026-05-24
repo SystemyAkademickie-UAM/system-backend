@@ -32,4 +32,14 @@ export class BadgeEntity {
 
   @Column({ name: 'reward_amount', type: 'integer', nullable: true, default: 0 })
   rewardAmount: number | null;
+
+  @Column({ name: 'rarity', type: 'varchar', length: 20, default: 'common' })
+  rarity: string;
+}
+
+export enum BadgeRarity {
+  COMMON = 'common',
+  UNCOMMON = 'uncommon',
+  RARE = 'rare',
+  EPIC = 'epic',
 }
