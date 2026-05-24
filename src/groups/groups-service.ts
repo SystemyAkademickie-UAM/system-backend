@@ -11,13 +11,26 @@ import {
   GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
   GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
 } from '../constants/group-api-constants';
+<<<<<<< HEAD
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+=======
+import {
+  GENERATE_CODE_RESULT_DB_ERROR,
+  GENERATE_CODE_RESULT_GROUP_NOT_FOUND,
+  GENERATE_CODE_RESULT_NOT_AUTHORIZED,
+  GROUP_ENTRY_CODE_GENERATED_BYTE_LENGTH,
+  GROUP_ENTRY_CODE_GENERATION_MAX_ATTEMPTS,
+  GROUP_GENERATE_CODE_API_JSON_STATUS_OK,
+} from '../constants/group-generate-code-api-constants';
+import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+>>>>>>> main
 import { GroupEntity } from '../database/entities/group.entity';
 import { AccountEntity } from '../database/entities/account.entity';
 import { UserEntity } from '../database/entities/user.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
+import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 
 export type CreateGroupResponseBody = { statusCode: number; group: number };
 
@@ -33,6 +46,12 @@ export type UserGroupListItem = {
 export type GetUserGroupsResponseBody = {
   statusCode: number;
   groups: UserGroupListItem[];
+};
+
+export type GenerateCodeResponseBody = {
+  statusCode: number;
+  code: string;
+  groupId: number;
 };
 
 function nullableTrimmedString(value: unknown): string | null {
@@ -129,15 +148,66 @@ export class GroupsService {
     this.logger.error(`Group creation failed: ${String(err)}`);
   }
 
-  generateCode(type?: string) {
-    // Generates a 6-character random hex string safely using crypto
-    const code = crypto.randomBytes(3).toString('hex').toUpperCase();
+  async generateCodeForGroup(
+    req: Request,
+    body: GenerateCodeBodyDto,
+    browserIdHeader: string | undefined,
+  ): Promise<GenerateCodeResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      body.auth,
+    );
+    if (!subject) {
+      return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
+    }
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    if (lecturerAccountId === null) {
+      return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
+    }
+    const publicGroupId = body.groupId;
+    const internalGroupId =
+      publicGroupId >= GROUP_RESPONSE_GROUP_ID_OFFSET
+        ? publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET
+        : publicGroupId;
+    const group = await this.groupRepository.findOne({
+      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!group) {
+      const groupExists = await this.groupRepository.exist({ where: { id: internalGroupId } });
+      if (!groupExists) {
+        return this.buildGenerateCodeError(GENERATE_CODE_RESULT_GROUP_NOT_FOUND);
+      }
+      return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
+    }
+    try {
+      const code = await this.persistUniqueEntryCode(group);
+      if (code === null) {
+        return this.buildGenerateCodeError(GENERATE_CODE_RESULT_DB_ERROR);
+      }
+      return {
+        statusCode: GROUP_GENERATE_CODE_API_JSON_STATUS_OK,
+        code,
+        groupId: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
+      };
+    } catch (err: unknown) {
+      this.logGenerateCodeFailure(err);
+      return this.buildGenerateCodeError(GENERATE_CODE_RESULT_DB_ERROR);
+    }
+  }
+
+  private buildGenerateCodeError(groupId: number): GenerateCodeResponseBody {
     return {
-      statusCode: GROUP_API_JSON_STATUS_OK,
-      code: code,
+      statusCode: GROUP_GENERATE_CODE_API_JSON_STATUS_OK,
+      code: '',
+      groupId,
     };
   }
 
+<<<<<<< HEAD
   async getUserGroups(req: Request, browserIdHeader: string | undefined): Promise<GetUserGroupsResponseBody> {
     const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
@@ -211,5 +281,37 @@ export class GroupsService {
     });
 
     return { statusCode: GROUP_API_JSON_STATUS_OK, groups: mappedGroups };
+=======
+  private buildRandomEntryCode(): string {
+    return crypto.randomBytes(GROUP_ENTRY_CODE_GENERATED_BYTE_LENGTH).toString('hex').toUpperCase();
+  }
+
+  private async persistUniqueEntryCode(group: GroupEntity): Promise<string | null> {
+    for (let attempt = 0; attempt < GROUP_ENTRY_CODE_GENERATION_MAX_ATTEMPTS; attempt += 1) {
+      const code = this.buildRandomEntryCode();
+      const taken = await this.groupRepository.exist({ where: { entryCode: code } });
+      if (taken) {
+        continue;
+      }
+      group.entryCode = code;
+      await this.groupRepository.save(group);
+      return code;
+    }
+    return null;
+  }
+
+  private logGenerateCodeFailure(err: unknown): void {
+    if (postgresFkViolation(err)) {
+      const detail =
+        typeof err.driverError.detail === 'string' ? err.driverError.detail : '(no detail)';
+      this.logger.error(`Group entry code generation failed (Postgres ${err.driverError.code}): ${detail}`);
+      return;
+    }
+    if (err instanceof Error) {
+      this.logger.error(`Group entry code generation failed: ${err.message}`, err.stack);
+      return;
+    }
+    this.logger.error(`Group entry code generation failed: ${String(err)}`);
+>>>>>>> main
   }
 }

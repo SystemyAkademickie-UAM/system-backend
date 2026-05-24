@@ -170,6 +170,7 @@ export class SamlController {
           secure: isProd,
           sameSite: 'lax',
           maxAge: jwtExpiresInToCookieMaxAgeMs(this.samlConfig.getJwtExpiresIn()),
+          path: '/',
         });
 
         res.redirect(this.samlConfig.getLoginSuccessUrl());
@@ -192,7 +193,7 @@ export class SamlController {
 
   @Post('logout')
   logout(@Req() req: Request, @Res() res: Response): void {
-    res.clearCookie(SAML_SESSION_COOKIE_NAME);
+    res.clearCookie(SAML_SESSION_COOKIE_NAME, { path: '/' });
     res.json({ success: true });
   }
 
@@ -206,7 +207,7 @@ export class SamlController {
     const session = token ? this.samlService.verifySessionToken(token) : null;
     
     // Clear local session first
-    res.clearCookie(SAML_SESSION_COOKIE_NAME);
+    res.clearCookie(SAML_SESSION_COOKIE_NAME, { path: '/' });
 
     // If no strategy or no IdP logout configured, just redirect
     if (!this.strategy || !this.samlConfig.getIdpLogoutUrl()) {
@@ -267,7 +268,7 @@ export class SamlController {
 
   private handleSloCallback(_req: Request, res: Response): void {
     // Clear session cookie and redirect to frontend
-    res.clearCookie(SAML_SESSION_COOKIE_NAME);
+    res.clearCookie(SAML_SESSION_COOKIE_NAME, { path: '/' });
     res.redirect(this.samlConfig.getLogoutUrl());
   }
 }
