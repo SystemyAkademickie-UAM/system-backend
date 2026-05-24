@@ -36,4 +36,12 @@ export class UserEntity {
 
   @Column({ type: 'varchar', length: AUTH_USER_LANGUAGE_MAX_LENGTH, nullable: true, default: 'PL' })
   language: string | null;
+
+  /** Whether the user has completed the registration flow (nickname + avatar). */
+  @Column({ name: 'registration_completed', type: 'boolean', nullable: false, default: false })
+  registrationCompleted: boolean;
+
+  /** Timestamp when the user accepted EULA (null if not accepted). */
+  @Column({ name: 'eula_accepted_at', type: 'timestamp', nullable: true, default: null })
+  eulaAcceptedAt: Date | null;
 }
