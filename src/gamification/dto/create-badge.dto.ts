@@ -1,4 +1,5 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { BadgeRarity } from '../../database/entities/badge.entity';
 
 /**
  * DTO for creating a badge within a course group.
@@ -30,4 +31,8 @@ export class CreateBadgeDto {
   @IsInt()
   @Min(0)
   rewardAmount?: number;
+
+  @IsOptional()
+  @IsEnum(BadgeRarity)
+  rarity?: BadgeRarity;
 }

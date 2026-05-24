@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
-import { BadgeEntity } from '../database/entities/badge.entity';
+import { BadgeEntity, BadgeRarity } from '../database/entities/badge.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateBadgeDto } from './dto/create-badge.dto';
@@ -53,6 +53,7 @@ export class BadgesService {
       educationalDescription: dto.educationalDescription,
       storyDescription: dto.storyDescription ?? null,
       rewardAmount: dto.rewardAmount ?? 0,
+      rarity: dto.rarity ?? BadgeRarity.COMMON,
     });
 
     const saved = await this.badgeRepository.save(entity);
