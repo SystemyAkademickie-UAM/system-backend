@@ -12,7 +12,7 @@ import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { JoinGroupQueryDto } from './dto/join-group-query.dto';
 import { EnrollGroupResponseBody, GroupsEnrollmentService } from './groups-enrollment-service';
-import { CreateGroupResponseBody, GenerateCodeResponseBody, GroupsService } from './groups-service';
+import { CreateGroupResponseBody, GenerateCodeResponseBody, GetUserGroupsResponseBody, GroupsService } from './groups-service';
 
 /**
  * Course group creation API for lecturers.
@@ -25,6 +25,20 @@ export class GroupsController {
     private readonly badgesService: BadgesService,
     private readonly ranksService: RanksService,
   ) {}
+
+  /**
+   * Returns groups for the authenticated user (student enrollments and lecturer-owned groups).
+   * Auth: `maq_auth` cookie or optional `auth` query param. Requires `X-Browser-ID` for strong binding.
+   */
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  getUserGroups(
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+    @Query('auth') auth: string | undefined,
+  ): Promise<GetUserGroupsResponseBody> {
+    return this.groupsService.getUserGroups(req, browserId, auth);
+  }
 
   /**
    * Creates a group row when the caller presents a valid lecturer-bound session.
@@ -54,7 +68,7 @@ export class GroupsController {
   ): Promise<EnrollGroupResponseBody> {
     return this.groupsEnrollmentService.enrollStudentInGroup(req, groupId, body, browserId);
   }
-  
+
   /**
    * Generates a 6-character entry code and persists it on `education.groups.entry_code`.
    * Auth is read from `maq_auth` cookie OR body `auth` field. Lecturer must own the group.
@@ -70,7 +84,7 @@ export class GroupsController {
   }
 
   /**
-   * Enrolls a student in a group when the entry code matches that specific group.
+   * Validates entry code for a group and enrolls the student when auth succeeds.
    * Auth is read from `maq_auth` cookie OR query `auth` parameter.
    */
   @Get(':groupId/invite')
@@ -79,7 +93,7 @@ export class GroupsController {
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
     @Query() query: JoinGroupQueryDto,
-  ) {
+  ): Promise<EnrollGroupResponseBody> {
     return this.groupsEnrollmentService.enrollStudentByCode(req, publicGroupId, query, browserId);
   }
 
