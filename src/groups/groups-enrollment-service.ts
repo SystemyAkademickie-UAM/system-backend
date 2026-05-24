@@ -16,7 +16,7 @@ import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
-import { JoinGroupBodyDto } from './dto/join-group-body.dto';
+import { JoinGroupQueryDto } from './dto/join-group-query.dto';
 
 /**
  * HTTP response body for enrollment endpoint.
@@ -28,12 +28,6 @@ export type EnrollGroupResponseBody = {
   statusCode: number;
   enrollmentId: number;
   groupId?: number;
-};
-
-export type InviteGroupResponseBody = {
-  statusCode: number;
-  code: string;
-  group: number;
 };
 
 /**
@@ -141,40 +135,47 @@ export class GroupsEnrollmentService {
   }
 
   /**
-   * HTTP handler: resolves auth and enrolls the student using an entry code.
+   * HTTP handler: resolves auth and enrolls the student when both groupId and entry code match.
+   * Lookup is scoped to the given group — codes cannot be probed across all groups.
    */
   async enrollStudentByCode(
     req: Request,
-    query: JoinGroupBodyDto,
+    publicGroupId: number,
+    query: JoinGroupQueryDto,
     browserIdHeader: string | undefined,
-  ): Promise<InviteGroupResponseBody> {
+  ): Promise<EnrollGroupResponseBody> {
     const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
       browserIdHeader,
       query.auth,
     );
     if (!subject) {
-      return { statusCode: 200, code: query.code, group: 1 }; // Code expired / Not authorized
+      return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }
     const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
     if (studentAccountId === null) {
-      return { statusCode: 200, code: query.code, group: 1 }; // Not authorized
+      return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }
-
-    const groupObj = await this.groupRepository.findOne({ where: { entryCode: query.code } });
+    const internalGroupId =
+      publicGroupId >= GROUP_RESPONSE_GROUP_ID_OFFSET
+        ? publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET
+        : publicGroupId;
+    const groupObj = await this.groupRepository.findOne({
+      where: { id: internalGroupId, entryCode: query.code },
+    });
     if (!groupObj) {
-      return { statusCode: 200, code: query.code, group: 0 }; // Code not found
+      return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_GROUP_NOT_FOUND };
     }
-
     const result = await this.enrollStudentById(studentAccountId, groupObj.id);
+    const publicGroupIdForResponse = groupObj.id + GROUP_RESPONSE_GROUP_ID_OFFSET;
     if (result.enrollmentId > 0) {
       return {
-        statusCode: 200,
-        code: query.code,
-        group: groupObj.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        statusCode: GROUP_ENROLL_API_JSON_STATUS_OK,
+        enrollmentId: result.enrollmentId,
+        groupId: publicGroupIdForResponse,
       };
     }
-    return { statusCode: 200, code: query.code, group: 0 };
+    return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: result.enrollmentId };
   }
 
   private logEnrollmentFailure(err: unknown): void {

@@ -1,14 +1,16 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { DRIVE_DEFAULT_ORGANIZATION_ID } from '../../constants/drive-service-constants';
-import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../../constants/role-name-constants';
 import {
-  SAML_BYPASS_DEV_LECTURER_USER,
-  SAML_BYPASS_DEV_STUDENT_USER,
+  isSamlBypassPersonaId,
+  resolveLegacyBypassProfile,
+  SAML_BYPASS_PERSONAS,
   SAML_BYPASS_SEED_ORGANIZATION_NAME,
+  type SamlBypassPersonaDefinition,
+  type SamlBypassPersonaId,
 } from '../../constants/saml-bypass-constants';
 import { AccountEntity } from '../../database/entities/account.entity';
 import { OrganizationEntity } from '../../database/entities/organization.entity';
@@ -24,8 +26,14 @@ function parseBypassOrganizationId(raw: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : DRIVE_DEFAULT_ORGANIZATION_ID;
 }
 
+export type SamlBypassPersonaListItem = {
+  id: SamlBypassPersonaId;
+  label: string;
+  sessionRole: string;
+};
+
 /**
- * Non-production helper: seeds `auth.users` and role-specific `auth.accounts` (lecturer / student) for smoke tests without IdP.
+ * Non-production helper: seeds `auth.users` and role-specific `auth.accounts` for smoke tests without IdP.
  */
 @Injectable()
 export class SamlBypassService {
@@ -56,31 +64,58 @@ export class SamlBypassService {
     }
   }
 
+  listPersonas(): SamlBypassPersonaListItem[] {
+    return Object.values(SAML_BYPASS_PERSONAS).map((persona) => ({
+      id: persona.id,
+      label: persona.label,
+      sessionRole: persona.sessionRole,
+    }));
+  }
+
+  resolvePersonaId(rawPersona: string): SamlBypassPersonaId {
+    const trimmed = rawPersona.trim();
+    if (isSamlBypassPersonaId(trimmed)) {
+      return trimmed;
+    }
+    const legacy = resolveLegacyBypassProfile(trimmed);
+    if (legacy !== null) {
+      return legacy;
+    }
+    throw new BadRequestException({
+      error: 'SAML_BYPASS_UNKNOWN_PERSONA',
+      message: `Unknown bypass persona "${trimmed}".`,
+    });
+  }
+
+  personaDefinition(personaId: SamlBypassPersonaId): SamlBypassPersonaDefinition {
+    return SAML_BYPASS_PERSONAS[personaId];
+  }
+
+  sessionUserForPersona(personaId: SamlBypassPersonaId): SamlUser {
+    return SAML_BYPASS_PERSONAS[personaId].user;
+  }
+
+  /** @deprecated Use `seedDevPersona('student1' | …)`. */
   sessionUserForProfile(profile: 'student' | 'lecturer'): SamlUser {
-    return profile === 'student' ? SAML_BYPASS_DEV_STUDENT_USER : SAML_BYPASS_DEV_LECTURER_USER;
+    return this.sessionUserForPersona(this.resolvePersonaId(profile));
   }
 
   /**
-   * Ensures DB rows exist for the bypass persona (`auth.accounts` with lecturer or student role).
+   * Ensures DB rows exist for the bypass persona (`auth.accounts` with the matching role).
    */
-  async seedDevPersona(profile: 'student' | 'lecturer'): Promise<SamlUser> {
-    const sessionUser = this.sessionUserForProfile(profile);
+  async seedDevPersona(personaId: SamlBypassPersonaId): Promise<SamlUser> {
+    const persona = SAML_BYPASS_PERSONAS[personaId];
+    const sessionUser = persona.user;
     const userId = await this.samlLinkedUserService.findOrCreateFromSamlSession({
       sub: sessionUser.nameId,
       email: sessionUser.email,
       displayName: sessionUser.displayName,
+      role: sessionUser.role,
     });
-    if (profile === 'lecturer') {
-      await this.ensureLecturerAccount(userId);
-    } else {
-      await this.ensureStudentAccount(userId);
-    }
+    await this.ensureAccount(userId, persona.accountRole);
     return sessionUser;
   }
 
-  /**
-   * Resolves `organization_id` for seeded dev `auth.accounts`: env id if present in `auth.organizations`, else first row, else seed row.
-   */
   private async resolveOrganizationIdForDevAccount(): Promise<number> {
     const preferred = parseBypassOrganizationId(this.configService.get<string>('SAML_BYPASS_ORGANIZATION_ID'));
     const preferredRow = await this.organizationRepository.findOne({
@@ -104,13 +139,13 @@ export class SamlBypassService {
     return saved.id;
   }
 
-  private async ensureLecturerAccount(userId: number): Promise<void> {
+  private async ensureAccount(userId: number, accountRole: string): Promise<void> {
     const organizationId = await this.resolveOrganizationIdForDevAccount();
     const existing = await this.accountRepository.findOne({
       where: {
         userId,
         organizationId,
-        role: LECTURER_ROLE_NAME,
+        role: accountRole,
       },
     });
     if (existing !== null) {
@@ -119,27 +154,7 @@ export class SamlBypassService {
     const row = this.accountRepository.create({
       userId,
       organizationId,
-      role: LECTURER_ROLE_NAME,
-    });
-    await this.accountRepository.save(row);
-  }
-
-  private async ensureStudentAccount(userId: number): Promise<void> {
-    const organizationId = await this.resolveOrganizationIdForDevAccount();
-    const existing = await this.accountRepository.findOne({
-      where: {
-        userId,
-        organizationId,
-        role: STUDENT_ROLE_NAME,
-      },
-    });
-    if (existing !== null) {
-      return;
-    }
-    const row = this.accountRepository.create({
-      userId,
-      organizationId,
-      role: STUDENT_ROLE_NAME,
+      role: accountRole,
     });
     await this.accountRepository.save(row);
   }
