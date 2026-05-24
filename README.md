@@ -34,9 +34,10 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `POST /api/login/profile` — save nickname + avatar during `/login` wizard
 - `POST /api/login/accept-eula` — accept EULA and complete registration during `/login` wizard
 - `POST /api/logout` — clears `maq_auth` and SAML session cookies → `{ "success": true }`; see [docs/api.md](./docs/api.md)
+- `GET /api/groups` — authenticated user group list → `{ "statusCode", "groups" }`; see [docs/api.md](./docs/api.md)
 - `POST /api/groups/new` — lecturer opaque bearer + JSON group payload → `{ "statusCode", "group" }; see [docs/api.md](./docs/api.md)`
 - `POST /api/groups/generate-code` — lecturer session + `groupId` → `{ "statusCode", "code", "groupId" }`; see [docs/api.md](./docs/api.md)
-- `GET /api/groups/:groupId/invite` — student session + scoped entry code `?code=...` → `{ "statusCode", "enrollmentId", "groupId"? }`; see [docs/api.md](./docs/api.md)
+- `GET /api/groups/invite` — student entry code validation `?code=...` → `{ "statusCode", "code", "group" }`; see [docs/api.md](./docs/api.md)
 - `POST /api/groups/enroll` — student opaque bearer + `groupId` → `{ "statusCode", "zapis" }` (`grywalizacja.zapisy`); see [docs/api.md](./docs/api.md)
 - `POST /api/groups/:id/post` — lecturer opaque bearer + post payload → `{ "status", "post" }`; see [docs/api.md](./docs/api.md)
 - `GET /api/groups/:id/post` — lecturer/student opaque bearer → `{ "status", "posts" }`; see [docs/api.md](./docs/api.md)
