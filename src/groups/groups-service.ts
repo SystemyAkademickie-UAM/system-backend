@@ -19,8 +19,11 @@ import {
   GROUP_ENTRY_CODE_GENERATION_MAX_ATTEMPTS,
   GROUP_GENERATE_CODE_API_JSON_STATUS_OK,
 } from '../constants/group-generate-code-api-constants';
-import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { AccountEntity } from '../database/entities/account.entity';
+import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
+import { UserEntity } from '../database/entities/user.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
@@ -31,6 +34,20 @@ export type GenerateCodeResponseBody = {
   statusCode: number;
   code: string;
   groupId: number;
+};
+
+export type UserGroupListItem = {
+  id: number;
+  groupName: string;
+  subjectName: string;
+  bannerId: string | null;
+  lecturers: string;
+  description: string | null;
+};
+
+export type GetUserGroupsResponseBody = {
+  statusCode: number;
+  groups: UserGroupListItem[];
 };
 
 function nullableTrimmedString(value: unknown): string | null {
@@ -216,5 +233,80 @@ export class GroupsService {
       return;
     }
     this.logger.error(`Group entry code generation failed: ${String(err)}`);
+  }
+
+  async getUserGroups(
+    req: Request,
+    browserIdHeader: string | undefined,
+    queryAuth: string | undefined,
+  ): Promise<GetUserGroupsResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      queryAuth,
+    );
+    if (!subject) {
+      return { statusCode: GROUP_API_JSON_STATUS_OK, groups: [] };
+    }
+    // TODO: findAccountIdForRole returns only the first matching account id.
+    // Support users with multiple accounts of the same role when multi-org is implemented.
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    const studentAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      STUDENT_ROLE_NAME,
+    );
+    if (lecturerAccountId === null && studentAccountId === null) {
+      return { statusCode: GROUP_API_JSON_STATUS_OK, groups: [] };
+    }
+    const qb = this.groupRepository.createQueryBuilder('group');
+    qb.leftJoin(AccountEntity, 'account', 'group.teacher_account_id = account.id')
+      .leftJoin(UserEntity, 'user', 'account.user_id = user.id')
+      .select([
+        'group.id AS id',
+        'group.name AS name',
+        'group.image_ref AS image_ref',
+        'group.description AS description',
+        'user.name AS teacher_name',
+        'user.surname AS teacher_surname',
+      ]);
+    if (studentAccountId !== null) {
+      qb.leftJoin(
+        EnrollmentEntity,
+        'enrollment',
+        'enrollment.group_id = group.id AND enrollment.student_account_id = :studentId',
+        { studentId: studentAccountId },
+      );
+    }
+    const whereConditions: string[] = [];
+    if (lecturerAccountId !== null) {
+      whereConditions.push('group.teacher_account_id = :lecturerId');
+      qb.setParameter('lecturerId', lecturerAccountId);
+    }
+    if (studentAccountId !== null) {
+      whereConditions.push('enrollment.id IS NOT NULL');
+    }
+    qb.where(`(${whereConditions.join(' OR ')})`);
+    // Deduplicate when the same user matches lecturer ownership and student enrollment.
+    qb.groupBy('group.id').addGroupBy('account.id').addGroupBy('user.id');
+    qb.orderBy('group.name', 'ASC');
+    const rawGroups = await qb.getRawMany();
+    const mappedGroups: UserGroupListItem[] = rawGroups.map((row) => {
+      const teacherName = row.teacher_name ? String(row.teacher_name).trim() : '';
+      const teacherSurname = row.teacher_surname ? String(row.teacher_surname).trim() : '';
+      const lecturers = `${teacherName} ${teacherSurname}`.trim();
+      return {
+        id: row.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        groupName: row.name,
+        // TODO: Split subjectName from groupName when the DB model distinguishes them.
+        subjectName: row.name,
+        bannerId: row.image_ref ?? null,
+        lecturers: lecturers || '',
+        description: row.description ?? null,
+      };
+    });
+    return { statusCode: GROUP_API_JSON_STATUS_OK, groups: mappedGroups };
   }
 }
