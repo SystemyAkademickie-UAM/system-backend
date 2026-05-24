@@ -12,6 +12,7 @@ import { GroupsModule } from './groups/groups-module';
 import { StagesModule } from './stages/stages-module';
 import { ActivitiesModule } from './activities/activities-module';
 import { StudentManagementModule } from './student-management/student-management-module';
+import { ProfileModule } from './profile/profile-module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { StudentManagementModule } from './student-management/student-management
     DriveModule,
     StudentProfileModule,
     StudentManagementModule,
+    ProfileModule,
   ],
 })
 export class AppModule {}
