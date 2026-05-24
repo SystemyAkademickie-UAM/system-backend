@@ -597,7 +597,8 @@ CREATE TABLE gamification.badges (
     educational_description text,
     icon character varying(255),
     story_description text,
-    reward_amount integer DEFAULT 0
+    reward_amount integer DEFAULT 0,
+    rarity character varying(20) DEFAULT 'common' NOT NULL
 );
 
 
@@ -1289,7 +1290,7 @@ COPY education.stages (id, group_id, name) FROM stdin;
 -- Data for Name: badges; Type: TABLE DATA; Schema: gamification; Owner: dev_user
 --
 
-COPY gamification.badges (id, group_id, name, educational_description, icon, story_description, reward_amount) FROM stdin;
+COPY gamification.badges (id, group_id, name, educational_description, icon, story_description, reward_amount, rarity) FROM stdin;
 \.
 
 
