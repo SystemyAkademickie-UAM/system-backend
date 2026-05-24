@@ -1,18 +1,20 @@
-import { Body, Controller, Headers, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req, Get, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Headers, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Req, Get, Query } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { toInternalGroupId } from '../constants/group-api-constants';
 
 import { BadgesService } from '../gamification/badges-service';
 import { CreateBadgeDto } from '../gamification/dto/create-badge.dto';
+import { UpdateBadgeDto } from '../gamification/dto/update-badge.dto';
 import { CreateRankDto } from '../gamification/dto/create-rank.dto';
+import { UpdateRankDto } from '../gamification/dto/update-rank.dto';
 import { RanksService } from '../gamification/ranks-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { JoinGroupQueryDto } from './dto/join-group-query.dto';
 import { EnrollGroupResponseBody, GroupsEnrollmentService } from './groups-enrollment-service';
-import { CreateGroupResponseBody, GenerateCodeResponseBody, GetUserGroupsResponseBody, GroupsService } from './groups-service';
+import { CreateGroupResponseBody, GenerateCodeResponseBody, GetGroupsCatalogResponseBody, GetUserGroupsResponseBody, GroupPreviewResponseBody, GroupsService } from './groups-service';
 
 /**
  * Course group creation API for lecturers.
@@ -38,6 +40,35 @@ export class GroupsController {
     @Query('auth') auth: string | undefined,
   ): Promise<GetUserGroupsResponseBody> {
     return this.groupsService.getUserGroups(req, browserId, auth);
+  }
+
+  /**
+   * Returns all groups split into `myGroups` and `otherGroups` for the authenticated user.
+   * GET /groups/catalog
+   */
+  @Get('catalog')
+  @HttpCode(HttpStatus.OK)
+  getGroupsCatalog(
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+    @Query('auth') auth: string | undefined,
+  ): Promise<GetGroupsCatalogResponseBody> {
+    return this.groupsService.getGroupsCatalog(req, browserId, auth);
+  }
+
+  /**
+   * Returns public group metadata and access flags for the authenticated user.
+   * GET /groups/:groupId/preview
+   */
+  @Get(':groupId/preview')
+  @HttpCode(HttpStatus.OK)
+  getGroupPreview(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+    @Query('auth') auth: string | undefined,
+  ): Promise<GroupPreviewResponseBody> {
+    return this.groupsService.getGroupPreview(req, publicGroupId, browserId, auth);
   }
 
   /**
@@ -70,6 +101,21 @@ export class GroupsController {
   }
 
   /**
+   * Returns the current entry code for a group owned by the lecturer.
+   * GET /groups/:groupId/access-code
+   */
+  @Get(':groupId/access-code')
+  @HttpCode(HttpStatus.OK)
+  getAccessCode(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+    @Query('auth') auth: string | undefined,
+  ): Promise<GenerateCodeResponseBody> {
+    return this.groupsService.getAccessCodeForGroup(req, publicGroupId, browserId, auth);
+  }
+
+  /**
    * Generates a 6-character entry code and persists it on `education.groups.entry_code`.
    * Auth is read from `maq_auth` cookie OR body `auth` field. Lecturer must own the group.
    */
@@ -97,6 +143,24 @@ export class GroupsController {
     return this.groupsEnrollmentService.enrollStudentByCode(req, publicGroupId, query, browserId);
   }
 
+  // ========================================
+  // BADGES CRUD
+  // ========================================
+
+  /**
+   * Returns all badges for the given course group.
+   * GET /groups/:groupId/badges
+   */
+  @Get(':groupId/badges')
+  @HttpCode(HttpStatus.OK)
+  getBadges(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Query('auth') auth: string | undefined,
+  ) {
+    return this.badgesService.getBadgesForGroup(req, toInternalGroupId(publicGroupId), auth);
+  }
+
   /**
    * Creates a badge definition for the given course group.
    * Auth is read from `maq_auth` cookie OR body `auth` field (soft token resolution).
@@ -113,6 +177,54 @@ export class GroupsController {
   }
 
   /**
+   * Updates a badge definition.
+   * PATCH /groups/:groupId/badges/:badgeId
+   */
+  @Patch(':groupId/badges/:badgeId')
+  @HttpCode(HttpStatus.OK)
+  updateBadge(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('badgeId', ParseIntPipe) badgeId: number,
+    @Req() req: Request,
+    @Body() dto: UpdateBadgeDto,
+  ) {
+    return this.badgesService.updateBadge(req, toInternalGroupId(publicGroupId), badgeId, dto);
+  }
+
+  /**
+   * Deletes a badge definition.
+   * DELETE /groups/:groupId/badges/:badgeId
+   */
+  @Delete(':groupId/badges/:badgeId')
+  @HttpCode(HttpStatus.OK)
+  deleteBadge(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('badgeId', ParseIntPipe) badgeId: number,
+    @Req() req: Request,
+    @Body() body: { auth?: string },
+  ) {
+    return this.badgesService.deleteBadge(req, toInternalGroupId(publicGroupId), badgeId, body?.auth);
+  }
+
+  // ========================================
+  // RANKS CRUD
+  // ========================================
+
+  /**
+   * Returns all ranks for the given course group.
+   * GET /groups/:groupId/ranks
+   */
+  @Get(':groupId/ranks')
+  @HttpCode(HttpStatus.OK)
+  getRanks(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Query('auth') auth: string | undefined,
+  ) {
+    return this.ranksService.getRanksForGroup(req, toInternalGroupId(publicGroupId), auth);
+  }
+
+  /**
    * Creates a rank definition for the given course group.
    * Auth is read from `maq_auth` cookie OR body `auth` field (soft token resolution).
    * POST /groups/:groupId/ranks
@@ -125,5 +237,35 @@ export class GroupsController {
     @Body() dto: CreateRankDto,
   ) {
     return this.ranksService.createRank(req, toInternalGroupId(publicGroupId), dto);
+  }
+
+  /**
+   * Updates a rank definition.
+   * PATCH /groups/:groupId/ranks/:rankId
+   */
+  @Patch(':groupId/ranks/:rankId')
+  @HttpCode(HttpStatus.OK)
+  updateRank(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('rankId', ParseIntPipe) rankId: number,
+    @Req() req: Request,
+    @Body() dto: UpdateRankDto,
+  ) {
+    return this.ranksService.updateRank(req, toInternalGroupId(publicGroupId), rankId, dto);
+  }
+
+  /**
+   * Deletes a rank definition.
+   * DELETE /groups/:groupId/ranks/:rankId
+   */
+  @Delete(':groupId/ranks/:rankId')
+  @HttpCode(HttpStatus.OK)
+  deleteRank(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('rankId', ParseIntPipe) rankId: number,
+    @Req() req: Request,
+    @Body() body: { auth?: string },
+  ) {
+    return this.ranksService.deleteRank(req, toInternalGroupId(publicGroupId), rankId, body?.auth);
   }
 }
