@@ -373,7 +373,9 @@ CREATE TABLE auth.users (
     surname character varying(100) NOT NULL,
     nickname character varying(100) NOT NULL,
     language character varying(10) DEFAULT 'PL'::character varying,
-    avatar_id integer NOT NULL
+    avatar_id integer NOT NULL,
+    registration_completed boolean NOT NULL DEFAULT false,
+    eula_accepted_at timestamp without time zone DEFAULT NULL
 );
 
 
