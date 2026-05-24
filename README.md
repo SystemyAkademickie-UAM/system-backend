@@ -30,6 +30,9 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/counter/health` — smoke check `{ "ok": true }`
 - `POST /api/counter/increment` — body `{ "currentCount": number }` → `{ "count": number }` (`201`)
 - `POST /api/login` — SAML session cookie (`maqSamlSession`) + `X-Browser-ID` → `{ "auth": "<plaintext_opaque_once>" }; see [docs/api.md](./docs/api.md)`
+- `GET /api/login/registration-status` — registration progress for authenticated user during `/login` wizard
+- `POST /api/login/profile` — save nickname + avatar during `/login` wizard
+- `POST /api/login/accept-eula` — accept EULA and complete registration during `/login` wizard
 - `POST /api/logout` — clears `maq_auth` and SAML session cookies → `{ "success": true }`; see [docs/api.md](./docs/api.md)
 - `POST /api/groups/new` — lecturer opaque bearer + JSON group payload → `{ "statusCode", "group" }; see [docs/api.md](./docs/api.md)`
 - `POST /api/groups/generate-code` — lecturer session → `{ "statusCode", "code" }`; see [docs/api.md](./docs/api.md)
@@ -44,6 +47,8 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/auth/saml/login` — start SAML SSO (`302` to IdP)
 - `POST /api/auth/saml/acs` — SAML Assertion Consumer Service
 - `GET /api/auth/saml/me` — session JWT from cookie (smoke)
+- `GET /api/auth/saml/bypass/status` — dev-only bypass flag + persona list (empty when disabled)
+- `POST /api/auth/saml/bypass/session` — dev-only mint session cookie (`{ "persona": "student1" | … }`)
 
 Details in [docs/api.md](./docs/api.md).
 

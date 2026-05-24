@@ -1,6 +1,6 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res, BadRequestException } from '@nestjs/common';
 import type { Response } from 'express';
-import { IsIn, IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 import { SAML_SESSION_COOKIE_NAME } from '../../constants/saml-constants';
 import { jwtExpiresInToCookieMaxAgeMs } from '../saml/saml-jwt-expiry.util';
@@ -10,9 +10,14 @@ import type { SamlUser } from '../saml/saml.types';
 import { SamlBypassService } from './saml-bypass.service';
 
 class SamlBypassSessionBodyDto {
+  @IsOptional()
   @IsString()
-  @IsIn(['student', 'lecturer'])
-  profile: 'student' | 'lecturer';
+  persona?: string;
+
+  /** @deprecated Use `persona`. */
+  @IsOptional()
+  @IsString()
+  profile?: string;
 }
 
 /**
@@ -26,10 +31,24 @@ export class SamlBypassController {
     private readonly samlConfigService: SamlConfigService,
   ) {}
 
+  @Get('bypass/status')
+  getBypassStatus(): {
+    enabled: boolean;
+    personas: ReturnType<SamlBypassService['listPersonas']>;
+  } {
+    if (!this.bypassService.isBypassAllowed()) {
+      return { enabled: false, personas: [] };
+    }
+    return {
+      enabled: true,
+      personas: this.bypassService.listPersonas(),
+    };
+  }
+
   @Get('bypass/student')
   async getBypassStudent(@Res() res: Response): Promise<void> {
     this.bypassService.assertBypassAllowed();
-    const sessionUser = await this.bypassService.seedDevPersona('student');
+    const sessionUser = await this.bypassService.seedDevPersona('student1');
     this.attachSessionCookie(res, sessionUser);
     res.redirect(this.samlConfigService.getLoginSuccessUrl());
   }
@@ -37,7 +56,7 @@ export class SamlBypassController {
   @Get('bypass/lecturer')
   async getBypassLecturer(@Res() res: Response): Promise<void> {
     this.bypassService.assertBypassAllowed();
-    const sessionUser = await this.bypassService.seedDevPersona('lecturer');
+    const sessionUser = await this.bypassService.seedDevPersona('lecturer1');
     this.attachSessionCookie(res, sessionUser);
     res.redirect(this.samlConfigService.getLoginSuccessUrl());
   }
@@ -47,12 +66,21 @@ export class SamlBypassController {
   async postBypassSession(
     @Body() body: SamlBypassSessionBodyDto,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<{ ok: true; profile: 'student' | 'lecturer' }> {
+  ): Promise<{ ok: true; persona: string }> {
     this.bypassService.assertBypassAllowed();
-    const profile = body.profile;
-    const sessionUser = await this.bypassService.seedDevPersona(profile);
+    const rawPersona = body.persona?.trim() ?? '';
+    const rawProfile = body.profile?.trim() ?? '';
+    const candidate = rawPersona !== '' ? rawPersona : rawProfile;
+    if (candidate === '') {
+      throw new BadRequestException({
+        error: 'SAML_BYPASS_PERSONA_REQUIRED',
+        message: 'Request body must include `persona` (dev bypass id).',
+      });
+    }
+    const personaId = this.bypassService.resolvePersonaId(candidate);
+    const sessionUser = await this.bypassService.seedDevPersona(personaId);
     this.attachSessionCookie(res, sessionUser);
-    return { ok: true, profile };
+    return { ok: true, persona: personaId };
   }
 
   private attachSessionCookie(res: Response, sessionUser: SamlUser): void {
@@ -64,6 +92,7 @@ export class SamlBypassController {
       sameSite: 'lax',
       secure: isProd,
       maxAge: sessionTtlMs,
+      path: '/',
     });
   }
 }
