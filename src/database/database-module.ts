@@ -24,7 +24,7 @@ import { resolvePostgresSslOption } from './postgres-ssl.config';
           type: 'postgres' as const,
           host: configService.get<string>('DATABASE_HOST', '127.0.0.1'),
           port: Number.isFinite(databasePort) ? databasePort : 5432,
-          username: configService.get<string>('DATABASE_USER', ''),
+          username: configService.get<string>('DATABASE_USER', 'postgres'),
           password: configService.get<string>('DATABASE_PASSWORD', ''),
           database: configService.get<string>('DATABASE_NAME', ''),
           ssl: ssl === false ? undefined : ssl,
