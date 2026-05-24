@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Req } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { UpdateProfileSettingsDto } from './dto/update-profile-settings.dto';
@@ -15,6 +15,15 @@ export class ProfileController {
   @Get('avatars')
   async getAvatars() {
     return this.profileService.getAvatars();
+  }
+
+  /**
+   * GET /profile
+   * Returns current user's profile info.
+   */
+  @Get()
+  async getProfile(@Req() req: Request, @Query('auth') auth?: string) {
+    return this.profileService.getProfile(req, auth);
   }
 
   /**

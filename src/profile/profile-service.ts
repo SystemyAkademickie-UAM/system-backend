@@ -28,6 +28,23 @@ export class ProfileService {
   }
 
   /**
+   * Retrieves profile settings for the currently logged-in user.
+   */
+  async getProfile(req: Request, auth?: string): Promise<UserEntity> {
+    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, auth);
+    if (!subject) {
+      throw new ForbiddenException('Brak autoryzacji');
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: subject.userId } });
+    if (!user) {
+      throw new NotFoundException('Użytkownik nie istnieje');
+    }
+
+    return user;
+  }
+
+  /**
    * Updates profile settings for the currently logged-in user.
    */
   async updateSettings(req: Request, dto: UpdateProfileSettingsDto): Promise<UserEntity> {
