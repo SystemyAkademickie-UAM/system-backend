@@ -118,6 +118,67 @@ Clears HTTP-only **`maq_auth`** and SAML session cookies for this browser origin
 
 ---
 
+## User groups (student & lecturer)
+
+Retrieves a list of groups the authenticated user belongs to. For students, it returns groups they are enrolled in. For lecturers, it returns groups they own.
+
+**Endpoint:** `GET /api/groups`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Required UUID binding for session verification. |
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `auth` | string (optional) | Plaintext bearer token (can also be passed via `maq_auth` cookie). |
+
+**Authorization:** **strong** token + browser binding.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | integer | Always `200`. |
+| `groups` | array | Array of `UserGroupListItem` objects representing the user's groups. |
+
+**UserGroupListItem object:**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | integer | Public group ID (includes `GROUP_RESPONSE_GROUP_ID_OFFSET`). |
+| `groupName` | string | Name of the group (`edukacja.grupy.nazwa`). |
+| `subjectName` | string | Subject name (currently defaults to `''` for lecturers or is fetched from `edukacja.przedmioty`). |
+| `lecturerName` | string | The full name of the group's lecturer. |
+
+**Example**
+
+```http
+GET /api/groups HTTP/1.1
+Host: 127.0.0.1:8080
+X-Browser-ID: <BrowserUUID>
+Cookie: maq_auth=<token>
+```
+
+```json
+{
+  "statusCode": 200,
+  "groups": [
+    {
+      "id": 100001,
+      "groupName": "Grupa A",
+      "subjectName": "Programowanie Obiektowe",
+      "lecturerName": "Jan Kowalski"
+    }
+  ]
+}
+```
+
+---
+
 ## Groups (lecturer)
 
 Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATABASE_*`, optional `TYPEORM_SYNC=true` for local schema sync).

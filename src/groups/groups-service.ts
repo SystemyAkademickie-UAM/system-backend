@@ -21,6 +21,20 @@ import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 
 export type CreateGroupResponseBody = { statusCode: number; group: number };
 
+export type UserGroupListItem = {
+  id: number;
+  groupName: string;
+  subjectName: string;
+  bannerId: string | null;
+  lecturers: string;
+  description: string | null;
+};
+
+export type GetUserGroupsResponseBody = {
+  statusCode: number;
+  groups: UserGroupListItem[];
+};
+
 function nullableTrimmedString(value: unknown): string | null {
   if (value === undefined || value === null) {
     return null;
@@ -124,7 +138,7 @@ export class GroupsService {
     };
   }
 
-  async getUserGroups(req: Request, browserIdHeader: string | undefined) {
+  async getUserGroups(req: Request, browserIdHeader: string | undefined): Promise<GetUserGroupsResponseBody> {
     const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
       browserIdHeader,
@@ -133,6 +147,8 @@ export class GroupsService {
       return { statusCode: GROUP_API_JSON_STATUS_OK, groups: [] };
     }
 
+    // TODO: findAccountIdForRole returns only the first matching account id. 
+    // In the future, this should support users with multiple accounts of the same role.
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
     const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
 
@@ -167,10 +183,17 @@ export class GroupsService {
     }
 
     qb.where(`(${whereConditions.join(' OR ')})`);
+    
+    // Deduplikacja: zapobiega powielaniu rekordu jeśli ktoś jest i studentem, i prowadzącym
+    qb.groupBy('group.id')
+      .addGroupBy('account.id')
+      .addGroupBy('user.id');
+
+    qb.orderBy('group.name', 'ASC');
 
     const rawGroups = await qb.getRawMany();
 
-    const mappedGroups = rawGroups.map(row => {
+    const mappedGroups: UserGroupListItem[] = rawGroups.map(row => {
       const teacherName = row.teacher_name ? String(row.teacher_name).trim() : '';
       const teacherSurname = row.teacher_surname ? String(row.teacher_surname).trim() : '';
       const lecturers = `${teacherName} ${teacherSurname}`.trim();
@@ -178,9 +201,11 @@ export class GroupsService {
       return {
         id: row.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
         groupName: row.name,
-        subjectName: row.name, // Zmapowane podwójnie
-        bannerId: row.image_ref ?? null, // Zmapowane imageRef jako bannerId
-        lecturers: lecturers || 'Brak danych',
+        // TODO: Oddzielić subjectName od groupName, gdy model bazy zacznie je rozróżniać (edukacja.przedmioty).
+        subjectName: row.name, 
+        bannerId: row.image_ref ?? null, 
+        // TODO: Frontend should handle fallback display when lecturers is empty
+        lecturers: lecturers || '', 
         description: row.description ?? null
       };
     });

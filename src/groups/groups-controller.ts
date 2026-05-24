@@ -12,7 +12,7 @@ import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { JoinGroupBodyDto } from './dto/join-group-body.dto';
 import { EnrollGroupResponseBody, GroupsEnrollmentService } from './groups-enrollment-service';
-import { CreateGroupResponseBody, GroupsService } from './groups-service';
+import { CreateGroupResponseBody, GetUserGroupsResponseBody, GroupsService } from './groups-service';
 
 /**
  * Course group creation API for lecturers.
@@ -27,15 +27,15 @@ export class GroupsController {
   ) {}
 
   /**
-   * Zwraca listę grup (wraz ze zmapowanymi danymi prowadzącego), do których należy użytkownik.
-   * Autoryzacja jest pobierana z ciasteczka lub nagłówka.
+   * Returns a list of groups the user belongs to (with mapped lecturer data).
+   * Auth is read from `maq_auth` cookie OR header `x-browser-id`.
    */
   @Get()
   @HttpCode(HttpStatus.OK)
   getUserGroups(
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
-  ) {
+  ): Promise<GetUserGroupsResponseBody> {
     return this.groupsService.getUserGroups(req, browserId);
   }
 
