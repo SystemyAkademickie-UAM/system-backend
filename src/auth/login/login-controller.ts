@@ -1,14 +1,36 @@
-import { Controller, Headers, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  Res,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 
+import { AuthTokenSessionService } from '../api-token/auth-token-session-service';
+import { RegistrationService } from '../../registration/registration.service';
 import { LoginApiService } from './login-api.service';
 
+interface UpdateProfileDto {
+  nickname: string;
+  avatarId: number;
+}
+
 /**
- * Issues opaque API bearer secrets after SAML browser sessions.
+ * Login flow: opaque token exchange and in-wizard registration steps.
  */
 @Controller('login')
 export class LoginController {
-  constructor(private readonly loginApiService: LoginApiService) {}
+  constructor(
+    private readonly loginApiService: LoginApiService,
+    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly registrationService: RegistrationService,
+  ) {}
 
   /**
    * Exchanges HTTP-only SSO cookie (`saml_session`) for an auth token.
@@ -22,5 +44,61 @@ export class LoginController {
     @Headers('x-browser-id') browserId: string | undefined,
   ): Promise<{ auth: string }> {
     return this.loginApiService.exchangeSamlSessionForOpaqueBearerToken(req, res, browserId);
+  }
+
+  @Get('registration-status')
+  @HttpCode(HttpStatus.OK)
+  async getRegistrationStatus(
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+  ) {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserId,
+      undefined,
+    );
+    if (!subject) {
+      throw new ForbiddenException('Not authenticated');
+    }
+    return this.registrationService.getRegistrationStatus(subject.userId);
+  }
+
+  @Post('profile')
+  @HttpCode(HttpStatus.OK)
+  async updateProfile(
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+    @Body() body: UpdateProfileDto,
+  ) {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserId,
+      undefined,
+    );
+    if (!subject) {
+      throw new ForbiddenException('Not authenticated');
+    }
+    return this.registrationService.updateProfile(
+      subject.userId,
+      body.nickname,
+      body.avatarId,
+    );
+  }
+
+  @Post('accept-eula')
+  @HttpCode(HttpStatus.OK)
+  async acceptEula(
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+  ) {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserId,
+      undefined,
+    );
+    if (!subject) {
+      throw new ForbiddenException('Not authenticated');
+    }
+    return this.registrationService.acceptEula(subject.userId);
   }
 }
