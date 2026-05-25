@@ -28,6 +28,7 @@ import { UserEntity } from '../database/entities/user.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
+import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
 
 export type CreateGroupResponseBody = { statusCode: number; group: number };
 
@@ -63,6 +64,12 @@ export type GroupPreviewResponseBody = {
   hasAccess: boolean;
   isOwner: boolean;
   isEnrolled: boolean;
+};
+
+export type UpdateGroupResponseBody = {
+  statusCode: number;
+  group: number;
+  updated: boolean;
 };
 
 function nullableTrimmedString(value: unknown): string | null {
@@ -126,6 +133,7 @@ export class GroupsService {
       const entity = this.groupRepository.create({
         teacherAccountId: lecturerAccountId,
         name: nameTrimmed,
+        subjectName: nullableTrimmedString(groupPayload.subjectName),
         description: nullableTrimmedString(groupPayload.description),
         currency: nullableTrimmedString(groupPayload.currency),
         currencyIcon: nullableTrimmedString(groupPayload.currencyIcon),
@@ -142,6 +150,123 @@ export class GroupsService {
     } catch (err: unknown) {
       this.logGroupCreationFailure(err);
       return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID };
+    }
+  }
+
+  /**
+   * Updates an existing group owned by the lecturer.
+   * Only fields present in the payload are written; unset fields are left untouched.
+   */
+  async updateGroup(
+    req: Request,
+    publicGroupId: number,
+    body: UpdateGroupBodyDto,
+    browserIdHeader: string | undefined,
+  ): Promise<UpdateGroupResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      body.auth,
+    );
+    if (!subject) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
+        updated: false,
+      };
+    }
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    if (lecturerAccountId === null) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
+        updated: false,
+      };
+    }
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
+        updated: false,
+      };
+    }
+
+    const existing = await this.groupRepository.findOne({
+      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!existing) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
+        updated: false,
+      };
+    }
+
+    const payload = body.group ?? {};
+    const updates: Partial<GroupEntity> = {};
+
+    if (payload.name !== undefined) {
+      const trimmed = String(payload.name ?? '').trim();
+      if (trimmed === '') {
+        return {
+          statusCode: GROUP_API_JSON_STATUS_OK,
+          group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
+          updated: false,
+        };
+      }
+      updates.name = trimmed;
+    }
+    if (payload.subjectName !== undefined) {
+      updates.subjectName = nullableTrimmedString(payload.subjectName);
+    }
+    if (payload.description !== undefined) {
+      updates.description = nullableTrimmedString(payload.description);
+    }
+    if (payload.currency !== undefined) {
+      updates.currency = nullableTrimmedString(payload.currency);
+    }
+    if (payload.currencyIcon !== undefined) {
+      updates.currencyIcon = nullableTrimmedString(payload.currencyIcon);
+    }
+    if (payload.lives !== undefined) {
+      updates.lives = payload.lives;
+    }
+    if (payload.livesIcon !== undefined) {
+      updates.livesIcon = nullableTrimmedString(payload.livesIcon);
+    }
+    if (payload.imageRef !== undefined) {
+      updates.imageRef = nullableTrimmedString(payload.imageRef);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        updated: false,
+      };
+    }
+
+    try {
+      await this.groupRepository.update({ id: internalGroupId }, updates);
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        updated: true,
+      };
+    } catch (err: unknown) {
+      this.logGroupCreationFailure(err);
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
+        updated: false,
+      };
     }
   }
 
@@ -429,6 +554,7 @@ export class GroupsService {
   private mapRawGroupRow(row: {
     id: number;
     name: string;
+    subject_name: string | null;
     image_ref: string | null;
     description: string | null;
     teacher_nickname: string | null;
@@ -443,7 +569,7 @@ export class GroupsService {
     return {
       id: row.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
       groupName: row.name,
-      subjectName: row.name,
+      subjectName: row.subject_name ?? '',
       bannerId: row.image_ref ?? null,
       lecturers: lecturers || '',
       description: row.description ?? null,
@@ -458,6 +584,7 @@ export class GroupsService {
     Array<{
       id: number;
       name: string;
+      subject_name: string | null;
       image_ref: string | null;
       description: string | null;
       teacher_nickname: string | null;
@@ -473,6 +600,7 @@ export class GroupsService {
       .select([
         'group.id AS id',
         'group.name AS name',
+        'group.subject_name AS subject_name',
         'group.image_ref AS image_ref',
         'group.description AS description',
         'user.nickname AS teacher_nickname',
@@ -507,6 +635,7 @@ export class GroupsService {
     return rawGroups.map((row) => ({
       id: Number(row.id),
       name: String(row.name),
+      subject_name: row.subject_name ?? null,
       image_ref: row.image_ref ?? null,
       description: row.description ?? null,
       teacher_nickname: row.teacher_nickname ?? null,
