@@ -405,17 +405,41 @@ export class GroupsService {
     };
   }
 
+  private formatLecturerDisplay(
+    nickname: string | null | undefined,
+    name: string | null | undefined,
+    surname: string | null | undefined,
+  ): string {
+    const nick = nickname ? String(nickname).trim() : '';
+    const legal = [name, surname]
+      .filter(Boolean)
+      .map((part) => String(part).trim())
+      .join(' ')
+      .trim();
+
+    if (nick && legal && nick.toLowerCase() !== legal.toLowerCase()) {
+      return `${nick} (${legal})`;
+    }
+    if (nick) {
+      return nick;
+    }
+    return legal;
+  }
+
   private mapRawGroupRow(row: {
     id: number;
     name: string;
     image_ref: string | null;
     description: string | null;
+    teacher_nickname: string | null;
     teacher_name: string | null;
     teacher_surname: string | null;
   }): UserGroupListItem {
-    const teacherName = row.teacher_name ? String(row.teacher_name).trim() : '';
-    const teacherSurname = row.teacher_surname ? String(row.teacher_surname).trim() : '';
-    const lecturers = `${teacherName} ${teacherSurname}`.trim();
+    const lecturers = this.formatLecturerDisplay(
+      row.teacher_nickname,
+      row.teacher_name,
+      row.teacher_surname,
+    );
     return {
       id: row.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
       groupName: row.name,
@@ -436,6 +460,7 @@ export class GroupsService {
       name: string;
       image_ref: string | null;
       description: string | null;
+      teacher_nickname: string | null;
       teacher_name: string | null;
       teacher_surname: string | null;
       is_owner: boolean;
@@ -450,6 +475,7 @@ export class GroupsService {
         'group.name AS name',
         'group.image_ref AS image_ref',
         'group.description AS description',
+        'user.nickname AS teacher_nickname',
         'user.name AS teacher_name',
         'user.surname AS teacher_surname',
       ]);
@@ -483,6 +509,7 @@ export class GroupsService {
       name: String(row.name),
       image_ref: row.image_ref ?? null,
       description: row.description ?? null,
+      teacher_nickname: row.teacher_nickname ?? null,
       teacher_name: row.teacher_name ?? null,
       teacher_surname: row.teacher_surname ?? null,
       is_owner: row.is_owner === true || row.is_owner === 't' || row.is_owner === 1,

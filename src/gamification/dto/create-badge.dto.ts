@@ -19,9 +19,9 @@ export class CreateBadgeDto {
   @IsNotEmpty()
   icon: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  educationalDescription: string;
+  educationalDescription?: string;
 
   @IsOptional()
   @IsString()
