@@ -146,7 +146,7 @@ describe('GroupsService', () => {
           {
             id: 5 + GROUP_RESPONSE_GROUP_ID_OFFSET,
             groupName: 'Math 101',
-            subjectName: 'Math 101',
+            subjectName: '',
             bannerId: 'img_uuid',
             lecturers: 'John Doe',
             description: 'Basic math',

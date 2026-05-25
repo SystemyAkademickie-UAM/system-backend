@@ -22,6 +22,7 @@ export type GetPostsResponseBody = {
   status: number;
   posts: Array<{ id: number; title: string; content: string }>;
 };
+export type DeletePostResponseBody = { status: number; deleted: boolean };
 
 @Injectable()
 export class GroupsPostsService {
@@ -157,6 +158,53 @@ export class GroupsPostsService {
     } catch (err: unknown) {
       this.logger.error(`Get posts failed: ${String(err)}`);
       return { status: GROUP_API_JSON_STATUS_OK, posts: [] };
+    }
+  }
+
+  async deletePost(
+    req: Request,
+    publicGroupId: number,
+    postId: number,
+    browserIdHeader: string | undefined,
+    bodyAuth?: string,
+  ): Promise<DeletePostResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      bodyAuth,
+    );
+    if (!subject) {
+      return { status: GROUP_API_JSON_STATUS_OK, deleted: false };
+    }
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    if (lecturerAccountId === null) {
+      return { status: GROUP_API_JSON_STATUS_OK, deleted: false };
+    }
+
+    const groupId =
+      publicGroupId >= GROUP_RESPONSE_GROUP_ID_OFFSET
+        ? publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET
+        : publicGroupId;
+
+    const ownsGroup = await this.groupRepository.exist({
+      where: { id: groupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!ownsGroup) {
+      return { status: GROUP_API_JSON_STATUS_OK, deleted: false };
+    }
+
+    try {
+      const result = await this.postRepository.delete({ id: postId, groupId });
+      return {
+        status: GROUP_API_JSON_STATUS_OK,
+        deleted: (result.affected ?? 0) > 0,
+      };
+    } catch (err: unknown) {
+      this.logger.error(`Delete post failed: ${String(err)}`);
+      return { status: GROUP_API_JSON_STATUS_OK, deleted: false };
     }
   }
 }

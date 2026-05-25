@@ -13,8 +13,9 @@ import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { JoinGroupQueryDto } from './dto/join-group-query.dto';
+import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
 import { EnrollGroupResponseBody, GroupsEnrollmentService } from './groups-enrollment-service';
-import { CreateGroupResponseBody, GenerateCodeResponseBody, GetGroupsCatalogResponseBody, GetUserGroupsResponseBody, GroupPreviewResponseBody, GroupsService } from './groups-service';
+import { CreateGroupResponseBody, GenerateCodeResponseBody, GetGroupsCatalogResponseBody, GetUserGroupsResponseBody, GroupPreviewResponseBody, GroupsService, UpdateGroupResponseBody } from './groups-service';
 
 /**
  * Course group creation API for lecturers.
@@ -83,6 +84,21 @@ export class GroupsController {
     @Body() body: CreateGroupBodyDto,
   ): Promise<CreateGroupResponseBody> {
     return this.groupsService.createGroup(req, body, browserId);
+  }
+
+  /**
+   * Updates an existing group owned by the authenticated lecturer.
+   * PATCH /groups/:groupId
+   */
+  @Patch(':groupId')
+  @HttpCode(HttpStatus.OK)
+  updateGroup(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+    @Body() body: UpdateGroupBodyDto,
+  ): Promise<UpdateGroupResponseBody> {
+    return this.groupsService.updateGroup(req, publicGroupId, body, browserId);
   }
 
   /**
