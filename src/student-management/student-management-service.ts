@@ -21,6 +21,8 @@ export interface StudentListItem {
   surname: string;
   nickname: string;
   email: string;
+  avatarId: number;
+  avatarUrl: string | null;
   rankId: number | null;
   currency: number;
   totalEarned: number;
@@ -61,12 +63,15 @@ export class StudentManagementService {
          u.surname       AS "surname",
          u.nickname      AS "nickname",
          u.email         AS "email",
+         u.avatar_id     AS "avatarId",
+         av.image_url    AS "avatarUrl",
          ss.rank_id      AS "rankId",
          COALESCE(ss.currency, 0)     AS "currency",
          COALESCE(ss.total_earned, 0) AS "totalEarned"
        FROM gamification.enrollments e
        JOIN auth.accounts a  ON a.id = e.student_account_id
        JOIN auth.users u     ON u.id = a.user_id
+       LEFT JOIN auth.avatars av ON av.id = u.avatar_id
        LEFT JOIN gamification.student_stats ss ON ss.enrollment_id = e.id
        WHERE e.group_id = $1
        ORDER BY u.surname, u.name`,

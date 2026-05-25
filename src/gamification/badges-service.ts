@@ -120,7 +120,7 @@ export class BadgesService {
       groupId,
       name: dto.name,
       icon: dto.icon,
-      educationalDescription: dto.educationalDescription,
+      educationalDescription: dto.educationalDescription ?? '',
       storyDescription: dto.storyDescription ?? null,
       rewardAmount: dto.rewardAmount ?? 0,
       rarity: dto.rarity ?? BadgeRarity.COMMON,
