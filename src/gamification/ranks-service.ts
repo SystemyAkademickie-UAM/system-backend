@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
@@ -25,6 +25,7 @@ export class RanksService {
     private readonly rankRepository: Repository<RankEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -69,6 +70,7 @@ export class RanksService {
     if (dto.uniqueStoreItems !== undefined) rank.uniqueStoreItems = dto.uniqueStoreItems;
 
     const saved = await this.rankRepository.save(rank);
+    await this.recalculateRanksForGroup(groupId);
     this.logger.log(`Rank "${saved.name}" (id=${saved.id}) updated in group ${groupId}`);
     return saved;
   }
@@ -92,6 +94,7 @@ export class RanksService {
     }
 
     await this.rankRepository.remove(rank);
+    await this.recalculateRanksForGroup(groupId);
     this.logger.log(`Rank (id=${rankId}) deleted from group ${groupId}`);
     return { deleted: true };
   }
@@ -127,6 +130,7 @@ export class RanksService {
     });
 
     const saved = await this.rankRepository.save(entity);
+    await this.recalculateRanksForGroup(groupId);
     this.logger.log(`Rank "${saved.name}" (id=${saved.id}) created for group ${groupId}`);
     return saved;
   }
@@ -136,5 +140,40 @@ export class RanksService {
     if (!exists) {
       throw new NotFoundException(`Group with id ${groupId} not found`);
     }
+  }
+
+  /**
+   * Calculates the highest rank a student can obtain based on their points.
+   * Returns null if no rank is available for the given points.
+   */
+  async calculateRankForPoints(groupId: number, points: number): Promise<number | null> {
+    const ranks = await this.rankRepository.find({
+      where: { groupId },
+      order: { requiredPoints: 'DESC' },
+    });
+    const rank = ranks.find(r => r.requiredPoints <= points);
+    return rank ? rank.id : null;
+  }
+
+  /**
+   * Recalculates and updates the `rank_id` for all students in a given group.
+   * This is necessary when rank thresholds are added, modified or removed.
+   */
+  private async recalculateRanksForGroup(groupId: number): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE gamification.student_stats
+       SET rank_id = (
+           SELECT r.id
+           FROM gamification.ranks r
+           WHERE r.group_id = $1 AND r.required_points <= gamification.student_stats.total_earned
+           ORDER BY r.required_points DESC
+           LIMIT 1
+       )
+       WHERE enrollment_id IN (
+           SELECT id FROM gamification.enrollments WHERE group_id = $1
+       )`,
+      [groupId],
+    );
+    this.logger.debug(`Recalculated ranks for all students in group ${groupId}`);
   }
 }

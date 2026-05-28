@@ -84,7 +84,6 @@ export class SamlLinkedUserService {
           {
             name,
             surname,
-            nickname,
           },
         );
         return byEmail.id;

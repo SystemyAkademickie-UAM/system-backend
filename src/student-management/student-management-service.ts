@@ -9,6 +9,7 @@ import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { RanksService } from '../gamification/ranks-service';
 import { BulkUpdateStudentsDto } from './dto/bulk-update-student.dto';
 
 /**
@@ -45,6 +46,7 @@ export class StudentManagementService {
     private readonly studentStatsRepository: Repository<StudentStatsEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
+    private readonly ranksService: RanksService,
   ) {}
 
   /**
@@ -123,9 +125,23 @@ export class StudentManagementService {
           });
         }
 
-        if (item.rankId !== undefined) stats.rankId = item.rankId;
-        if (item.currency !== undefined) stats.currency = item.currency;
-        if (item.totalEarned !== undefined) stats.totalEarned = item.totalEarned;
+        if (item.currency !== undefined) {
+          const delta = item.currency - (stats.currency || 0);
+          stats.currency = item.currency;
+          if (delta > 0) {
+            stats.totalEarned = (stats.totalEarned || 0) + delta;
+          }
+        }
+        if (item.totalEarned !== undefined) {
+          stats.totalEarned = item.totalEarned;
+        }
+
+        const newRankId = await this.ranksService.calculateRankForPoints(groupId, stats.totalEarned || 0);
+        stats.rankId = newRankId;
+
+        if (item.rankId !== undefined) {
+          stats.rankId = item.rankId;
+        }
 
         await queryRunner.manager.save(StudentStatsEntity, stats);
         updatedCount++;
