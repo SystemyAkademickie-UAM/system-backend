@@ -16,6 +16,7 @@ import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
+import { JoinGroupQueryDto } from './dto/join-group-query.dto';
 
 /**
  * HTTP response body for enrollment endpoint.
@@ -24,7 +25,7 @@ import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
  * - `groupId`: included on success as proof of enrollment target
  */
 export type EnrollGroupResponseBody = {
-  status: number;
+  statusCode: number;
   enrollmentId: number;
   groupId?: number;
 };
@@ -65,7 +66,7 @@ export class GroupsEnrollmentService {
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
-  ) {}
+  ) { }
 
   /**
    * Core enrollment logic - use when you already have studentAccountId and groupId.
@@ -111,11 +112,11 @@ export class GroupsEnrollmentService {
       body.auth,
     );
     if (!subject) {
-      return { status: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
+      return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }
     const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
     if (studentAccountId === null) {
-      return { status: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
+      return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }
     const groupId =
       publicGroupId >= GROUP_RESPONSE_GROUP_ID_OFFSET
@@ -125,12 +126,56 @@ export class GroupsEnrollmentService {
     const publicGroupIdForResponse = groupId + GROUP_RESPONSE_GROUP_ID_OFFSET;
     if (result.enrollmentId > 0) {
       return {
-        status: GROUP_ENROLL_API_JSON_STATUS_OK,
+        statusCode: GROUP_ENROLL_API_JSON_STATUS_OK,
         enrollmentId: result.enrollmentId,
         groupId: publicGroupIdForResponse,
       };
     }
-    return { status: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: result.enrollmentId };
+    return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: result.enrollmentId };
+  }
+
+  /**
+   * HTTP handler: resolves auth and enrolls the student when both groupId and entry code match.
+   * Lookup is scoped to the given group — codes cannot be probed across all groups.
+   */
+  async enrollStudentByCode(
+    req: Request,
+    publicGroupId: number,
+    query: JoinGroupQueryDto,
+    browserIdHeader: string | undefined,
+  ): Promise<EnrollGroupResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      query.auth,
+    );
+    if (!subject) {
+      return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
+    }
+    const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
+    if (studentAccountId === null) {
+      return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
+    }
+    const internalGroupId =
+      publicGroupId >= GROUP_RESPONSE_GROUP_ID_OFFSET
+        ? publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET
+        : publicGroupId;
+    const groupObj = await this.groupRepository.findOne({
+      where: { id: internalGroupId, entryCode: query.code },
+    });
+    if (!groupObj) {
+      return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_GROUP_NOT_FOUND };
+    }
+    const result = await this.enrollStudentById(studentAccountId, groupObj.id);
+    const publicGroupIdForResponse = groupObj.id + GROUP_RESPONSE_GROUP_ID_OFFSET;
+    if (result.enrollmentId > 0) {
+      return {
+        statusCode: GROUP_ENROLL_API_JSON_STATUS_OK,
+        enrollmentId: result.enrollmentId,
+        groupId: publicGroupIdForResponse,
+      };
+    }
+    return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: result.enrollmentId };
   }
 
   private logEnrollmentFailure(err: unknown): void {

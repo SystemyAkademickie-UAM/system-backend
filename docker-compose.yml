@@ -1,32 +1,42 @@
 services:
-  backend:
-    build:
-      context: .
-    ports:
-      - "8080:8080"
+  api:
+    container_name: academy-api
+    build: .
     env_file:
       - .env
-    environment:
-      - DATABASE_HOST=db
-      - DATABASE_PORT=5432
-      - DATABASE_USER=dev_user
-      - DATABASE_PASSWORD=dev_password
-      - DATABASE_NAME=maq_dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    networks:
+      - academy-network
 
   db:
     image: postgres:13.16-alpine
     environment:
-      - POSTGRES_USER=dev_user
-      - POSTGRES_PASSWORD=dev_password
-      - POSTGRES_DB=maq_dev
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=${DATABASE_NAME}
     ports:
-      - "5433:5432"
+      - "${DATABASE_PORT:-5432}:5432"
     volumes:
-      - ./test_db.sql:/docker-entrypoint-initdb.d/test_db.sql
+      - ./maq.sql:/docker-entrypoint-initdb.d/maq.sql
       # Zachowanie danych w bazie po wyłączeniu kontenerów
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - academy-network
 
 volumes:
   pg_data:
+
+networks:
+  academy-network:
+    external: true

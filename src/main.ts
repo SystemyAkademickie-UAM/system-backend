@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
@@ -5,9 +7,16 @@ import passport from 'passport';
 import { AppModule } from './app-module';
 import { DEFAULT_CORS_ORIGINS } from './constants/cors-constants';
 import { HTTP_HOST, HTTP_PORT } from './constants/server-constants';
+import { assertRequiredEnv } from './validate-env';
+
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
+
+assertRequiredEnv();
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.useStaticAssets(join(__dirname, '..', 'assets'), { prefix: '/assets/' });
   app.use(cookieParser());
   app.use(passport.initialize());
   const corsOriginEnv = process.env.CORS_ORIGIN;

@@ -6,7 +6,13 @@ import { CounterModule } from './counter/counter-module';
 import { DatabaseModule } from './database/database-module';
 import { LoginModule } from './auth/login/login-module';
 import { DriveModule } from './drive/drive-module';
+import { GamificationModule } from './gamification/gamification-module';
+import { StudentProfileModule } from './student-profile/student-profile-module';
 import { GroupsModule } from './groups/groups-module';
+import { StagesModule } from './stages/stages-module';
+import { ActivitiesModule } from './activities/activities-module';
+import { StudentManagementModule } from './student-management/student-management-module';
+import { ProfileModule } from './profile/profile-module';
 
 @Module({
   imports: [
@@ -15,8 +21,14 @@ import { GroupsModule } from './groups/groups-module';
     SamlModule,
     LoginModule,
     CounterModule,
+    GamificationModule,
     GroupsModule,
+    StagesModule,
+    ActivitiesModule,
     DriveModule,
+    StudentProfileModule,
+    StudentManagementModule,
+    ProfileModule,
   ],
 })
 export class AppModule {}
