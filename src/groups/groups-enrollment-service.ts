@@ -14,7 +14,9 @@ import {
 import { STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
+import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { RanksService } from '../gamification/ranks-service';
 import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
 import { JoinGroupQueryDto } from './dto/join-group-query.dto';
 
@@ -62,11 +64,14 @@ export class GroupsEnrollmentService {
   constructor(
     private readonly authTokenSessionService: AuthTokenSessionService,
     private readonly userRolesService: UserRolesService,
+    private readonly ranksService: RanksService,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
-  ) { }
+    @InjectRepository(StudentStatsEntity)
+    private readonly studentStatsRepository: Repository<StudentStatsEntity>,
+  ) {}
 
   /**
    * Core enrollment logic - use when you already have studentAccountId and groupId.
@@ -89,6 +94,16 @@ export class GroupsEnrollmentService {
     try {
       const entity = this.enrollmentRepository.create({ groupId, studentAccountId });
       const saved = await this.enrollmentRepository.save(entity);
+
+      const initialRankId = await this.ranksService.calculateRankForPoints(groupId, 0);
+      const stats = this.studentStatsRepository.create({
+        enrollmentId: saved.id,
+        currency: 0,
+        totalEarned: 0,
+        rankId: initialRankId,
+      });
+      await this.studentStatsRepository.save(stats);
+
       return { enrollmentId: saved.id, groupId };
     } catch (err: unknown) {
       this.logEnrollmentFailure(err);
