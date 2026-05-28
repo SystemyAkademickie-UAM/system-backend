@@ -5,6 +5,7 @@ import { AuthTokenSessionModule } from '../auth/api-token/auth-token-session-mod
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { PostEntity } from '../database/entities/post.entity';
+import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { GamificationModule } from '../gamification/gamification-module';
 import { UserRolesModule } from '../user-roles/user-roles-module';
 import { GroupsEnrollmentService } from './groups-enrollment-service';
@@ -15,7 +16,7 @@ import { GroupsPostsService } from './groups-posts-service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([GroupEntity, EnrollmentEntity, PostEntity]),
+    TypeOrmModule.forFeature([GroupEntity, EnrollmentEntity, PostEntity, StudentStatsEntity]),
     AuthTokenSessionModule,
     UserRolesModule,
     GamificationModule,
