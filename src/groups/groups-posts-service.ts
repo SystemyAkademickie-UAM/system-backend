@@ -16,6 +16,7 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { PostEntity } from '../database/entities/post.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
 
 export type CreatePostResponseBody = { status: number; post: number };
 export type GetPostsResponseBody = {
@@ -23,6 +24,7 @@ export type GetPostsResponseBody = {
   posts: Array<{ id: number; title: string; content: string }>;
 };
 export type DeletePostResponseBody = { status: number; deleted: boolean };
+export type UpdatePostResponseBody = { status: number; updated: boolean };
 
 @Injectable()
 export class GroupsPostsService {
@@ -205,6 +207,57 @@ export class GroupsPostsService {
     } catch (err: unknown) {
       this.logger.error(`Delete post failed: ${String(err)}`);
       return { status: GROUP_API_JSON_STATUS_OK, deleted: false };
+    }
+  }
+
+  async updatePost(
+    req: Request,
+    publicGroupId: number,
+    postId: number,
+    body: UpdatePostDto,
+    browserIdHeader: string | undefined,
+  ): Promise<UpdatePostResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      body.auth,
+    );
+    if (!subject) {
+      return { status: GROUP_API_JSON_STATUS_OK, updated: false };
+    }
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    if (lecturerAccountId === null) {
+      return { status: GROUP_API_JSON_STATUS_OK, updated: false };
+    }
+
+    const groupId =
+      publicGroupId >= GROUP_RESPONSE_GROUP_ID_OFFSET
+        ? publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET
+        : publicGroupId;
+
+    const ownsGroup = await this.groupRepository.exist({
+      where: { id: groupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!ownsGroup) {
+      return { status: GROUP_API_JSON_STATUS_OK, updated: false };
+    }
+
+    try {
+      const updateData: Partial<PostEntity> = {};
+      if (body.title !== undefined) updateData.title = body.title;
+      if (body.content !== undefined) updateData.content = body.content;
+
+      const result = await this.postRepository.update({ id: postId, groupId }, updateData);
+      return {
+        status: GROUP_API_JSON_STATUS_OK,
+        updated: (result.affected ?? 0) > 0,
+      };
+    } catch (err: unknown) {
+      this.logger.error(`Update post failed: ${String(err)}`);
+      return { status: GROUP_API_JSON_STATUS_OK, updated: false };
     }
   }
 }

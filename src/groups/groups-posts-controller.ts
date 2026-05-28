@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
   Req,
@@ -20,7 +21,9 @@ import {
   DeletePostResponseBody,
   GetPostsResponseBody,
   GroupsPostsService,
+  UpdatePostResponseBody,
 } from './groups-posts-service';
+import { UpdatePostDto } from './dto/update-post.dto';
 
 @Controller('groups')
 export class GroupsPostsController {
@@ -74,5 +77,21 @@ export class GroupsPostsController {
     @Body() body: { auth?: string } = {},
   ): Promise<DeletePostResponseBody> {
     return this.groupsPostsService.deletePost(req, groupId, postId, browserId, body?.auth);
+  }
+
+  /**
+   * Updates a post belonging to the given course group.
+   * PATCH /groups/:id/post/:postId
+   */
+  @Patch(':id/post/:postId')
+  @HttpCode(HttpStatus.OK)
+  updatePost(
+    @Param('id', ParseIntPipe) groupId: number,
+    @Param('postId', ParseIntPipe) postId: number,
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+    @Body() body: UpdatePostDto,
+  ): Promise<UpdatePostResponseBody> {
+    return this.groupsPostsService.updatePost(req, groupId, postId, body, browserId);
   }
 }
