@@ -487,6 +487,7 @@ CREATE TABLE education.groups (
     id integer NOT NULL,
     teacher_account_id integer NOT NULL,
     name character varying(255) NOT NULL,
+    subject_name character varying(255),
     image_ref character varying(255),
     description text,
     currency character varying(100),
@@ -1221,7 +1222,7 @@ COPY education.activities (id, stage_id, name, currency, educational_description
 -- Data for Name: groups; Type: TABLE DATA; Schema: education; Owner: dev_user
 --
 
-COPY education.groups (id, teacher_account_id, name, image_ref, description, currency, currency_icon, lives, lives_icon, entry_code) FROM stdin;
+COPY education.groups (id, teacher_account_id, name, subject_name, image_ref, description, currency, currency_icon, lives, lives_icon, entry_code) FROM stdin;
 \.
 
 

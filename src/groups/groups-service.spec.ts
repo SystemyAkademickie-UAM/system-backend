@@ -12,8 +12,10 @@ import { GroupsService } from './groups-service';
 type MockQueryBuilder = {
   leftJoin: jest.Mock;
   select: jest.Mock;
+  addSelect: jest.Mock;
   setParameter: jest.Mock;
   where: jest.Mock;
+  andWhere: jest.Mock;
   groupBy: jest.Mock;
   addGroupBy: jest.Mock;
   orderBy: jest.Mock;
@@ -47,8 +49,10 @@ describe('GroupsService', () => {
     mockQueryBuilder = {
       leftJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
       setParameter: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
       groupBy: jest.fn().mockReturnThis(),
       addGroupBy: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
@@ -99,11 +103,12 @@ describe('GroupsService', () => {
     it('should return empty array if user has neither student nor lecturer roles', async () => {
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.findAccountIdForRole.mockResolvedValue(null);
+      mockQueryBuilder.getRawMany.mockResolvedValue([]);
       const result = await service.getUserGroups(mockRequest, 'browser-id', undefined);
       expect(result).toEqual({ statusCode: GROUP_API_JSON_STATUS_OK, groups: [] });
     });
 
-    it('should fetch and map groups correctly with offsets when user is enrolled', async () => {
+    it('should fetch and map enrolled groups into myGroups when user is student', async () => {
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) => {
         if (role === STUDENT_ROLE_NAME) {
@@ -119,11 +124,21 @@ describe('GroupsService', () => {
           description: 'Basic math',
           teacher_name: 'John',
           teacher_surname: 'Doe',
+          is_owner: false,
+          is_enrolled: true,
+        },
+        {
+          id: 6,
+          name: 'Other course',
+          image_ref: null,
+          description: null,
+          teacher_name: 'Jane',
+          teacher_surname: 'Smith',
+          is_owner: false,
+          is_enrolled: false,
         },
       ]);
       const result = await service.getUserGroups(mockRequest, 'browser-id', undefined);
-      expect(mockQueryBuilder.setParameter).not.toHaveBeenCalledWith('lecturerId', expect.anything());
-      expect(mockQueryBuilder.groupBy).toHaveBeenCalledWith('group.id');
       expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('group.name', 'ASC');
       expect(result).toEqual({
         statusCode: GROUP_API_JSON_STATUS_OK,
@@ -131,7 +146,7 @@ describe('GroupsService', () => {
           {
             id: 5 + GROUP_RESPONSE_GROUP_ID_OFFSET,
             groupName: 'Math 101',
-            subjectName: 'Math 101',
+            subjectName: '',
             bannerId: 'img_uuid',
             lecturers: 'John Doe',
             description: 'Basic math',
@@ -140,7 +155,7 @@ describe('GroupsService', () => {
       });
     });
 
-    it('should query lecturer-owned groups when user is lecturer only', async () => {
+    it('should split catalog into myGroups and otherGroups', async () => {
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 2 });
       userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) => {
         if (role === LECTURER_ROLE_NAME) {
@@ -148,14 +163,36 @@ describe('GroupsService', () => {
         }
         return null;
       });
-      mockQueryBuilder.getRawMany.mockResolvedValue([]);
-      const result = await service.getUserGroups(mockRequest, 'browser-id', undefined);
-      expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith('lecturerId', 30);
-      expect(mockQueryBuilder.leftJoin).toHaveBeenCalledTimes(2);
-      expect(result).toEqual({ statusCode: GROUP_API_JSON_STATUS_OK, groups: [] });
+      mockQueryBuilder.getRawMany.mockResolvedValue([
+        {
+          id: 1,
+          name: 'Owned',
+          image_ref: null,
+          description: null,
+          teacher_name: 'Ann',
+          teacher_surname: 'Lee',
+          is_owner: true,
+          is_enrolled: false,
+        },
+        {
+          id: 2,
+          name: 'Foreign',
+          image_ref: null,
+          description: null,
+          teacher_name: 'Bob',
+          teacher_surname: 'Kay',
+          is_owner: false,
+          is_enrolled: false,
+        },
+      ]);
+      const result = await service.getGroupsCatalog(mockRequest, 'browser-id', undefined);
+      expect(result.myGroups).toHaveLength(1);
+      expect(result.otherGroups).toHaveLength(1);
+      expect(result.myGroups[0].groupName).toBe('Owned');
+      expect(result.otherGroups[0].groupName).toBe('Foreign');
     });
 
-    it('should include enrollment join and lecturer filter when user has both roles', async () => {
+    it('should include enrollment join when user has student role', async () => {
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 3 });
       userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) => {
         if (role === LECTURER_ROLE_NAME) {
@@ -167,12 +204,9 @@ describe('GroupsService', () => {
         return null;
       });
       mockQueryBuilder.getRawMany.mockResolvedValue([]);
-      await service.getUserGroups(mockRequest, 'browser-id', undefined);
+      await service.getGroupsCatalog(mockRequest, 'browser-id', undefined);
       expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith('lecturerId', 40);
       expect(mockQueryBuilder.leftJoin).toHaveBeenCalledTimes(3);
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-        '(group.teacher_account_id = :lecturerId OR enrollment.id IS NOT NULL)',
-      );
     });
 
     it('should use empty string fallback if lecturer name is missing', async () => {
@@ -191,10 +225,27 @@ describe('GroupsService', () => {
           description: null,
           teacher_name: null,
           teacher_surname: null,
+          is_owner: true,
+          is_enrolled: false,
         },
       ]);
       const result = await service.getUserGroups(mockRequest, 'browser-id', undefined);
       expect(result.groups[0].lecturers).toBe('');
+    });
+
+    it('should return existing entry code for group owner', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({
+        id: 1,
+        teacherAccountId: 10,
+        entryCode: 'ABC123',
+      });
+
+      const result = await service.getAccessCodeForGroup(mockRequest, 100001, 'browser-id', undefined);
+
+      expect(result.code).toBe('ABC123');
+      expect(result.groupId).toBe(100001);
     });
   });
 });

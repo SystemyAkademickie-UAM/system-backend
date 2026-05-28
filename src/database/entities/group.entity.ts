@@ -22,6 +22,10 @@ export class GroupEntity {
   @Column({ name: 'name', type: 'varchar', length: EDUCATION_GROUP_NAME_MAX_LENGTH, nullable: false })
   name: string;
 
+  /** Optional academic subject name (separate from the fabular group name). */
+  @Column({ name: 'subject_name', type: 'varchar', length: EDUCATION_GROUP_NAME_MAX_LENGTH, nullable: true })
+  subjectName: string | null;
+
   @Column({ name: 'image_ref', type: 'varchar', length: EDUCATION_GROUP_VARCHAR_MAX_LENGTH, nullable: true })
   imageRef: string | null;
 
