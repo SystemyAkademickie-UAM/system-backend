@@ -6,9 +6,6 @@ services:
       - .env
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    environment:
-      DATABASE_HOST: host.docker.internal
-      NODE_ENV: ${NODE_ENV:-development}
     ports:
       - "8080:8080"
     depends_on:
@@ -26,7 +23,7 @@ services:
     ports:
       - "${DATABASE_PORT:-5432}:5432"
     volumes:
-      - ./db_v3.sql:/docker-entrypoint-initdb.d/db_v3.sql
+      - ./maq.sql:/docker-entrypoint-initdb.d/maq.sql
       # Zachowanie danych w bazie po wyłączeniu kontenerów
       - pg_data:/var/lib/postgresql/data
     healthcheck:
