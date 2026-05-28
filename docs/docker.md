@@ -1,8 +1,16 @@
 # Docker (backend)
 
-This document covers **only** the API image defined in this repository’s `Dockerfile`.
+## Compose network (local stack)
 
-## Build and run
+`docker-compose.yml` uses an **external** network. Create it once before the first Compose run:
+
+```bash
+docker network create academy-network
+```
+
+See also [installation.md](./installation.md#docker-compose-local-postgresql).
+
+## Build and run (API image only)
 
 ```bash
 docker build -t system-backend:local .
@@ -11,7 +19,7 @@ docker run --rm -p 8080:8080 -e PORT=8080 system-backend:local
 
 The process listens on **8080** inside the container (`PORT=8080`), which matches a host nginx `location /api/ { proxy_pass http://localhost:8080; ... }` when you publish `-p 127.0.0.1:8080:8080` (or equivalent).
 
-The image sets **`NODE_ENV=production`**. **`docker-compose.yml` in this repo overrides it** with **`NODE_ENV=${NODE_ENV:-development}`** so dev SAML bypass (`SAML_BYPASS_ENABLED=true`) is allowed when using Compose locally. For a hardened production stack, set **`NODE_ENV=production`** in the Compose `.env` file (variable substitution) or equivalent orchestration env.
+The image sets **`NODE_ENV=production`**. For local Compose, set **`NODE_ENV=development`** in `.env` when you need dev SAML bypass (`SAML_BYPASS_ENABLED=true`). For production, keep **`NODE_ENV=production`** in `.env`.
 
 ## Helper scripts (Docker CLI only)
 
@@ -29,7 +37,9 @@ Optional: set `IMAGE_NAME` to override the image tag. For extra `docker run` fla
 - `.github/workflows/docker-build.yml` — builds this Dockerfile on `push` to `main` (verification only).
 - `.github/workflows/docker-publish.yml` — builds and pushes on `push` to `production` (for example to GHCR).
 
-The container listens on **8080**. The `Dockerfile` uses **Node.js 24.14.1** (Alpine) and **npm 11.11.0** during install, matching [prerequisites.md](./prerequisites.md).
+The process listens on **8080**. The `Dockerfile` uses **Node.js 24.14.1** (Alpine) and **npm 11.11.0** during install, matching [prerequisites.md](./prerequisites.md).
+
+On container start, the `Dockerfile` `CMD` runs pending TypeORM migrations (`npm run migrate:dist`), then starts the API. Failed migrations stop the container (the API does not start on a stale schema). All connection settings come from `.env` via Compose `env_file`.
 
 ## CORS
 
