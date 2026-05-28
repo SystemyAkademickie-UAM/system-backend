@@ -14,6 +14,12 @@ export class GroupPayloadDto {
   @MinLength(1)
   name: string;
 
+  /** Optional academic subject name (separate from `name`). */
+  @Transform(({ value }) => transformOptionalString(value))
+  @IsOptional()
+  @IsString()
+  subjectName?: string;
+
   @Transform(({ value }) => transformOptionalString(value))
   @IsOptional()
   @IsString()

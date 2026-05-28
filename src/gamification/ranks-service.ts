@@ -9,6 +9,7 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { RankEntity } from '../database/entities/rank.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateRankDto } from './dto/create-rank.dto';
+import { UpdateRankDto } from './dto/update-rank.dto';
 
 /**
  * Persists rank definitions in `gamification.ranks` for a given course group.
@@ -25,6 +26,75 @@ export class RanksService {
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
   ) {}
+
+  /**
+   * Returns all ranks for a group, ordered by requiredPoints ascending.
+   * Auth is read from `maq_auth` cookie OR query `auth` parameter (soft token resolution).
+   */
+  async getRanksForGroup(req: Request, groupId: number, queryAuth?: string): Promise<RankEntity[]> {
+    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, queryAuth);
+    if (!subject) {
+      throw new ForbiddenException('Not authorized');
+    }
+    await this.assertGroupExists(groupId);
+    return this.rankRepository.find({
+      where: { groupId },
+      order: { requiredPoints: 'ASC' },
+    });
+  }
+
+  /**
+   * Updates an existing rank.
+   */
+  async updateRank(req: Request, groupId: number, rankId: number, dto: UpdateRankDto): Promise<RankEntity> {
+    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    if (!subject) {
+      throw new ForbiddenException('Not authorized');
+    }
+    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
+    if (!isLecturer) {
+      throw new ForbiddenException('Not authorized');
+    }
+
+    const rank = await this.rankRepository.findOne({ where: { id: rankId, groupId } });
+    if (!rank) {
+      throw new NotFoundException(`Rank with id ${rankId} not found in group ${groupId}`);
+    }
+
+    if (dto.name !== undefined) rank.name = dto.name;
+    if (dto.icon !== undefined) rank.icon = dto.icon;
+    if (dto.requiredPoints !== undefined) rank.requiredPoints = dto.requiredPoints;
+    if (dto.storyDescription !== undefined) rank.storyDescription = dto.storyDescription;
+    if (dto.storeDiscount !== undefined) rank.storeDiscount = dto.storeDiscount;
+    if (dto.uniqueStoreItems !== undefined) rank.uniqueStoreItems = dto.uniqueStoreItems;
+
+    const saved = await this.rankRepository.save(rank);
+    this.logger.log(`Rank "${saved.name}" (id=${saved.id}) updated in group ${groupId}`);
+    return saved;
+  }
+
+  /**
+   * Deletes a rank from a group.
+   */
+  async deleteRank(req: Request, groupId: number, rankId: number, bodyAuth?: string): Promise<{ deleted: boolean }> {
+    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, bodyAuth);
+    if (!subject) {
+      throw new ForbiddenException('Not authorized');
+    }
+    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
+    if (!isLecturer) {
+      throw new ForbiddenException('Not authorized');
+    }
+
+    const rank = await this.rankRepository.findOne({ where: { id: rankId, groupId } });
+    if (!rank) {
+      throw new NotFoundException(`Rank with id ${rankId} not found in group ${groupId}`);
+    }
+
+    await this.rankRepository.remove(rank);
+    this.logger.log(`Rank (id=${rankId}) deleted from group ${groupId}`);
+    return { deleted: true };
+  }
 
   /**
    * Creates a new rank bound to the given group.
