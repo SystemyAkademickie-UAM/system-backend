@@ -20,7 +20,7 @@ Exercise endpoints with any HTTP client (curl, REST client, automated tests).
 
 **Baseline:** `maq.sql` at the repo root is a full schema dump for **fresh** local Docker Postgres only (`docker compose` `db` service init). It already includes the schema through the `001-baseline` cutover. Do not use it to update production or remote databases.
 
-**Incremental changes:** add numbered files under `src/database/migrations/` (`0000000000002-…`, etc.). Filenames and class names use a **13-digit prefix** (TypeORM requirement); `0000000000001` is the baseline. Put SQL in `UP_SQL` / `DOWN_SQL` constants (see `0000000000001-baseline.migration.ts`).
+**Incremental changes:** add numbered files under `src/database/migrations/` (`0000000000002-…`, etc.). Filenames and class names use a **13-digit prefix** (TypeORM requirement); `0000000000001` is the baseline, `0000000000002` syncs schema changes from main. Put SQL in `UP_SQL` / `DOWN_SQL` constants (see existing migrations).
 
 Scaffold the next file:
 
