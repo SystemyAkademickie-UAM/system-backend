@@ -4,6 +4,7 @@ import type { Profile } from '@node-saml/node-saml';
 import type { Request, Response } from 'express';
 import passport from 'passport';
 
+import { MAQ_AUTH_COOKIE_NAME } from '../../constants/api-token-constants';
 import { SAML_SESSION_COOKIE_NAME } from '../../constants/saml-constants';
 import { jwtExpiresInToCookieMaxAgeMs } from './saml-jwt-expiry.util';
 import { SamlConfigService } from './saml-config.service';
@@ -193,7 +194,7 @@ export class SamlController {
 
   @Post('logout')
   logout(@Req() req: Request, @Res() res: Response): void {
-    res.clearCookie(SAML_SESSION_COOKIE_NAME, { path: '/' });
+    this.clearBrowserAuthCookies(res);
     res.json({ success: true });
   }
 
@@ -205,9 +206,8 @@ export class SamlController {
   samlLogout(@Req() req: Request, @Res() res: Response): void {
     const token = req.cookies?.[SAML_SESSION_COOKIE_NAME];
     const session = token ? this.samlService.verifySessionToken(token) : null;
-    
-    // Clear local session first
-    res.clearCookie(SAML_SESSION_COOKIE_NAME, { path: '/' });
+
+    this.clearBrowserAuthCookies(res);
 
     // If no strategy or no IdP logout configured, just redirect
     if (!this.strategy || !this.samlConfig.getIdpLogoutUrl()) {
@@ -267,8 +267,14 @@ export class SamlController {
   }
 
   private handleSloCallback(_req: Request, res: Response): void {
-    // Clear session cookie and redirect to frontend
-    res.clearCookie(SAML_SESSION_COOKIE_NAME, { path: '/' });
+    this.clearBrowserAuthCookies(res);
     res.redirect(this.samlConfig.getLogoutUrl());
+  }
+
+  private clearBrowserAuthCookies(res: Response): void {
+    const isProd = process.env.NODE_ENV === 'production';
+    const cookieOptions = isProd ? { path: '/', secure: true } : { path: '/' };
+    res.clearCookie(SAML_SESSION_COOKIE_NAME, cookieOptions);
+    res.clearCookie(MAQ_AUTH_COOKIE_NAME, cookieOptions);
   }
 }
