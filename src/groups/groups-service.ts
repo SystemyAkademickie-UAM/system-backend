@@ -10,6 +10,7 @@ import {
   GROUP_RESPONSE_GROUP_ID_OFFSET,
   GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
   GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
+  toInternalGroupId,
 } from '../constants/group-api-constants';
 import {
   GENERATE_CODE_RESULT_DB_ERROR,
@@ -27,6 +28,7 @@ import { UserEntity } from '../database/entities/user.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
+import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
 
 export type CreateGroupResponseBody = { statusCode: number; group: number };
 
@@ -48,6 +50,26 @@ export type UserGroupListItem = {
 export type GetUserGroupsResponseBody = {
   statusCode: number;
   groups: UserGroupListItem[];
+};
+
+export type GetGroupsCatalogResponseBody = {
+  statusCode: number;
+  myGroups: UserGroupListItem[];
+  otherGroups: UserGroupListItem[];
+};
+
+export type GroupPreviewResponseBody = {
+  statusCode: number;
+  group: UserGroupListItem | null;
+  hasAccess: boolean;
+  isOwner: boolean;
+  isEnrolled: boolean;
+};
+
+export type UpdateGroupResponseBody = {
+  statusCode: number;
+  group: number;
+  updated: boolean;
 };
 
 function nullableTrimmedString(value: unknown): string | null {
@@ -111,6 +133,7 @@ export class GroupsService {
       const entity = this.groupRepository.create({
         teacherAccountId: lecturerAccountId,
         name: nameTrimmed,
+        subjectName: nullableTrimmedString(groupPayload.subjectName),
         description: nullableTrimmedString(groupPayload.description),
         currency: nullableTrimmedString(groupPayload.currency),
         currencyIcon: nullableTrimmedString(groupPayload.currencyIcon),
@@ -130,6 +153,123 @@ export class GroupsService {
     }
   }
 
+  /**
+   * Updates an existing group owned by the lecturer.
+   * Only fields present in the payload are written; unset fields are left untouched.
+   */
+  async updateGroup(
+    req: Request,
+    publicGroupId: number,
+    body: UpdateGroupBodyDto,
+    browserIdHeader: string | undefined,
+  ): Promise<UpdateGroupResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      body.auth,
+    );
+    if (!subject) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
+        updated: false,
+      };
+    }
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    if (lecturerAccountId === null) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
+        updated: false,
+      };
+    }
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
+        updated: false,
+      };
+    }
+
+    const existing = await this.groupRepository.findOne({
+      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!existing) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
+        updated: false,
+      };
+    }
+
+    const payload = body.group ?? {};
+    const updates: Partial<GroupEntity> = {};
+
+    if (payload.name !== undefined) {
+      const trimmed = String(payload.name ?? '').trim();
+      if (trimmed === '') {
+        return {
+          statusCode: GROUP_API_JSON_STATUS_OK,
+          group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
+          updated: false,
+        };
+      }
+      updates.name = trimmed;
+    }
+    if (payload.subjectName !== undefined) {
+      updates.subjectName = nullableTrimmedString(payload.subjectName);
+    }
+    if (payload.description !== undefined) {
+      updates.description = nullableTrimmedString(payload.description);
+    }
+    if (payload.currency !== undefined) {
+      updates.currency = nullableTrimmedString(payload.currency);
+    }
+    if (payload.currencyIcon !== undefined) {
+      updates.currencyIcon = nullableTrimmedString(payload.currencyIcon);
+    }
+    if (payload.lives !== undefined) {
+      updates.lives = payload.lives;
+    }
+    if (payload.livesIcon !== undefined) {
+      updates.livesIcon = nullableTrimmedString(payload.livesIcon);
+    }
+    if (payload.imageRef !== undefined) {
+      updates.imageRef = nullableTrimmedString(payload.imageRef);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        updated: false,
+      };
+    }
+
+    try {
+      await this.groupRepository.update({ id: internalGroupId }, updates);
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        updated: true,
+      };
+    } catch (err: unknown) {
+      this.logGroupCreationFailure(err);
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
+        updated: false,
+      };
+    }
+  }
+
   private logGroupCreationFailure(err: unknown): void {
     if (postgresFkViolation(err)) {
       const detail =
@@ -142,6 +282,50 @@ export class GroupsService {
       return;
     }
     this.logger.error(`Group creation failed: ${String(err)}`);
+  }
+
+  async getAccessCodeForGroup(
+    req: Request,
+    publicGroupId: number,
+    browserIdHeader: string | undefined,
+    queryAuth: string | undefined,
+  ): Promise<GenerateCodeResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      queryAuth,
+    );
+    if (!subject) {
+      return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
+    }
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    if (lecturerAccountId === null) {
+      return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
+    }
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      return this.buildGenerateCodeError(GENERATE_CODE_RESULT_GROUP_NOT_FOUND);
+    }
+    const group = await this.groupRepository.findOne({
+      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!group) {
+      const groupExists = await this.groupRepository.exist({ where: { id: internalGroupId } });
+      if (!groupExists) {
+        return this.buildGenerateCodeError(GENERATE_CODE_RESULT_GROUP_NOT_FOUND);
+      }
+      return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
+    }
+    return {
+      statusCode: GROUP_GENERATE_CODE_API_JSON_STATUS_OK,
+      code: group.entryCode ?? '',
+      groupId: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
+    };
   }
 
   async generateCodeForGroup(
@@ -240,16 +424,29 @@ export class GroupsService {
     browserIdHeader: string | undefined,
     queryAuth: string | undefined,
   ): Promise<GetUserGroupsResponseBody> {
+    const catalog = await this.getGroupsCatalog(req, browserIdHeader, queryAuth);
+    return {
+      statusCode: catalog.statusCode,
+      groups: catalog.myGroups,
+    };
+  }
+
+  /**
+   * Returns all groups split into membership buckets for the authenticated user.
+   */
+  async getGroupsCatalog(
+    req: Request,
+    browserIdHeader: string | undefined,
+    queryAuth: string | undefined,
+  ): Promise<GetGroupsCatalogResponseBody> {
     const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
       browserIdHeader,
       queryAuth,
     );
     if (!subject) {
-      return { statusCode: GROUP_API_JSON_STATUS_OK, groups: [] };
+      return { statusCode: GROUP_API_JSON_STATUS_OK, myGroups: [], otherGroups: [] };
     }
-    // TODO: findAccountIdForRole returns only the first matching account id.
-    // Support users with multiple accounts of the same role when multi-org is implemented.
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
       LECTURER_ROLE_NAME,
@@ -258,17 +455,155 @@ export class GroupsService {
       subject.userId,
       STUDENT_ROLE_NAME,
     );
-    if (lecturerAccountId === null && studentAccountId === null) {
-      return { statusCode: GROUP_API_JSON_STATUS_OK, groups: [] };
+    const allGroups = await this.fetchAllGroupsWithMembershipFlags(
+      lecturerAccountId,
+      studentAccountId,
+    );
+    const myGroups: UserGroupListItem[] = [];
+    const otherGroups: UserGroupListItem[] = [];
+    for (const row of allGroups) {
+      const item = this.mapRawGroupRow(row);
+      if (row.is_owner || row.is_enrolled) {
+        myGroups.push(item);
+      } else {
+        otherGroups.push(item);
+      }
     }
+    return { statusCode: GROUP_API_JSON_STATUS_OK, myGroups, otherGroups };
+  }
+
+  /**
+   * Returns public group metadata and access flags for the authenticated user.
+   */
+  async getGroupPreview(
+    req: Request,
+    publicGroupId: number,
+    browserIdHeader: string | undefined,
+    queryAuth: string | undefined,
+  ): Promise<GroupPreviewResponseBody> {
+    const empty: GroupPreviewResponseBody = {
+      statusCode: GROUP_API_JSON_STATUS_OK,
+      group: null,
+      hasAccess: false,
+      isOwner: false,
+      isEnrolled: false,
+    };
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      queryAuth,
+    );
+    if (!subject) {
+      return empty;
+    }
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      return empty;
+    }
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    const studentAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      STUDENT_ROLE_NAME,
+    );
+    const rows = await this.fetchAllGroupsWithMembershipFlags(
+      lecturerAccountId,
+      studentAccountId,
+      internalGroupId,
+    );
+    const row = rows[0];
+    if (!row) {
+      return empty;
+    }
+    const isOwner = Boolean(row.is_owner);
+    const isEnrolled = Boolean(row.is_enrolled);
+    return {
+      statusCode: GROUP_API_JSON_STATUS_OK,
+      group: this.mapRawGroupRow(row),
+      hasAccess: isOwner || isEnrolled,
+      isOwner,
+      isEnrolled,
+    };
+  }
+
+  private formatLecturerDisplay(
+    nickname: string | null | undefined,
+    name: string | null | undefined,
+    surname: string | null | undefined,
+  ): string {
+    const nick = nickname ? String(nickname).trim() : '';
+    const legal = [name, surname]
+      .filter(Boolean)
+      .map((part) => String(part).trim())
+      .join(' ')
+      .trim();
+
+    if (nick && legal && nick.toLowerCase() !== legal.toLowerCase()) {
+      return `${nick} (${legal})`;
+    }
+    if (nick) {
+      return nick;
+    }
+    return legal;
+  }
+
+  private mapRawGroupRow(row: {
+    id: number;
+    name: string;
+    subject_name: string | null;
+    image_ref: string | null;
+    description: string | null;
+    teacher_nickname: string | null;
+    teacher_name: string | null;
+    teacher_surname: string | null;
+  }): UserGroupListItem {
+    const lecturers = this.formatLecturerDisplay(
+      row.teacher_nickname,
+      row.teacher_name,
+      row.teacher_surname,
+    );
+    return {
+      id: row.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
+      groupName: row.name,
+      subjectName: row.subject_name ?? '',
+      bannerId: row.image_ref ?? null,
+      lecturers: lecturers || '',
+      description: row.description ?? null,
+    };
+  }
+
+  private async fetchAllGroupsWithMembershipFlags(
+    lecturerAccountId: number | null,
+    studentAccountId: number | null,
+    internalGroupId?: number,
+  ): Promise<
+    Array<{
+      id: number;
+      name: string;
+      subject_name: string | null;
+      image_ref: string | null;
+      description: string | null;
+      teacher_nickname: string | null;
+      teacher_name: string | null;
+      teacher_surname: string | null;
+      is_owner: boolean;
+      is_enrolled: boolean;
+    }>
+  > {
     const qb = this.groupRepository.createQueryBuilder('group');
     qb.leftJoin(AccountEntity, 'account', 'group.teacher_account_id = account.id')
       .leftJoin(UserEntity, 'user', 'account.user_id = user.id')
       .select([
         'group.id AS id',
         'group.name AS name',
+        'group.subject_name AS subject_name',
         'group.image_ref AS image_ref',
         'group.description AS description',
+        'user.nickname AS teacher_nickname',
         'user.name AS teacher_name',
         'user.surname AS teacher_surname',
       ]);
@@ -279,34 +614,35 @@ export class GroupsService {
         'enrollment.group_id = group.id AND enrollment.student_account_id = :studentId',
         { studentId: studentAccountId },
       );
+      qb.addSelect('CASE WHEN enrollment.id IS NOT NULL THEN true ELSE false END', 'is_enrolled');
+    } else {
+      qb.addSelect('false', 'is_enrolled');
     }
-    const whereConditions: string[] = [];
     if (lecturerAccountId !== null) {
-      whereConditions.push('group.teacher_account_id = :lecturerId');
+      qb.addSelect(
+        'CASE WHEN group.teacher_account_id = :lecturerId THEN true ELSE false END',
+        'is_owner',
+      );
       qb.setParameter('lecturerId', lecturerAccountId);
+    } else {
+      qb.addSelect('false', 'is_owner');
     }
-    if (studentAccountId !== null) {
-      whereConditions.push('enrollment.id IS NOT NULL');
+    if (internalGroupId !== undefined) {
+      qb.andWhere('group.id = :groupId', { groupId: internalGroupId });
     }
-    qb.where(`(${whereConditions.join(' OR ')})`);
-    // Deduplicate when the same user matches lecturer ownership and student enrollment.
-    qb.groupBy('group.id').addGroupBy('account.id').addGroupBy('user.id');
     qb.orderBy('group.name', 'ASC');
     const rawGroups = await qb.getRawMany();
-    const mappedGroups: UserGroupListItem[] = rawGroups.map((row) => {
-      const teacherName = row.teacher_name ? String(row.teacher_name).trim() : '';
-      const teacherSurname = row.teacher_surname ? String(row.teacher_surname).trim() : '';
-      const lecturers = `${teacherName} ${teacherSurname}`.trim();
-      return {
-        id: row.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
-        groupName: row.name,
-        // TODO: Split subjectName from groupName when the DB model distinguishes them.
-        subjectName: row.name,
-        bannerId: row.image_ref ?? null,
-        lecturers: lecturers || '',
-        description: row.description ?? null,
-      };
-    });
-    return { statusCode: GROUP_API_JSON_STATUS_OK, groups: mappedGroups };
+    return rawGroups.map((row) => ({
+      id: Number(row.id),
+      name: String(row.name),
+      subject_name: row.subject_name ?? null,
+      image_ref: row.image_ref ?? null,
+      description: row.description ?? null,
+      teacher_nickname: row.teacher_nickname ?? null,
+      teacher_name: row.teacher_name ?? null,
+      teacher_surname: row.teacher_surname ?? null,
+      is_owner: row.is_owner === true || row.is_owner === 't' || row.is_owner === 1,
+      is_enrolled: row.is_enrolled === true || row.is_enrolled === 't' || row.is_enrolled === 1,
+    }));
   }
 }

@@ -1,23 +1,23 @@
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { BadgeRarity } from '../../database/entities/badge.entity';
 
 /**
- * DTO for creating a badge within a course group.
- * Frontend sends camelCase; service maps to snake_case columns.
+ * DTO for updating a badge within a course group.
+ * All fields are optional - only provided fields will be updated.
  */
-export class CreateBadgeDto {
+export class UpdateBadgeDto {
   /** Optional when using `maq_auth` cookie (browser clients). */
   @IsOptional()
   @IsString()
   auth?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  name: string;
+  name?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  icon: string;
+  icon?: string;
 
   @IsOptional()
   @IsString()

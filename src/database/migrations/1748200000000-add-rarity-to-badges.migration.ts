@@ -13,7 +13,7 @@ export class AddRarityToBadges1748200000000 implements MigrationInterface {
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE gamification.badges 
-      DROP COLUMN rarity
+      DROP COLUMN IF EXISTS rarity
     `);
   }
 }
