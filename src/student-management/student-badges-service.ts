@@ -10,6 +10,7 @@ import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { RanksService } from '../gamification/ranks-service';
 
 /**
  * Badge item returned to the frontend with an `isEarned` flag.
@@ -34,6 +35,7 @@ export class StudentBadgesService {
   constructor(
     private readonly authTokenSessionService: AuthTokenSessionService,
     private readonly userRolesService: UserRolesService,
+    private readonly ranksService: RanksService,
     private readonly dataSource: DataSource,
     @InjectRepository(BadgeEntity)
     private readonly badgeRepository: Repository<BadgeEntity>,
@@ -108,7 +110,7 @@ export class StudentBadgesService {
       if (existing) {
         // Revoke badge
         await queryRunner.manager.remove(EarnedBadgeEntity, existing);
-        await this.adjustStudentStats(queryRunner, enrollment.id, -rewardAmount);
+        await this.adjustStudentStats(queryRunner, enrollment.id, groupId, -rewardAmount);
         isEarned = false;
         this.logger.log(`Badge ${badgeId} revoked from enrollment ${enrollment.id}`);
       } else {
@@ -118,7 +120,7 @@ export class StudentBadgesService {
           badgeId,
         });
         await queryRunner.manager.save(EarnedBadgeEntity, earned);
-        await this.adjustStudentStats(queryRunner, enrollment.id, rewardAmount);
+        await this.adjustStudentStats(queryRunner, enrollment.id, groupId, rewardAmount);
         isEarned = true;
         this.logger.log(`Badge ${badgeId} granted to enrollment ${enrollment.id}`);
       }
@@ -143,6 +145,7 @@ export class StudentBadgesService {
   private async adjustStudentStats(
     queryRunner: import('typeorm').QueryRunner,
     enrollmentId: number,
+    groupId: number,
     delta: number,
   ): Promise<void> {
     if (delta === 0) return;
@@ -152,16 +155,18 @@ export class StudentBadgesService {
     });
 
     if (!stats) {
+      const initialRankId = await this.ranksService.calculateRankForPoints(groupId, 0);
       stats = queryRunner.manager.create(StudentStatsEntity, {
         enrollmentId,
         currency: 0,
         totalEarned: 0,
-        rankId: null,
+        rankId: initialRankId,
       });
     }
 
     stats.currency = Math.max(0, (stats.currency ?? 0) + delta);
     stats.totalEarned = Math.max(0, (stats.totalEarned ?? 0) + delta);
+    stats.rankId = await this.ranksService.calculateRankForPoints(groupId, stats.totalEarned);
 
     await queryRunner.manager.save(StudentStatsEntity, stats);
   }
