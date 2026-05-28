@@ -18,16 +18,7 @@ import { resolvePostgresSslOption } from './postgres-ssl.config';
         const databasePortRaw = configService.get<string>('DATABASE_PORT', '5432');
         const databasePort = Number.parseInt(databasePortRaw, 10);
         const typeOrmSync = configService.get<string>('TYPEORM_SYNC', 'false');
-        // Auto-aplikacja migracji na starcie:
-        //  - w `production` musi być jawnie włączona (`TYPEORM_MIGRATIONS_RUN=true`),
-        //  - w pozostałych trybach (dev/test/docker-compose) domyślnie ON, żeby świeżo
-        //    zbudowany kontener / nowy klon repo nie wymagał ręcznego puszczania CLI.
-        const nodeEnv = configService.get<string>('NODE_ENV', 'development');
-        const migrationsRunRaw = configService.get<string>('TYPEORM_MIGRATIONS_RUN');
-        const migrationsRun =
-          migrationsRunRaw !== undefined
-            ? migrationsRunRaw === 'true'
-            : nodeEnv !== 'production';
+        const migrationsRun = configService.get<string>('TYPEORM_MIGRATIONS_RUN', 'false') === 'true';
         const ssl = resolvePostgresSslOption((key) => configService.get<string>(key));
         return {
           type: 'postgres' as const,
