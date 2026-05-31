@@ -7,6 +7,7 @@ import { GROUP_API_JSON_STATUS_OK, GROUP_RESPONSE_GROUP_ID_OFFSET } from '../con
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { EnrollmentCodesService } from './enrollment-codes-service';
 import { GroupsService } from './groups-service';
 
 type MockQueryBuilder = {
@@ -36,6 +37,7 @@ describe('GroupsService', () => {
   let service: GroupsService;
   let authTokenSessionService: jest.Mocked<AuthTokenSessionService>;
   let userRolesService: jest.Mocked<UserRolesService>;
+  let enrollmentCodesService: jest.Mocked<EnrollmentCodesService>;
   let mockQueryBuilder: MockQueryBuilder;
   let groupRepository: MockGroupRepository;
 
@@ -45,6 +47,10 @@ describe('GroupsService', () => {
     };
     const mockUserRolesService = {
       findAccountIdForRole: jest.fn(),
+    };
+    const mockEnrollmentCodesService = {
+      findLatestActiveCode: jest.fn(),
+      createCode: jest.fn(),
     };
     mockQueryBuilder = {
       leftJoin: jest.fn().mockReturnThis(),
@@ -70,12 +76,14 @@ describe('GroupsService', () => {
         GroupsService,
         { provide: AuthTokenSessionService, useValue: mockAuthTokenSessionService },
         { provide: UserRolesService, useValue: mockUserRolesService },
+        { provide: EnrollmentCodesService, useValue: mockEnrollmentCodesService },
         { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },
       ],
     }).compile();
     service = module.get<GroupsService>(GroupsService);
     authTokenSessionService = module.get(AuthTokenSessionService);
     userRolesService = module.get(UserRolesService);
+    enrollmentCodesService = module.get(EnrollmentCodesService);
   });
 
   describe('getUserGroups', () => {
@@ -233,14 +241,18 @@ describe('GroupsService', () => {
       expect(result.groups[0].lecturers).toBe('');
     });
 
-    it('should return existing entry code for group owner', async () => {
+    it('should return existing enrollment code for group owner', async () => {
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.findOne.mockResolvedValue({
         id: 1,
         teacherAccountId: 10,
-        entryCode: 'ABC123',
       });
+      enrollmentCodesService.findLatestActiveCode.mockResolvedValue({
+        id: 5,
+        groupId: 1,
+        code: 'ABC123',
+      } as never);
 
       const result = await service.getAccessCodeForGroup(mockRequest, 100001, 'browser-id', undefined);
 

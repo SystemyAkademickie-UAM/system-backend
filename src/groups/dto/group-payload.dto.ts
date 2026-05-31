@@ -66,10 +66,4 @@ export class GroupPayloadDto {
   @IsOptional()
   @IsString()
   imageRef?: string;
-
-  /** Maps to `education.groups.entry_code`. */
-  @Transform(({ value }) => transformOptionalString(value))
-  @IsOptional()
-  @IsString()
-  entryCode?: string;
 }

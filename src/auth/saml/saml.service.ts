@@ -86,7 +86,7 @@ export class SamlService {
     };
   }
 
-  signSessionToken(user: SamlUser): string {
+  signSessionToken(user: SamlUser, organizationId?: number, userId?: number): string {
     const payload: SamlSessionPayload = {
       sub: user.nameId,
       nameIdFormat: user.nameIdFormat,
@@ -97,6 +97,8 @@ export class SamlService {
       displayName: user.displayName,
       affiliations: user.affiliations,
       role: user.role,
+      organizationId,
+      userId,
     };
     return this.jwtService.sign(payload as unknown as Record<string, unknown>);
   }

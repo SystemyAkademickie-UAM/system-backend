@@ -2,6 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import {
+  ADMINISTRATOR_ROLE_NAME,
+  LECTURER_ROLE_NAME,
+  STUDENT_ROLE_NAME,
+  SUPER_ROLE_NAME,
+} from '../constants/role-name-constants';
 import { AccountEntity } from '../database/entities/account.entity';
 
 /**
@@ -33,5 +39,32 @@ export class UserRolesService {
       select: ['id'],
     });
     return row?.id ?? null;
+  }
+
+  /**
+   * Picks the highest-privilege role when a user has multiple `auth.accounts` rows.
+   */
+  async resolvePrimaryRoleForUser(userId: number): Promise<string | null> {
+    const rows = await this.accountRepository.find({
+      where: { userId },
+      select: ['role'],
+    });
+    if (rows.length === 0) {
+      return null;
+    }
+    const roleNames = new Set(rows.map((row) => row.role));
+    if (roleNames.has(SUPER_ROLE_NAME)) {
+      return SUPER_ROLE_NAME;
+    }
+    if (roleNames.has(ADMINISTRATOR_ROLE_NAME)) {
+      return ADMINISTRATOR_ROLE_NAME;
+    }
+    if (roleNames.has(LECTURER_ROLE_NAME)) {
+      return LECTURER_ROLE_NAME;
+    }
+    if (roleNames.has(STUDENT_ROLE_NAME)) {
+      return STUDENT_ROLE_NAME;
+    }
+    return rows[0]?.role ?? null;
   }
 }

@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { QueryFailedError, Repository } from 'typeorm';
-import * as crypto from 'crypto';
 
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import {
@@ -16,8 +15,6 @@ import {
   GENERATE_CODE_RESULT_DB_ERROR,
   GENERATE_CODE_RESULT_GROUP_NOT_FOUND,
   GENERATE_CODE_RESULT_NOT_AUTHORIZED,
-  GROUP_ENTRY_CODE_GENERATED_BYTE_LENGTH,
-  GROUP_ENTRY_CODE_GENERATION_MAX_ATTEMPTS,
   GROUP_GENERATE_CODE_API_JSON_STATUS_OK,
 } from '../constants/group-generate-code-api-constants';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
@@ -29,6 +26,7 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
+import { EnrollmentCodesService } from './enrollment-codes-service';
 
 export type CreateGroupResponseBody = { statusCode: number; group: number };
 
@@ -103,6 +101,7 @@ export class GroupsService {
   constructor(
     private readonly authTokenSessionService: AuthTokenSessionService,
     private readonly userRolesService: UserRolesService,
+    private readonly enrollmentCodesService: EnrollmentCodesService,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
   ) {}
@@ -140,7 +139,6 @@ export class GroupsService {
         lives: groupPayload.lives ?? null,
         livesIcon: nullableTrimmedString(groupPayload.livesIcon),
         imageRef: nullableTrimmedString(groupPayload.imageRef),
-        entryCode: nullableTrimmedString(groupPayload.entryCode),
       });
       const saved = await this.groupRepository.save(entity);
       return {
@@ -321,9 +319,10 @@ export class GroupsService {
       }
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
+    const latestCode = await this.enrollmentCodesService.findLatestActiveCode(internalGroupId);
     return {
       statusCode: GROUP_GENERATE_CODE_API_JSON_STATUS_OK,
-      code: group.entryCode ?? '',
+      code: latestCode?.code ?? '',
       groupId: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
     };
   }
@@ -364,13 +363,10 @@ export class GroupsService {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
     try {
-      const code = await this.persistUniqueEntryCode(group);
-      if (code === null) {
-        return this.buildGenerateCodeError(GENERATE_CODE_RESULT_DB_ERROR);
-      }
+      const created = await this.enrollmentCodesService.createCode(req, internalGroupId, { auth: body.auth });
       return {
         statusCode: GROUP_GENERATE_CODE_API_JSON_STATUS_OK,
-        code,
+        code: created.code,
         groupId: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
       };
     } catch (err: unknown) {
@@ -385,24 +381,6 @@ export class GroupsService {
       code: '',
       groupId,
     };
-  }
-
-  private buildRandomEntryCode(): string {
-    return crypto.randomBytes(GROUP_ENTRY_CODE_GENERATED_BYTE_LENGTH).toString('hex').toUpperCase();
-  }
-
-  private async persistUniqueEntryCode(group: GroupEntity): Promise<string | null> {
-    for (let attempt = 0; attempt < GROUP_ENTRY_CODE_GENERATION_MAX_ATTEMPTS; attempt += 1) {
-      const code = this.buildRandomEntryCode();
-      const taken = await this.groupRepository.exist({ where: { entryCode: code } });
-      if (taken) {
-        continue;
-      }
-      group.entryCode = code;
-      await this.groupRepository.save(group);
-      return code;
-    }
-    return null;
   }
 
   private logGenerateCodeFailure(err: unknown): void {

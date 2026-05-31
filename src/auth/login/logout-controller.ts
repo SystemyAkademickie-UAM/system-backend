@@ -1,10 +1,10 @@
-import { Controller, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { Controller, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 
 import { LoginApiService } from './login-api.service';
 
 /**
- * Clears API auth cookies (`maq_auth`, SAML session).
+ * Clears API auth cookies (`maq_auth`, SAML session) and revokes the token row.
  */
 @Controller()
 export class LogoutController {
@@ -12,7 +12,10 @@ export class LogoutController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  logout(@Res({ passthrough: true }) res: Response): { success: true } {
-    return this.loginApiService.clearAuthCookies(res);
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ success: true }> {
+    return this.loginApiService.clearAuthCookiesAndRevokeToken(req, res);
   }
 }

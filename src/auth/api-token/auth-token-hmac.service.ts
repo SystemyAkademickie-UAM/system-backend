@@ -8,7 +8,7 @@ import {
   OPAQUE_API_TOKEN_HMAC_ALGORITHM,
 } from '../../constants/api-token-constants';
 
-const LOCAL_DEV_hmac_SECRET_FALLBACK =
+const LOCAL_DEV_HMAC_SECRET_FALLBACK =
   'local-dev-only-api-token-hmac-secret-change-me-32-char-minimum';
 
 /**
@@ -56,7 +56,7 @@ export class AuthTokenHmacService implements OnModuleInit {
     if (isProduction) {
       throw new Error('API_TOKEN_HMAC_SECRET must be set in production');
     }
-    return LOCAL_DEV_hmac_SECRET_FALLBACK;
+    return LOCAL_DEV_HMAC_SECRET_FALLBACK;
   }
 
   private bootValidateConfiguredSecretWhereRequired(): void {
