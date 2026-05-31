@@ -49,19 +49,22 @@ Clients send the previous value; the response carries the incremented value.
 
 ---
 
-## Dev SAML bypass (non-production)
+## Admin organizations (super role)
 
-When **`SAML_BYPASS_ENABLED=true`** and **`NODE_ENV`** is not **`production`**, the API exposes shortcuts that mint the same HTTP-only **`maqSamlSession`** cookie as a successful SAML ACS, **without** contacting an IdP. They also upsert **`autoryzacja.uzytkownicy`** rows; lecturer flows ensure **`autoryzacja.konta`** with **`rola = lecturer`**. The organization key **`id_organizacji`** is **`SAML_BYPASS_ORGANIZATION_ID`** when that row exists in **`autoryzacja.organizacje`**; otherwise the smallest existing **`autoryzacja.organizacje.id`**, or a seeded organization named **`Dev organization (bypass seed)`** when the table is empty.
+Manage institutional SAML configuration stored in **`auth.organizations`** and **`auth.idp_certificates`**. Requires **`super`** role on the caller's **`auth.accounts`** row.
 
-| Endpoint | Method | Behaviour |
+| Endpoint | Method | Description |
 | -------- | ------ | ----------- |
-| `/api/auth/saml/bypass/student` | `GET` | Seed student persona, set cookie, **`302`** to **`SAML_LOGIN_SUCCESS_REDIRECT_URL`**. |
-| `/api/auth/saml/bypass/lecturer` | `GET` | Seed lecturer persona + `autoryzacja.konta`, set cookie, **`302`** redirect. |
-| `/api/auth/saml/bypass/session` | `POST` | Body **`{ "profile": "student" \| "lecturer" }`** — same seeding + cookie, **`200`** JSON **`{ "ok": true, "profile": "..." }`** (for same-origin `fetch` without navigation). |
+| `/api/admin/organizations` | `POST` | Create organization. Set `metadataUrl` to fetch IdP entity ID, SSO URLs, and signing cert from federation metadata; or pass `certificatePem` when metadata is unavailable. |
+| `/api/admin/organizations` | `GET` | List organizations with cert summary. |
+| `/api/admin/organizations/:id` | `GET` | Organization detail. |
+| `/api/admin/organizations/:id` | `PATCH` | Update name, contact, SSO URLs, `isActive`. |
+| `/api/admin/organizations/:id` | `DELETE` | Soft-delete (`is_active = false`). |
+| `/api/admin/organizations/:id/sync-from-metadata` | `POST` | Re-fetch IdP metadata from stored `metadata_url` and rotate signing certificate. |
+| `/api/admin/organizations/:id/certificates` | `POST` | Rotate IdP signing certificate (PEM body). |
+| `/api/admin/organizations/:id/certificates/:certId` | `DELETE` | Revoke certificate. |
 
-If bypass is disabled or **`NODE_ENV=production`**, these routes return **`403`** with **`SAML_BYPASS_DISABLED`**.
-
-**Database:** lecturer bypass inserts **`autoryzacja.konta`** only after resolving **`id_organizacji`** against **`autoryzacja.organizacje`** (preferred env id → first row → insert seed row if empty).
+Register organizations via admin API (no migration seed). Example: UAM — `metadataUrl` = `https://sso.amu.edu.pl/simplesaml/saml2/idp/metadata.php`. Local dev IdP — see [saml-local-idp.md](./saml-local-idp.md).
 
 ---
 
@@ -99,6 +102,31 @@ Optional JSON is **reserved for future email/password provisioning** — omit th
 Rotate previous rows for `(user_id, browser_uuid)` on each issuance (single active bearer per browser install).
 
 Configure **`API_TOKEN_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=production`**) and optional **`API_TOKEN_TTL_SECONDS`**.
+
+---
+
+## Login session (API token cookie)
+
+Browser clients that already hold **`maq_auth`** (e.g. after SAML ACS mint with RelayState browser id) can verify the session without a live SAML cookie.
+
+**Endpoint:** `GET /api/login/me`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Required RFC 4122 UUID bound to the token row. |
+
+**Response:** `200 OK` with JSON body (same shape as **`GET /api/auth/saml/me`**):
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `authenticated` | boolean | Whether the token resolves to a user. |
+| `user` | object | Present when authenticated; includes `email`, `role`, `displayName`, etc. |
+
+When not authenticated, returns `{ "authenticated": false }` (still `200`).
+
+Uses **strong** auth (`maq_auth` + matching `X-Browser-ID`) when the header is present; falls back to **soft** auth (`maq_auth` cookie only) so the SPA can restore UI session state when the browser id header is missing or mismatched.
 
 ---
 
@@ -355,46 +383,36 @@ X-Browser-ID: <BrowserUUID>
 
 ---
 
+## Group enrollment codes (lecturer)
+
+CRUD for **`education.enrollment_codes`** — group-scoped invite codes with optional expiration and usage limits.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/groups/:groupId/enrollment-codes` | `GET` | List codes for the group. |
+| `/api/groups/:groupId/enrollment-codes/:codeId` | `GET` | Single code by id. |
+| `/api/groups/:groupId/enrollment-codes` | `POST` | Create code (`201`). Body: optional `code`, `expiresAt` (ISO-8601), `maxUses`, `auth`. |
+| `/api/groups/:groupId/enrollment-codes/:codeId` | `PATCH` | Update `expiresAt`, `maxUses`, `isActive`. |
+| `/api/groups/:groupId/enrollment-codes/:codeId` | `DELETE` | Delete code (`204`). |
+
+Legacy **`GET /api/groups/:groupId/access-code`** and **`POST /api/groups/generate-code`** delegate to this table.
+
+---
+
 ## Group invite validation (student)
 
-Validates an entry code and enrolls the student into the corresponding group. Matches FigJam architecture specs.
+Validates an enrollment code and enrolls the student. Lookup is scoped to **`groupId`** in the path.
 
-**Endpoint:** `GET /api/groups/invite`
-
-**Headers:**
-
-| Header | Description |
-| ------ | ----------- |
-| `X-Browser-ID` | Required UUID binding for session verification. |
+**Endpoint:** `GET /api/groups/:groupId/invite`
 
 **Query parameters:**
 
 | Parameter | Type | Rules | Description |
 | --------- | ---- | ----- | ----------- |
-| `code` | string | Exactly 6 characters | The entry code generated by the lecturer. |
+| `code` | string | 1–10 characters | Enrollment code for this group. |
 | `auth` | string (optional) | Plaintext bearer | Auth token (can also be passed via `maq_auth` cookie). |
 
-**Authorization:** **strong** token + browser binding. Caller must have a valid student role.
-
-**Response:** `200 OK` with JSON body:
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `statusCode` | integer | Always `200`. |
-| `code` | string | Echoes the requested entry code. |
-| `group` | integer | `100000 + ID` on success; `0` if code not found; `1` if expired / unauthorized. |
-
-**Example**
-
-```http
-GET /api/groups/invite?code=ABCDEF&auth=<token> HTTP/1.1
-Host: 127.0.0.1:8080
-X-Browser-ID: <BrowserUUID>
-```
-
-```json
-{ "statusCode": 200, "code": "ABCDEF", "group": 100137 }
-```
+**Response:** `200 OK` — `enrollmentId > 0` success; negative values are error codes (`-1` unauthorized, `-2` group not found, `-4` invalid/expired/exhausted code).
 
 ---
 
@@ -818,59 +836,37 @@ using a new random UUID as the filename (and returns that value as `driveRef`).
 
 ---
 
-## SAML 2.0 (PIONIER.id / institutional IdP)
+## SAML 2.0 (per-organization IdP)
 
-These routes implement a **Service Provider (SP)** using `@node-saml/passport-saml`. Configure federation metadata exchange with your IdP (e.g. UAM) and PIONIER.id registration as required by your institution.
+These routes implement a **Service Provider (SP)** using `@node-saml/passport-saml`. **IdP settings** (SSO URL, logout URL, signing certificate) are loaded from **`auth.organizations`** + **`auth.idp_certificates`** after the user picks an institution.
 
-### Environment (required for SP to activate)
+### Environment (SP only)
 
 | Variable | Purpose |
 | -------- | ------- |
-| `SAML_SP_ENTITY_ID` | SP `entityID` — public URI, often your metadata URL (`…/api/auth/saml/metadata`). |
-| `SAML_ACS_URL` | Full URL of the Assertion Consumer Service (**POST** binding; must match metadata and how clients reach the API). |
-| `SAML_ENTRY_POINT` | IdP SSO URL — from IdP metadata (`SingleSignOnService`, **Redirect** binding), e.g. `…/idp/profile/SAML2/Redirect/SSO`. |
-| `SAML_IDP_CERT` **or** `SAML_IDP_CERT_PATH` | IdP **signing** certificate (PEM). |
-| `SAML_SP_PUBLIC_CERT` **or** `SAML_SP_PUBLIC_CERT_PATH` | SP public certificate (PEM). |
-| `SAML_SP_PRIVATE_KEY` **or** `SAML_SP_PRIVATE_KEY_PATH` | SP private key (PEM). Used to sign **AuthnRequests** (Redirect) and to advertise `AuthnRequestsSigned` in SP metadata. |
-| `SAML_SESSION_JWT_SECRET` | Secret for signing the HTTP-only session JWT. **Required whenever SAML SP routes should activate** (including non-production). |
-| `SAML_LOGIN_SUCCESS_REDIRECT_URL` | **Required.** Browser redirect after successful ACS (e.g. SPA origin). Use the same host you use in the browser (`127.0.0.1` vs `localhost` — pick one and use it in `CORS_ORIGIN` too). |
-| `SAML_SESSION_JWT_EXPIRES_IN` | Optional. JWT lifetime and cookie `maxAge` (default `8h`). Same format as `jsonwebtoken` / `ms` (e.g. `8h`, `15m`, or seconds as a number string). |
-| `SAML_NAMEID_FORMAT` | Optional. NameIDPolicy format (default **transient**, typical for eduGAIN). Set to `omit` or `none` to omit a fixed format (some Shibboleth setups). |
-| `SAML_ACCEPT_CLOCK_SKEW_MS` | Optional. Clock skew in ms for assertion validity (default `5000`). |
-| `SAML_WANT_AUTHN_RESPONSE_SIGNED` | Optional. Default `true` — require signed `Response` (usual for Shibboleth). |
-| `SAML_WANT_ASSERTIONS_SIGNED` | Optional. Default `true` — require signed `Assertion`. |
-| `SAML_DISABLE_REQUESTED_AUTHN_CONTEXT` | Optional. Default `true` — do not send requested `AuthnContext` (avoids IdP rejecting unknown contexts). |
-| `SAML_SKIP_REQUEST_COMPRESSION` | Optional. Default `false`. Set `true` only if debugging a broken intermediary. |
+| `SAML_SP_ENTITY_ID` | SP entity ID (metadata URL). |
+| `SAML_ACS_URL` | Assertion Consumer Service URL (**POST**). |
+| `SAML_SP_CERT_PATH` / `SAML_SP_PRIVATE_KEY_PATH` | SP certificate and private key (PEM). |
+| `SAML_JWT_SECRET` | Session JWT secret. |
+| `SAML_LOGIN_SUCCESS_URL` | Redirect after successful ACS. |
 
-If any required value is missing, **`/api/auth/saml/login`**, **`/api/auth/saml/metadata`**, and **`/api/auth/saml/acs`** respond with **`503`** and a JSON body with `error: "SAML_NOT_CONFIGURED"` (except **`/api/auth/saml/status`**, which always returns **`200`**).
-
-**InResponseTo:** The SP validates SAML responses against the AuthnRequest ID (`validateInResponseTo: always`) using the default in-memory cache from `@node-saml/node-saml`. **Multiple API instances** behind a load balancer must use a **shared cache provider** (see node-saml `cacheProvider`) or logins may fail intermittently.
-
-**Invalid PEM paths:** Missing files or unreadable `*_PATH` values are treated as “cert not configured” so `/status` and startup do not throw; the SP stays off until paths and files are valid.
+Local dev IdP: see [docs/saml-local-idp.md](./saml-local-idp.md). UAM production metadata: [sso.amu.edu.pl](https://sso.amu.edu.pl/simplesaml/saml2/idp/metadata.php).
 
 ### Endpoints
 
-**GET `/api/auth/saml/status`**
+**GET `/api/auth/saml/status`** — SP configured flag + `localIdpEntryPoint`.
 
-Returns whether SAML is configured, plus a boolean checklist for operators.
+**GET `/api/auth/saml/organizations`** — `{ "organizations": [{ "id", "name" }] }` for SAML-ready active orgs.
 
-The `requirements` object only means the related **environment variables are set**. **`configurationComplete`** and **`samlReady`** additionally require **PEM material to load** (see **`pemMaterialLoaded`**). If `requirements` are all `true` but `pemMaterialLoaded` entries are `false`, fix **file paths** (e.g. use absolute paths or correct bind mounts in Docker — relative paths like `./../secrets/` depend on the process working directory).
+**GET `/api/auth/saml/metadata`** — SP metadata XML (`200`, `application/xml`).
 
-**GET `/api/auth/saml/metadata`**
+**GET `/api/auth/saml/login?organizationId=<id>`** — requires organization picker choice; sets pending-org cookie; **`302`** to org's IdP SSO URL.
 
-Returns **`200`** with **`Content-Type: application/xml`** — SP metadata for IdPs and federation registration.
+**POST `/api/auth/saml/acs`** — ACS; provisions `auth.users` + `auth.accounts` for pending org.
 
-**GET `/api/auth/saml/login`**
+**GET `/api/auth/saml/me`** — session smoke check from cookie.
 
-Starts SAML **Web SSO** — responds with **`302`** to the IdP `entryPoint` when configured.
-
-**POST `/api/auth/saml/acs`**
-
-Assertion Consumer Service — accepts `SAMLResponse` (**HTTP-POST**). On success, sets an HTTP-only cookie `maqSamlSession` with a JWT and redirects to `SAML_LOGIN_SUCCESS_REDIRECT_URL` (required in `.env`).
-
-**GET `/api/auth/saml/me`**
-
-Returns **`{ "authenticated": false }`** or **`{ "authenticated": true, "user": { "sub", "email?", "displayName?" } }`** from the cookie. Intended for **smoke / debugging** only — do not rely on it as the sole authorization gate for protected APIs.
+**GET `/api/auth/saml/logout`** — SAML SLO when org logout URL is configured.
 
 ### CORS
 

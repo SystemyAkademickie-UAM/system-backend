@@ -30,6 +30,7 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/counter/health` — smoke check `{ "ok": true }`
 - `POST /api/counter/increment` — body `{ "currentCount": number }` → `{ "count": number }` (`201`)
 - `POST /api/login` — SAML session cookie (`maqSamlSession`) + `X-Browser-ID` → `{ "auth": "<plaintext_opaque_once>" }; see [docs/api.md](./docs/api.md)`
+- `GET /api/login/me` — session check from `maq_auth` cookie + `X-Browser-ID` (same shape as `/auth/saml/me`)
 - `GET /api/login/registration-status` — registration progress for authenticated user during `/login` wizard
 - `POST /api/login/profile` — save nickname + avatar during `/login` wizard
 - `POST /api/login/accept-eula` — accept EULA and complete registration during `/login` wizard
@@ -37,7 +38,8 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/groups` — authenticated user group list → `{ "statusCode", "groups" }`; see [docs/api.md](./docs/api.md)
 - `POST /api/groups/new` — lecturer opaque bearer + JSON group payload → `{ "statusCode", "group" }; see [docs/api.md](./docs/api.md)`
 - `POST /api/groups/generate-code` — lecturer session + `groupId` → `{ "statusCode", "code", "groupId" }`; see [docs/api.md](./docs/api.md)
-- `GET /api/groups/invite` — student entry code validation `?code=...` → `{ "statusCode", "code", "group" }`; see [docs/api.md](./docs/api.md)
+- `GET /api/groups/:groupId/invite` — student enrollment code validation `?code=...` → `{ "statusCode", "enrollmentId", "groupId?" }`
+- `GET /api/groups/:groupId/enrollment-codes` — lecturer CRUD for invite codes; see [docs/api.md](./docs/api.md)
 - `POST /api/groups/enroll` — student opaque bearer + `groupId` → `{ "statusCode", "zapis" }` (`grywalizacja.zapisy`); see [docs/api.md](./docs/api.md)
 - `POST /api/groups/:id/post` — lecturer opaque bearer + post payload → `{ "status", "post" }`; see [docs/api.md](./docs/api.md)
 - `GET /api/groups/:id/post` — lecturer/student opaque bearer → `{ "status", "posts" }`; see [docs/api.md](./docs/api.md)
@@ -47,11 +49,11 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `POST /api/activities` — activity CRUD (method: post/modify/remove/retrieve); see [docs/api.md](./docs/api.md)
 - `GET /api/auth/saml/status` — SAML configuration checklist
 - `GET /api/auth/saml/metadata` — SP metadata XML (PIONIER.id / IdP)
-- `GET /api/auth/saml/login` — start SAML SSO (`302` to IdP)
+- `GET /api/auth/saml/organizations` — institution picker list
+- `GET /api/auth/saml/login?organizationId=` — start SAML SSO (`302` to selected IdP)
 - `POST /api/auth/saml/acs` — SAML Assertion Consumer Service
 - `GET /api/auth/saml/me` — session JWT from cookie (smoke)
-- `GET /api/auth/saml/bypass/status` — dev-only bypass flag + persona list (empty when disabled)
-- `POST /api/auth/saml/bypass/session` — dev-only mint session cookie (`{ "persona": "student1" | … }`)
+- Local IdP: [docs/saml-local-idp.md](./docs/saml-local-idp.md) (`npm run idp:up`)
 
 Details in [docs/api.md](./docs/api.md).
 

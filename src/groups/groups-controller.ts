@@ -9,11 +9,14 @@ import { UpdateBadgeDto } from '../gamification/dto/update-badge.dto';
 import { CreateRankDto } from '../gamification/dto/create-rank.dto';
 import { UpdateRankDto } from '../gamification/dto/update-rank.dto';
 import { RanksService } from '../gamification/ranks-service';
+import { CreateEnrollmentCodeDto } from './dto/create-enrollment-code.dto';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { JoinGroupQueryDto } from './dto/join-group-query.dto';
+import { UpdateEnrollmentCodeDto } from './dto/update-enrollment-code.dto';
 import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
+import { EnrollmentCodesService } from './enrollment-codes-service';
 import { EnrollGroupResponseBody, GroupsEnrollmentService } from './groups-enrollment-service';
 import { CreateGroupResponseBody, GenerateCodeResponseBody, GetGroupsCatalogResponseBody, GetUserGroupsResponseBody, GroupPreviewResponseBody, GroupsService, UpdateGroupResponseBody } from './groups-service';
 
@@ -27,6 +30,7 @@ export class GroupsController {
     private readonly groupsEnrollmentService: GroupsEnrollmentService,
     private readonly badgesService: BadgesService,
     private readonly ranksService: RanksService,
+    private readonly enrollmentCodesService: EnrollmentCodesService,
   ) {}
 
   /**
@@ -132,7 +136,7 @@ export class GroupsController {
   }
 
   /**
-   * Generates a 6-character entry code and persists it on `education.groups.entry_code`.
+   * Generates a new enrollment code via the enrollment codes API.
    * Auth is read from `maq_auth` cookie OR body `auth` field. Lecturer must own the group.
    */
   @Post('generate-code')
@@ -157,6 +161,74 @@ export class GroupsController {
     @Query() query: JoinGroupQueryDto,
   ): Promise<EnrollGroupResponseBody> {
     return this.groupsEnrollmentService.enrollStudentByCode(req, publicGroupId, query, browserId);
+  }
+
+  /**
+   * Lists enrollment codes for a lecturer-owned group.
+   */
+  @Get(':groupId/enrollment-codes')
+  @HttpCode(HttpStatus.OK)
+  listEnrollmentCodes(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Query('auth') auth: string | undefined,
+  ) {
+    return this.enrollmentCodesService.listCodesForGroup(req, toInternalGroupId(publicGroupId), auth);
+  }
+
+  /**
+   * Returns a single enrollment code by id.
+   */
+  @Get(':groupId/enrollment-codes/:codeId')
+  @HttpCode(HttpStatus.OK)
+  getEnrollmentCode(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('codeId', ParseIntPipe) codeId: number,
+    @Req() req: Request,
+    @Query('auth') auth: string | undefined,
+  ) {
+    return this.enrollmentCodesService.getCodeForGroup(req, toInternalGroupId(publicGroupId), codeId, auth);
+  }
+
+  /**
+   * Creates an enrollment code with optional expiration and usage limits.
+   */
+  @Post(':groupId/enrollment-codes')
+  @HttpCode(HttpStatus.CREATED)
+  createEnrollmentCode(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Body() dto: CreateEnrollmentCodeDto,
+  ) {
+    return this.enrollmentCodesService.createCode(req, toInternalGroupId(publicGroupId), dto);
+  }
+
+  /**
+   * Updates enrollment code limits or active flag.
+   */
+  @Patch(':groupId/enrollment-codes/:codeId')
+  @HttpCode(HttpStatus.OK)
+  updateEnrollmentCode(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('codeId', ParseIntPipe) codeId: number,
+    @Req() req: Request,
+    @Body() dto: UpdateEnrollmentCodeDto,
+  ) {
+    return this.enrollmentCodesService.updateCode(req, toInternalGroupId(publicGroupId), codeId, dto);
+  }
+
+  /**
+   * Deletes an enrollment code.
+   */
+  @Delete(':groupId/enrollment-codes/:codeId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteEnrollmentCode(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('codeId', ParseIntPipe) codeId: number,
+    @Req() req: Request,
+    @Query('auth') auth: string | undefined,
+  ): Promise<void> {
+    await this.enrollmentCodesService.deleteCode(req, toInternalGroupId(publicGroupId), codeId, auth);
   }
 
   // ========================================

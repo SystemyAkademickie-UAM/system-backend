@@ -14,3 +14,6 @@ export const ENROLL_RESULT_GROUP_NOT_FOUND = -2;
 
 /** Database insert failed (FK violation, constraint, etc.). */
 export const ENROLL_RESULT_DB_ERROR = -3;
+
+/** Invalid, inactive, expired, or exhausted enrollment code. */
+export const ENROLL_RESULT_CODE_INVALID = -4;

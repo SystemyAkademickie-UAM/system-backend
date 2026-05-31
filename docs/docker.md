@@ -10,6 +10,23 @@ docker network create academy-network
 
 See also [installation.md](./installation.md#docker-compose-local-postgresql).
 
+## npm scripts (local stack)
+
+```powershell
+npm run docker:build
+npm run docker:rebuild   # wipes Postgres volume — re-register orgs after this
+```
+
+After **`docker:rebuild`** (fresh DB), register IdPs explicitly:
+
+```powershell
+npm run register:org -- --name "Local IdP" --metadata-url "http://127.0.0.1:5000/simplesaml/saml2/idp/metadata.php"
+npm run idp:up          # optional — local SimpleSAMLphp IdP
+.\idp\scripts\register-local-idp.ps1
+```
+
+Org registration uses **`POST /api/admin/organizations`** (super-admin API token). See `scripts/register-org.mjs` and [saml-local-idp.md](./saml-local-idp.md).
+
 ## Build and run (API image only)
 
 ```bash
@@ -19,7 +36,7 @@ docker run --rm -p 8080:8080 -e PORT=8080 system-backend:local
 
 The process listens on **8080** inside the container (`PORT=8080`), which matches a host nginx `location /api/ { proxy_pass http://localhost:8080; ... }` when you publish `-p 127.0.0.1:8080:8080` (or equivalent).
 
-The image sets **`NODE_ENV=production`**. For local Compose, set **`NODE_ENV=development`** in `.env` when you need dev SAML bypass (`SAML_BYPASS_ENABLED=true`). For production, keep **`NODE_ENV=production`** in `.env`.
+The image sets **`NODE_ENV=production`**. For local Compose, set **`NODE_ENV=development`** in `.env`. For production, keep **`NODE_ENV=production`** in `.env`.
 
 ## Helper scripts (Docker CLI only)
 

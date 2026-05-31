@@ -44,4 +44,8 @@ export interface SamlSessionPayload {
   affiliations?: readonly EduPersonAffiliation[];
   /** Derived system role (student | lecturer | administrator). */
   role?: string;
+  /** Organization selected before SAML redirect. */
+  organizationId?: number;
+  /** Resolved `auth.users.id` after ACS provisioning. */
+  userId?: number;
 }

@@ -3,7 +3,6 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import {
   EDUCATION_GROUP_NAME_MAX_LENGTH,
   EDUCATION_GROUP_VARCHAR_MAX_LENGTH,
-  EDUCATION_GROUP_ENTRY_CODE_MAX_LENGTH,
 } from '../../constants/database-entity-constants';
 import { EDUCATION_SCHEMA } from '../../constants/database-schema-constants';
 
@@ -43,8 +42,4 @@ export class GroupEntity {
 
   @Column({ name: 'lives_icon', type: 'varchar', length: EDUCATION_GROUP_VARCHAR_MAX_LENGTH, nullable: true })
   livesIcon: string | null;
-
-  /** Join / enrollment code. */
-  @Column({ name: 'entry_code', type: 'varchar', length: EDUCATION_GROUP_ENTRY_CODE_MAX_LENGTH, nullable: true })
-  entryCode: string | null;
 }
