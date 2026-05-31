@@ -93,10 +93,30 @@ export class RanksService {
       throw new NotFoundException(`Rank with id ${rankId} not found in group ${groupId}`);
     }
 
-    await this.rankRepository.remove(rank);
-    await this.recalculateRanksForGroup(groupId);
-    this.logger.log(`Rank (id=${rankId}) deleted from group ${groupId}`);
-    return { deleted: true };
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      await queryRunner.query(
+        `UPDATE gamification.student_stats
+         SET rank_id = NULL
+         WHERE rank_id = $1
+           AND enrollment_id IN (
+             SELECT id FROM gamification.enrollments WHERE group_id = $2
+           )`,
+        [rankId, groupId],
+      );
+      await queryRunner.manager.remove(RankEntity, rank);
+      await queryRunner.commitTransaction();
+      this.logger.log(`Rank (id=${rankId}) deleted from group ${groupId}`);
+      return { deleted: true };
+    } catch (err: unknown) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Delete rank failed (rank=${rankId}, group=${groupId}): ${String(err)}`);
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**

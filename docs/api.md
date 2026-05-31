@@ -195,6 +195,39 @@ Updates nickname and/or avatar for the logged-in user.
 
 ---
 
+## Activity completions (lecturer)
+
+Bulk read/write of which students completed a group activity (for assign-activity modal).
+
+**Endpoint:** `GET /api/groups/:groupId/activities/:activityId/completions`
+
+**Authorization:** lecturer + soft auth. Activity must belong to the group (via stage join). `404` if group/activity missing or activity not in group.
+
+**Response:** `200 OK`
+
+```json
+{ "activityId": 42, "completedAccountIds": [101, 105, 112] }
+```
+
+**Endpoint:** `PATCH /api/groups/:groupId/activities/:activityId/completions`
+
+**Body:** `{ "accountIds": [101, 105, 112] }` — target set of enrolled students with activity **completed**. Idempotent.
+
+**Response:** `200 OK`
+
+```json
+{
+  "activityId": 42,
+  "granted": 2,
+  "revoked": 1,
+  "completedAccountIds": [101, 105, 112]
+}
+```
+
+Adjusts `gamification.student_stats.currency` and `totalEarned` like `POST .../activities/:activityId/toggle`. All account IDs must be enrolled in the group.
+
+---
+
 ## User groups (student & lecturer)
 
 Retrieves groups the authenticated user belongs to: student enrollments and lecturer-owned groups.
@@ -757,6 +790,14 @@ Cookie: maq_auth=…
 }
 ```
 
+**Endpoint:** `DELETE /api/groups/:groupId/badges/:badgeId`
+
+Removes the badge, revokes it from all students (currency only — `totalEarned` unchanged), and returns `{ "deleted": true, "revokedFromStudents": N }`.
+
+**Endpoint:** `POST /api/groups/:groupId/students/:accountId/badges/:badgeId/toggle`
+
+Grant: `currency` and `totalEarned` increase by `rewardAmount`. Revoke: `currency` decreases (min 0); **`totalEarned` unchanged**. Response: `{ "isEarned": boolean }`.
+
 ---
 
 ## Ranks (lecturer)
@@ -806,6 +847,10 @@ Cookie: maq_auth=…
   "uniqueStoreItems": ["Zwój Mądrości", "Eliksir Skupienia"]
 }
 ```
+
+**Endpoint:** `DELETE /api/groups/:groupId/ranks/:rankId`
+
+Deletes the rank. Students who had this rank get `rank_id = NULL` (“Brak”) before removal. Response: `{ "deleted": true }`.
 
 ---
 
