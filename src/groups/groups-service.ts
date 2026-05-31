@@ -43,6 +43,8 @@ export type UserGroupListItem = {
   bannerId: string | null;
   lecturers: string;
   description: string | null;
+  currency: string | null;
+  currencyIcon: string | null;
 };
 
 export type GetUserGroupsResponseBody = {
@@ -535,6 +537,8 @@ export class GroupsService {
     subject_name: string | null;
     image_ref: string | null;
     description: string | null;
+    currency: string | null;
+    currency_icon: string | null;
     teacher_nickname: string | null;
     teacher_name: string | null;
     teacher_surname: string | null;
@@ -551,6 +555,8 @@ export class GroupsService {
       bannerId: row.image_ref ?? null,
       lecturers: lecturers || '',
       description: row.description ?? null,
+      currency: row.currency ?? null,
+      currencyIcon: row.currency_icon ?? null,
     };
   }
 
@@ -565,6 +571,8 @@ export class GroupsService {
       subject_name: string | null;
       image_ref: string | null;
       description: string | null;
+      currency: string | null;
+      currency_icon: string | null;
       teacher_nickname: string | null;
       teacher_name: string | null;
       teacher_surname: string | null;
@@ -581,6 +589,8 @@ export class GroupsService {
         'group.subject_name AS subject_name',
         'group.image_ref AS image_ref',
         'group.description AS description',
+        'group.currency AS currency',
+        'group.currency_icon AS currency_icon',
         'user.nickname AS teacher_nickname',
         'user.name AS teacher_name',
         'user.surname AS teacher_surname',
@@ -616,6 +626,8 @@ export class GroupsService {
       subject_name: row.subject_name ?? null,
       image_ref: row.image_ref ?? null,
       description: row.description ?? null,
+      currency: row.currency ?? null,
+      currency_icon: row.currency_icon ?? null,
       teacher_nickname: row.teacher_nickname ?? null,
       teacher_name: row.teacher_name ?? null,
       teacher_surname: row.teacher_surname ?? null,
