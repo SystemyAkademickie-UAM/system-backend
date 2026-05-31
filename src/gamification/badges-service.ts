@@ -101,6 +101,7 @@ export class BadgesService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+    let revokedFromStudents = 0;
     try {
       for (const earned of earnedRows) {
         if (earned.enrollmentId === null) {
@@ -114,13 +115,14 @@ export class BadgesService {
           rewardAmount,
         );
         await queryRunner.manager.remove(EarnedBadgeEntity, earned);
+        revokedFromStudents += 1;
       }
       await queryRunner.manager.remove(BadgeEntity, badge);
       await queryRunner.commitTransaction();
       this.logger.log(
-        `Badge (id=${badgeId}) deleted from group ${groupId}; revokedFromStudents=${earnedRows.length}`,
+        `Badge (id=${badgeId}) deleted from group ${groupId}; revokedFromStudents=${revokedFromStudents}`,
       );
-      return { deleted: true, revokedFromStudents: earnedRows.length };
+      return { deleted: true, revokedFromStudents };
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Delete badge failed (badge=${badgeId}, group=${groupId}): ${String(err)}`);
