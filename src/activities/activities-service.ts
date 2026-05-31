@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
@@ -171,40 +171,81 @@ export class ActivitiesService {
   ): Promise<ActivityResponseBody> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
     if (!subject) {
-      throw new ForbiddenException('Not authorized');
+      return {
+        statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN,
+        method: 'remove',
+        activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID,
+      };
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
-      throw new ForbiddenException('Not authorized');
+      return {
+        statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN,
+        method: 'remove',
+        activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID,
+      };
     }
     if (!body.activityId) {
-      throw new NotFoundException('Activity not found');
+      return {
+        statusCode: ACTIVITY_API_JSON_STATUS_OK,
+        method: 'remove',
+        activity: ACTIVITY_RESPONSE_NOT_FOUND_ID,
+      };
     }
     const activity = await this.activityRepository.findOne({ where: { id: body.activityId } });
     if (!activity) {
-      throw new NotFoundException(`Activity ${body.activityId} not found`);
+      return {
+        statusCode: ACTIVITY_API_JSON_STATUS_OK,
+        method: 'remove',
+        activity: ACTIVITY_RESPONSE_NOT_FOUND_ID,
+      };
     }
     const stage = await this.stageRepository.findOne({ where: { id: activity.stageId } });
     if (!stage) {
-      throw new NotFoundException(`Activity ${body.activityId} not found`);
+      return {
+        statusCode: ACTIVITY_API_JSON_STATUS_OK,
+        method: 'remove',
+        activity: ACTIVITY_RESPONSE_NOT_FOUND_ID,
+      };
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
       LECTURER_ROLE_NAME,
     );
     if (lecturerAccountId === null) {
-      throw new ForbiddenException('Not authorized');
+      return {
+        statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN,
+        method: 'remove',
+        activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID,
+      };
     }
     const group = await this.groupRepository.findOne({ where: { id: stage.groupId } });
     if (!group || group.teacherAccountId !== lecturerAccountId) {
-      throw new ForbiddenException('Not authorized for this activity');
+      return {
+        statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN,
+        method: 'remove',
+        activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID,
+      };
     }
-    await this.activityBacklogRepository.delete({ activityId: body.activityId });
-    const result = await this.activityRepository.delete({ id: body.activityId });
-    if (result.affected === 0) {
-      throw new NotFoundException(`Activity ${body.activityId} not found`);
+    try {
+      await this.activityBacklogRepository.delete({ activityId: body.activityId });
+      const result = await this.activityRepository.delete({ id: body.activityId });
+      if (result.affected === 0) {
+        return {
+          statusCode: ACTIVITY_API_JSON_STATUS_OK,
+          method: 'remove',
+          activity: ACTIVITY_RESPONSE_NOT_FOUND_ID,
+        };
+      }
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'remove', activity: body.activityId };
+    } catch (err) {
+      this.logger.error(`Activity removal failed: ${err instanceof Error ? err.message : String(err)}`);
+      return {
+        statusCode: ACTIVITY_API_JSON_STATUS_OK,
+        method: 'remove',
+        activity: ACTIVITY_RESPONSE_NOT_FOUND_ID,
+      };
     }
-    return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'remove', activity: body.activityId };
   }
 
   private async retrieveActivities(
