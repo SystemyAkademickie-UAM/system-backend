@@ -46,6 +46,22 @@ export class LoginController {
     return this.loginApiService.exchangeSamlSessionForOpaqueBearerToken(req, res, browserId);
   }
 
+  /**
+   * DEV BYPASS: Mints an opaque token for a mock user without requiring SAML.
+   */
+  @Post('dev-bypass')
+  @HttpCode(HttpStatus.OK)
+  async mintDevBypassToken(
+    @Res({ passthrough: true }) res: Response,
+    @Headers('x-browser-id') browserId: string | undefined,
+  ): Promise<{ auth: string }> {
+    const trimmedBrowserId = browserId?.trim() ?? '';
+    if (trimmedBrowserId === '') {
+      throw new ForbiddenException('X-Browser-ID header is required');
+    }
+    return this.loginApiService.devBypass(res, trimmedBrowserId);
+  }
+
   @Get('me')
   @HttpCode(HttpStatus.OK)
   async getMe(

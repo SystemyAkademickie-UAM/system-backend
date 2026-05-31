@@ -116,6 +116,19 @@ export class LoginApiService {
     return { auth: plaintext };
   }
 
+  /**
+   * DEV BYPASS: Issues an opaque token for a mock user without SAML validation.
+   */
+  async devBypass(res: Response, browserUuid: string): Promise<{ auth: string }> {
+    const payload: SamlSessionPayload = {
+      sub: 'dev-bypass-' + Date.now(), // Unique sub to allow creating new users if needed, or keep it static?
+      email: 'dev@student.edu.pl',
+      givenName: 'Dev',
+      surname: 'Student',
+    };
+    return this.issueOpaqueTokenFor(res, browserUuid, payload);
+  }
+
   /** Clears opaque auth and SAML session cookies for browser clients. */
   clearAuthCookies(res: Response): { success: true } {
     res.clearCookie(MAQ_AUTH_COOKIE_NAME, { path: '/' });
