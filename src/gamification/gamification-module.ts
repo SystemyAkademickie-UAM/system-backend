@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthTokenSessionModule } from '../auth/api-token/auth-token-session-module';
 import { BadgeEntity } from '../database/entities/badge.entity';
+import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { RankEntity } from '../database/entities/rank.entity';
 import { UserRolesModule } from '../user-roles/user-roles-module';
@@ -15,7 +16,7 @@ import { RanksService } from './ranks-service';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BadgeEntity, RankEntity, GroupEntity]),
+    TypeOrmModule.forFeature([BadgeEntity, EarnedBadgeEntity, RankEntity, GroupEntity]),
     AuthTokenSessionModule,
     UserRolesModule,
   ],
