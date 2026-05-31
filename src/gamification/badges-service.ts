@@ -1,15 +1,23 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { BadgeEntity, BadgeRarity } from '../database/entities/badge.entity';
+import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { RanksService } from './ranks-service';
+import { applyBadgeRevokeDelta } from '../student-management/student-stats-reward.helper';
 import { CreateBadgeDto } from './dto/create-badge.dto';
 import { UpdateBadgeDto } from './dto/update-badge.dto';
+
+export type DeleteBadgeResponse = {
+  deleted: boolean;
+  revokedFromStudents: number;
+};
 
 /**
  * Persists badge definitions in `gamification.badges` for a given course group.
@@ -21,16 +29,16 @@ export class BadgesService {
   constructor(
     private readonly authTokenSessionService: AuthTokenSessionService,
     private readonly userRolesService: UserRolesService,
+    private readonly ranksService: RanksService,
+    private readonly dataSource: DataSource,
     @InjectRepository(BadgeEntity)
     private readonly badgeRepository: Repository<BadgeEntity>,
+    @InjectRepository(EarnedBadgeEntity)
+    private readonly earnedBadgeRepository: Repository<EarnedBadgeEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
   ) {}
 
-  /**
-   * Returns all badges for a group.
-   * Auth is read from `maq_auth` cookie OR query `auth` parameter (soft token resolution).
-   */
   async getBadgesForGroup(req: Request, groupId: number, queryAuth?: string): Promise<BadgeEntity[]> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, queryAuth);
     if (!subject) {
@@ -43,9 +51,6 @@ export class BadgesService {
     });
   }
 
-  /**
-   * Updates an existing badge.
-   */
   async updateBadge(req: Request, groupId: number, badgeId: number, dto: UpdateBadgeDto): Promise<BadgeEntity> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
     if (!subject) {
@@ -55,28 +60,30 @@ export class BadgesService {
     if (!isLecturer) {
       throw new ForbiddenException('Not authorized');
     }
-
     const badge = await this.badgeRepository.findOne({ where: { id: badgeId, groupId } });
     if (!badge) {
       throw new NotFoundException(`Badge with id ${badgeId} not found in group ${groupId}`);
     }
-
     if (dto.name !== undefined) badge.name = dto.name;
     if (dto.icon !== undefined) badge.icon = dto.icon;
     if (dto.educationalDescription !== undefined) badge.educationalDescription = dto.educationalDescription;
     if (dto.storyDescription !== undefined) badge.storyDescription = dto.storyDescription;
     if (dto.rewardAmount !== undefined) badge.rewardAmount = dto.rewardAmount;
     if (dto.rarity !== undefined) badge.rarity = dto.rarity;
-
     const saved = await this.badgeRepository.save(badge);
     this.logger.log(`Badge "${saved.name}" (id=${saved.id}) updated in group ${groupId}`);
     return saved;
   }
 
   /**
-   * Deletes a badge from a group.
+   * Deletes a badge and revokes it from all students (currency only; totalEarned unchanged).
    */
-  async deleteBadge(req: Request, groupId: number, badgeId: number, bodyAuth?: string): Promise<{ deleted: boolean }> {
+  async deleteBadge(
+    req: Request,
+    groupId: number,
+    badgeId: number,
+    bodyAuth?: string,
+  ): Promise<DeleteBadgeResponse> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, bodyAuth);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
@@ -85,25 +92,45 @@ export class BadgesService {
     if (!isLecturer) {
       throw new ForbiddenException('Not authorized');
     }
-
     const badge = await this.badgeRepository.findOne({ where: { id: badgeId, groupId } });
     if (!badge) {
       throw new NotFoundException(`Badge with id ${badgeId} not found in group ${groupId}`);
     }
-
-    await this.badgeRepository.remove(badge);
-    this.logger.log(`Badge (id=${badgeId}) deleted from group ${groupId}`);
-    return { deleted: true };
+    const rewardAmount = badge.rewardAmount ?? 0;
+    const earnedRows = await this.earnedBadgeRepository.find({ where: { badgeId } });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    let revokedFromStudents = 0;
+    try {
+      for (const earned of earnedRows) {
+        if (earned.enrollmentId !== null) {
+          await applyBadgeRevokeDelta(
+            queryRunner,
+            this.ranksService,
+            earned.enrollmentId,
+            groupId,
+            rewardAmount,
+          );
+          revokedFromStudents += 1;
+        }
+        await queryRunner.manager.remove(EarnedBadgeEntity, earned);
+      }
+      await queryRunner.manager.remove(BadgeEntity, badge);
+      await queryRunner.commitTransaction();
+      this.logger.log(
+        `Badge (id=${badgeId}) deleted from group ${groupId}; revokedFromStudents=${revokedFromStudents}`,
+      );
+      return { deleted: true, revokedFromStudents };
+    } catch (err: unknown) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Delete badge failed (badge=${badgeId}, group=${groupId}): ${String(err)}`);
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
-  /**
-   * Creates a new badge bound to the given group.
-   * Auth is read from `maq_auth` cookie OR body `auth` field (soft token resolution).
-   * @param req     - Express request (cookie / body auth)
-   * @param groupId - Internal `education.groups.id`
-   * @param dto     - Validated payload from the controller
-   * @returns The persisted badge entity
-   */
   async createBadge(req: Request, groupId: number, dto: CreateBadgeDto): Promise<BadgeEntity> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
     if (!subject) {
@@ -113,9 +140,7 @@ export class BadgesService {
     if (!isLecturer) {
       throw new ForbiddenException('Not authorized');
     }
-
     await this.assertGroupExists(groupId);
-
     const entity = this.badgeRepository.create({
       groupId,
       name: dto.name,
@@ -125,7 +150,6 @@ export class BadgesService {
       rewardAmount: dto.rewardAmount ?? 0,
       rarity: dto.rarity ?? BadgeRarity.COMMON,
     });
-
     const saved = await this.badgeRepository.save(entity);
     this.logger.log(`Badge "${saved.name}" (id=${saved.id}) created for group ${groupId}`);
     return saved;
