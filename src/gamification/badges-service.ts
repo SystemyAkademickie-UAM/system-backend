@@ -104,18 +104,17 @@ export class BadgesService {
     let revokedFromStudents = 0;
     try {
       for (const earned of earnedRows) {
-        if (earned.enrollmentId === null) {
-          continue;
+        if (earned.enrollmentId !== null) {
+          await applyBadgeRevokeDelta(
+            queryRunner,
+            this.ranksService,
+            earned.enrollmentId,
+            groupId,
+            rewardAmount,
+          );
+          revokedFromStudents += 1;
         }
-        await applyBadgeRevokeDelta(
-          queryRunner,
-          this.ranksService,
-          earned.enrollmentId,
-          groupId,
-          rewardAmount,
-        );
         await queryRunner.manager.remove(EarnedBadgeEntity, earned);
-        revokedFromStudents += 1;
       }
       await queryRunner.manager.remove(BadgeEntity, badge);
       await queryRunner.commitTransaction();
