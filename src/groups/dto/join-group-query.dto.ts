@@ -1,8 +1,11 @@
-import { IsOptional, IsString, Length } from 'class-validator';
+import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+
+import { EDUCATION_ENROLLMENT_CODE_MAX_LENGTH } from '../../constants/database-entity-constants';
 
 export class JoinGroupQueryDto {
   @IsString()
-  @Length(6, 6)
+  @MinLength(1)
+  @MaxLength(EDUCATION_ENROLLMENT_CODE_MAX_LENGTH)
   code: string;
 
   @IsOptional()

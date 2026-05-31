@@ -5,6 +5,8 @@ import * as path from 'node:path';
 
 import { ValidateInResponseTo, type SamlConfig } from '@node-saml/node-saml';
 
+import type { OrganizationSamlConfig } from './saml-organization-config.service';
+
 @Injectable()
 export class SamlConfigService {
   constructor(private readonly config: ConfigService) {}
@@ -17,27 +19,9 @@ export class SamlConfigService {
     return this.config.getOrThrow<string>('SAML_ACS_URL');
   }
 
-  getIdpEntryPoint(): string {
-    return this.config.getOrThrow<string>('SAML_IDP_ENTRY_POINT');
-  }
-
-  getIdpCert(): string {
-    const certPath = this.config.get<string>('SAML_IDP_CERT_PATH');
-    const certInline = this.config.get<string>('SAML_IDP_CERT');
-    
-    if (certInline) {
-      return this.normalizePem(certInline);
-    }
-    if (certPath) {
-      return this.readPemFile(certPath);
-    }
-    throw new Error('SAML_IDP_CERT or SAML_IDP_CERT_PATH required');
-  }
-
   getSpPrivateKey(): string {
     const keyPath = this.config.get<string>('SAML_SP_PRIVATE_KEY_PATH');
     const keyInline = this.config.get<string>('SAML_SP_PRIVATE_KEY');
-    
     if (keyInline) {
       return this.normalizePem(keyInline);
     }
@@ -50,7 +34,6 @@ export class SamlConfigService {
   getSpCert(): string {
     const certPath = this.config.get<string>('SAML_SP_CERT_PATH');
     const certInline = this.config.get<string>('SAML_SP_CERT');
-    
     if (certInline) {
       return this.normalizePem(certInline);
     }
@@ -76,53 +59,52 @@ export class SamlConfigService {
     return this.config.get<string>('SAML_LOGOUT_URL') || this.getLoginSuccessUrl();
   }
 
-  getIdpLogoutUrl(): string | undefined {
-    return this.config.get<string>('SAML_IDP_LOGOUT_URL');
-  }
-
   getSloCallbackUrl(): string {
     const baseUrl = this.getAcsUrl().replace('/acs', '/slo');
     return this.config.get<string>('SAML_SLO_CALLBACK_URL') || baseUrl;
   }
 
   /**
-   * Build passport-saml configuration matching PIONIER.id requirements.
-   * - Signed AuthnRequest (SHA-256)
-   * - Transient NameID format
-   * - Signed assertions required
-   * - HTTP-Redirect for AuthnRequest, HTTP-POST for ACS
+   * Build passport-saml configuration for a specific organization IdP.
    */
-  buildSamlConfig(): SamlConfig {
+  buildSamlConfigForOrganization(orgConfig: OrganizationSamlConfig): SamlConfig {
     return {
       callbackUrl: this.getAcsUrl(),
-      entryPoint: this.getIdpEntryPoint(),
+      entryPoint: orgConfig.entryPoint,
       issuer: this.getSpEntityId(),
-      idpCert: this.getIdpCert(),
+      idpCert: orgConfig.idpCert,
       privateKey: this.getSpPrivateKey(),
       publicCert: this.getSpCert(),
-      
-      // PIONIER.id: transient NameID format (typical for eduGAIN)
       identifierFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
-      
-      // Signed AuthnRequest with SHA-256 (PIONIER requirement)
       signatureAlgorithm: 'sha256',
       digestAlgorithm: 'sha256',
-      
-      // Require signed assertions (security requirement)
       wantAssertionsSigned: true,
       wantAuthnResponseSigned: true,
-      
-      // Do not request specific authn context (let IdP decide)
       disableRequestedAuthnContext: true,
-      
-      // Clock skew tolerance (5 seconds)
       acceptedClockSkewMs: 5000,
-      
-      // Validate InResponseTo - disabled for test IdP compatibility
       validateInResponseTo: ValidateInResponseTo.never,
-      
-      // Single Logout (SLO) configuration
-      logoutUrl: this.getIdpLogoutUrl(),
+      logoutUrl: orgConfig.logoutUrl,
+      logoutCallbackUrl: this.getSloCallbackUrl(),
+    };
+  }
+
+  /** Minimal config for SP metadata generation (IdP fields are placeholders). */
+  buildSpMetadataSamlConfig(): SamlConfig {
+    return {
+      callbackUrl: this.getAcsUrl(),
+      entryPoint: 'http://localhost.invalid/sso',
+      issuer: this.getSpEntityId(),
+      idpCert: this.getSpCert(),
+      privateKey: this.getSpPrivateKey(),
+      publicCert: this.getSpCert(),
+      identifierFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
+      signatureAlgorithm: 'sha256',
+      digestAlgorithm: 'sha256',
+      wantAssertionsSigned: true,
+      wantAuthnResponseSigned: true,
+      disableRequestedAuthnContext: true,
+      acceptedClockSkewMs: 5000,
+      validateInResponseTo: ValidateInResponseTo.never,
       logoutCallbackUrl: this.getSloCallbackUrl(),
     };
   }
@@ -131,8 +113,6 @@ export class SamlConfigService {
     try {
       this.getSpEntityId();
       this.getAcsUrl();
-      this.getIdpEntryPoint();
-      this.getIdpCert();
       this.getSpPrivateKey();
       this.getSpCert();
       this.getJwtSecret();

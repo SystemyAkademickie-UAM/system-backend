@@ -13,6 +13,7 @@ import { StagesModule } from './stages/stages-module';
 import { ActivitiesModule } from './activities/activities-module';
 import { StudentManagementModule } from './student-management/student-management-module';
 import { ProfileModule } from './profile/profile-module';
+import { AdminModule } from './admin/admin-module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ProfileModule } from './profile/profile-module';
     DatabaseModule,
     SamlModule,
     LoginModule,
+    AdminModule,
     CounterModule,
     GamificationModule,
     GroupsModule,

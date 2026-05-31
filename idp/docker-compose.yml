@@ -1,0 +1,22 @@
+services:
+  idp:
+    image: kenchan0130/simplesamlphp
+    container_name: maq-local-idp
+    ports:
+      - "5000:8080"
+    env_file:
+      - ../.env
+    volumes:
+      - ./apache/maq-idp.conf:/etc/apache2/conf-enabled/zz-maq-idp.conf:ro
+      - ./authsources.php:/var/www/simplesamlphp/config/authsources.php
+      - ./saml20-sp-remote.php:/var/www/simplesamlphp/metadata/saml20-sp-remote.php
+      - ./lib:/var/www/simplesamlphp/config/maq-idp/lib
+      - ./data:/var/www/simplesamlphp/config/maq-idp/data
+      - ./www/maq-idp-users:/var/www/simplesamlphp/www/maq-idp-users
+      - ./modules/maqidp:/var/www/simplesamlphp/modules/maqidp
+    networks:
+      - academy-network
+
+networks:
+  academy-network:
+    external: true

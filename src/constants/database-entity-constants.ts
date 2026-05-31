@@ -16,14 +16,20 @@ export const AUTH_ACCOUNT_ROLE_MAX_LENGTH = 50;
 /** Max length for `auth.organizations.name`. */
 export const AUTH_ORGANIZATION_NAME_MAX_LENGTH = 255;
 
+/** Max length for `auth.organizations.contact_email`. */
+export const AUTH_ORGANIZATION_CONTACT_EMAIL_MAX_LENGTH = 255;
+
+/** Max length for `auth.organizations.contact_phone`. */
+export const AUTH_ORGANIZATION_CONTACT_PHONE_MAX_LENGTH = 64;
+
+/** Max length for `education.enrollment_codes.code`. */
+export const EDUCATION_ENROLLMENT_CODE_MAX_LENGTH = 10;
+
 /** Max length for `education.groups.name`. */
 export const EDUCATION_GROUP_NAME_MAX_LENGTH = 255;
 
-/** Max length for short varchar columns on `education.groups` (refs, codes, currency). */
+/** Max length for short varchar columns on `education.groups` (refs, currency). */
 export const EDUCATION_GROUP_VARCHAR_MAX_LENGTH = 255;
-
-/** Max length for `education.groups.entry_code`. */
-export const EDUCATION_GROUP_ENTRY_CODE_MAX_LENGTH = 10;
 
 /** Max length for `gamification.badges.name` / `gamification.ranks.name`. */
 export const GAMIFICATION_BADGE_NAME_MAX_LENGTH = 100;

@@ -6,10 +6,15 @@ export const DRIVE_API_JSON_STATUS_OK = 200;
 /** JSON `statusCode` when the session is missing or not a lecturer session. */
 export const DRIVE_API_JSON_STATUS_FORBIDDEN = 403;
 
+/** Default max upload when `DRIVE_MAX_FILE_BYTES` is unset (4 MiB). */
+export const DRIVE_MAX_FILE_BYTES_DEFAULT = 4 * 1024 * 1024;
+
 const parsedMaxBytes = Number.parseInt(process.env.DRIVE_MAX_FILE_BYTES ?? '', 10);
 
 /** Maximum uploaded file size in bytes (multipart `banner`). */
-export const DRIVE_MAX_FILE_BYTES = Number.isFinite(parsedMaxBytes) ? parsedMaxBytes : 15 * 1024 * 1024;
+export const DRIVE_MAX_FILE_BYTES = Number.isFinite(parsedMaxBytes)
+  ? parsedMaxBytes
+  : DRIVE_MAX_FILE_BYTES_DEFAULT;
 
 const parsedDefaultOrg = Number.parseInt(process.env.DRIVE_DEFAULT_ORGANIZATION_ID ?? '', 10);
 
