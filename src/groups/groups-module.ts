@@ -15,6 +15,8 @@ import { GroupsController } from './groups-controller';
 import { GroupsService } from './groups-service';
 import { GroupsPostsController } from './groups-posts-controller';
 import { GroupsPostsService } from './groups-posts-service';
+import { GroupsCurrencyController } from './groups-currency-controller';
+import { GroupsCurrencyService } from './groups-currency-service';
 
 @Module({
   imports: [
@@ -23,8 +25,8 @@ import { GroupsPostsService } from './groups-posts-service';
     UserRolesModule,
     GamificationModule,
   ],
-  controllers: [GroupsController, GroupsPostsController],
-  providers: [GroupsService, GroupsEnrollmentService, EnrollmentCodesService, GroupsPostsService],
+  controllers: [GroupsController, GroupsPostsController, GroupsCurrencyController],
+  providers: [GroupsService, GroupsEnrollmentService, EnrollmentCodesService, GroupsPostsService, GroupsCurrencyService],
 })
 export class GroupsModule {}
 
