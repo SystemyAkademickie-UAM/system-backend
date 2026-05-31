@@ -31,6 +31,10 @@ With PostgreSQL configured and `TYPEORM_SYNC=false`, apply schema with `npm run 
 
 End-to-end tests boot the full app with TypeORM and expect a **reachable PostgreSQL** instance configured via `DATABASE_*` (see `.env.example`). Without a live database, `test:e2e` fails while connecting.
 
+## Local SAML (optional)
+
+For institutional login in dev, run the local IdP (`npm run idp:up`), register orgs via [saml-local-idp.md](./saml-local-idp.md), and point **`SAML_ACS_URL`** / **`SAML_LOGIN_SUCCESS_URL`** at the SPA origin (`http://127.0.0.1:3000`). The frontend repo proxies `/api` to this service on **8080**.
+
 CI runs unit tests, e2e tests, and build. After lockfiles are committed, prefer `npm ci` over `npm install`.
 
 ## Container (this repository only)

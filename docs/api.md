@@ -70,9 +70,9 @@ Register organizations via admin API (no migration seed). Example: UAM — `meta
 
 ## Login (opaque API bearer issuance)
 
-Issues a **plaintext** bearer string for `{ "auth": "..." }` field used by `/api/groups/new`, `/api/groups/enroll`, `/api/drive`, `/api/stages`, `/api/activities`, `/api/groups/:groupId/badges`, and `/api/groups/:groupId/ranks`. The server persists only **`hex(HMAC-SHA256(API_TOKEN_HMAC_SECRET, plaintext))`** in Postgres **`autoryzacja.tokens.token_hmac`** plus **`user_id`**, **`browser_uuid`** (**PostgreSQL `uuid`** — clients MUST send an RFC 4122 UUID in **`X-Browser-ID`**), **`created_at`**, **`expired_at`** — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
+Issues a **plaintext** bearer string for `{ "auth": "..." }` field used by `/api/groups/new`, `/api/groups/:groupId/enroll`, `/api/drive`, `/api/stages`, `/api/activities`, `/api/groups/:groupId/badges`, and `/api/groups/:groupId/ranks`. The server persists only **`hex(HMAC-SHA256(API_TOKEN_HMAC_SECRET, plaintext))`** in Postgres **`autoryzacja.tokens.token_hmac`** plus **`user_id`**, **`browser_uuid`** (**PostgreSQL `uuid`** — clients MUST send an RFC 4122 UUID in **`X-Browser-ID`**), **`created_at`**, **`expired_at`** — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
 
-**Prerequisite:** authenticate via **SAML** so the browser holds HTTP-only **`maqSamlSession`** (see SAML section).
+**Prerequisite (legacy exchange path):** authenticate via **SAML** so the browser holds HTTP-only **`saml_session`**, then call this endpoint to mint **`maq_auth`**. When ACS receives a valid **`browserId`** in RelayState, it mints **`maq_auth`** directly and the SPA can skip this call.
 
 **Endpoint:** `POST /api/login`
 
@@ -132,7 +132,7 @@ Uses **strong** auth (`maq_auth` + matching `X-Browser-ID`) when the header is p
 
 ## Logout (clear API auth cookies)
 
-Clears HTTP-only **`maq_auth`** and SAML session cookies for this browser origin. Does **not** perform IdP single logout — use **`GET /api/auth/saml/logout`** for institutional SSO sign-out.
+Clears HTTP-only **`maq_auth`** and SAML session cookies for this browser origin. Revokes the current `maq_auth` database row when present. Does **not** perform IdP single logout — use **`GET /api/auth/saml/logout`** for institutional SSO sign-out.
 
 **Endpoint:** `POST /api/logout`
 
@@ -143,6 +143,55 @@ Clears HTTP-only **`maq_auth`** and SAML session cookies for this browser origin
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | `success` | boolean | Always `true` when cookies were cleared. |
+
+---
+
+## Registration wizard (`/login` UI)
+
+After SAML, first-time users complete nickname, avatar, and EULA in the SPA before accessing `/groups`. All steps require **`maq_auth`** (from ACS mint or **`POST /api/login`**) and **`X-Browser-ID`** unless noted.
+
+**Endpoint:** `GET /api/login/registration-status`
+
+**Headers:** `X-Browser-ID` (RFC 4122 UUID).
+
+**Authorization:** **strong** token + browser binding when possible; **soft** fallback (`maq_auth` cookie only).
+
+**Response:** `200 OK`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `userId` | integer | `auth.users.id`. |
+| `email` | string | User email from SAML provisioning. |
+| `nickname` | string | Display nickname (empty until profile step). |
+| `avatarId` | integer | Selected avatar id. |
+| `registrationCompleted` | boolean | Profile step done. |
+| `eulaAccepted` | boolean | EULA accepted. |
+
+**Endpoint:** `POST /api/login/profile`
+
+**Request body:** `{ "nickname": string, "avatarId": integer }`
+
+**Authorization:** **strong** only.
+
+**Endpoint:** `POST /api/login/accept-eula`
+
+**Request body:** `{}` (optional)
+
+**Authorization:** **strong** only.
+
+---
+
+## User profile (authenticated)
+
+**Endpoint:** `GET /api/profile`
+
+**Authorization:** **soft** (`maq_auth` cookie or query/body `auth`). No `X-Browser-ID` required.
+
+Returns the current user's profile row (nickname, avatar, registration flags, etc.).
+
+**Endpoint:** `PATCH /api/profile/settings`
+
+Updates nickname and/or avatar for the logged-in user.
 
 ---
 
@@ -250,7 +299,7 @@ Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATA
 | `statusCode` | integer | Example contract uses `200` on success. |
 | `group` | integer | Success: **`edukacja.grupy.id` + 100 000** (see constant `GROUP_RESPONSE_GROUP_ID_OFFSET`); `0` if creation failed; `1` if not authorized. |
 
-**Note:** The offset keeps API `group` values distinct from reserved codes `0` and `1`. Use this value as **`groupId`** when calling **`POST /api/groups/enroll`**.
+**Note:** The offset keeps API `group` values distinct from reserved codes `0` and `1`. Use this value as **`groupId`** in paths such as **`POST /api/groups/:groupId/enroll`**.
 
 **Example**
 
@@ -338,64 +387,78 @@ Manages announcements / posts in **`edukacja.posts`** for a given course group.
 
 ## Group enrollment (student)
 
-Inserts a **`grywalizacja.zapisy`** row linking the caller’s **student** `autoryzacja.konta` id to **`edukacja.grupy.id`**. Invite-code acceptance and **`/api/groups/invite`** validation are implemented separately; call this endpoint **after** those succeed.
+Inserts a row in **`gamification.enrollments`** linking the caller’s **student** account to the group. For invite-code joins, prefer **`GET /api/groups/:groupId/invite?code=`** (validates the code and enrolls in one step). Use **`POST /api/groups/:groupId/enroll`** when the student already has access (e.g. open enrollment) without a code.
 
-**Endpoint:** `POST /api/groups/enroll` (also supports legacy `:id/enroll`)
+**Endpoint:** `POST /api/groups/:groupId/enroll`
 
 **Headers:**
 
 | Header | Description |
 | ------ | ----------- |
-| `X-Browser-ID` | UUID; must match `autoryzacja.tokens.browser_uuid` for this bearer. |
+| `X-Browser-ID` | UUID; must match `auth.tokens.browser_uuid` for this bearer. |
+
+**URL parameters:**
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `groupId` | integer (≥ 1) | Public group id from **`POST /api/groups/new`** (includes **`GROUP_RESPONSE_GROUP_ID_OFFSET`**). Values below the offset are accepted as raw DB ids for backwards compatibility. |
 
 **Request body (JSON):**
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `auth` | string | Plaintext bearer (same HMAC rules as groups). |
-| `groupId` | integer (≥ 1) | Prefer the **`group`** value from **`POST /api/groups/new`** (includes **`GROUP_RESPONSE_GROUP_ID_OFFSET`**). The server subtracts that offset to get **`edukacja.grupy.id`**. Values below the offset are still accepted as a raw primary key for backwards compatibility. Numeric strings are coerced where clients send strings. |
+| `auth` | string (optional) | Plaintext bearer when not using the `maq_auth` cookie. |
 
-**Authorization:** **strong** token + browser binding. Caller must have **`autoryzacja.konta`** with **`rola = student`** for the token’s user. Missing student account, invalid token, or browser mismatch yields **`zapis: 1`**.
+**Authorization:** **strong** token + browser binding. Caller must have a **student** account. Missing student account, invalid token, or browser mismatch yields **`enrollmentId: -1`**.
 
-**Behaviour:** After resolving the database id from **`groupId`**, if **`edukacja.grupy`** has no matching row, response **`zapis: 0`**. If the student is already enrolled (same **`id_grupy`** + **`id_konta_studenta`**), returns the existing **`grywalizacja.zapisy.id`** (idempotent).
+**Behaviour:** Resolves the internal group id from the path. If the group row is missing, **`enrollmentId: -2`**. If the student is already enrolled, returns the existing enrollment id (idempotent). DB failures return **`enrollmentId: -3`**.
 
 **Response:** `200 OK` with JSON body:
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `statusCode` | integer | Example contract uses `200` on success. |
-| `zapis` | integer | New or existing **`grywalizacja.zapisy.id`**, or **`0`** if the row could not be created, or **`1`** if not authorized as a student. |
+| `statusCode` | integer | `200` on success. |
+| `enrollmentId` | integer | New or existing **`gamification.enrollments.id`** when `> 0`; negative error codes: `-1` not authorized, `-2` group not found, `-3` DB error. |
+| `groupId` | integer (optional) | Public group id on success. |
 
 **Example**
 
 ```http
-POST /api/groups/enroll HTTP/1.1
+POST /api/groups/100137/enroll HTTP/1.1
 Host: 127.0.0.1:8080
 Content-Type: application/json
 X-Browser-ID: <BrowserUUID>
-
-{"auth":"<token>","groupId":100137}
+Cookie: maq_auth=<token>
 ```
 
 ```json
-{ "statusCode": 200, "zapis": 42 }
+{ "statusCode": 200, "enrollmentId": 42, "groupId": 100137 }
 ```
 
 ---
 
 ## Group enrollment codes (lecturer)
 
-CRUD for **`education.enrollment_codes`** — group-scoped invite codes with optional expiration and usage limits.
+CRUD for **`education.enrollment_codes`** — group-scoped invite codes (1–10 characters) with optional expiration and usage limits. Auto-generated codes are 6-character uppercase hex unless the lecturer supplies a custom `code`.
+
+**Authorization:** **soft** auth (`maq_auth` cookie or `auth` query/body) plus **lecturer** role; caller must own the group.
 
 | Endpoint | Method | Description |
 | -------- | ------ | ----------- |
-| `/api/groups/:groupId/enrollment-codes` | `GET` | List codes for the group. |
+| `/api/groups/:groupId/enrollment-codes` | `GET` | List codes for the group (newest first). |
 | `/api/groups/:groupId/enrollment-codes/:codeId` | `GET` | Single code by id. |
-| `/api/groups/:groupId/enrollment-codes` | `POST` | Create code (`201`). Body: optional `code`, `expiresAt` (ISO-8601), `maxUses`, `auth`. |
-| `/api/groups/:groupId/enrollment-codes/:codeId` | `PATCH` | Update `expiresAt`, `maxUses`, `isActive`. |
-| `/api/groups/:groupId/enrollment-codes/:codeId` | `DELETE` | Delete code (`204`). |
+| `/api/groups/:groupId/enrollment-codes` | `POST` | Create code (`201`). Body: optional `code`, `expiresAt` (ISO-8601 or `null`), `maxUses`, `auth`. |
+| `/api/groups/:groupId/enrollment-codes/:codeId` | `PATCH` | Update `expiresAt`, `maxUses`, `isActive`. Body includes optional `auth`. |
+| `/api/groups/:groupId/enrollment-codes/:codeId` | `DELETE` | Delete code (`204`). Optional `auth` query param. |
 
-Legacy **`GET /api/groups/:groupId/access-code`** and **`POST /api/groups/generate-code`** delegate to this table.
+**Code object fields:** `id`, `groupId`, `code`, `expiresAt`, `maxUses`, `useCount`, `isActive`, `createdAt`, `updatedAt`.
+
+**Legacy compatibility (prefer enrollment-codes CRUD in new clients):**
+
+| Endpoint | Method | Behaviour |
+| -------- | ------ | --------- |
+| `GET /api/groups/:groupId/access-code` | `GET` | Returns the latest active code for the group (`code`, `groupId`; empty `code` on error). |
+| `POST /api/groups/generate-code` | `POST` | Creates a new code via **`POST …/enrollment-codes`** internally. Body: `groupId`, optional `auth`. |
 
 ---
 
@@ -412,7 +475,9 @@ Validates an enrollment code and enrolls the student. Lookup is scoped to **`gro
 | `code` | string | 1–10 characters | Enrollment code for this group. |
 | `auth` | string (optional) | Plaintext bearer | Auth token (can also be passed via `maq_auth` cookie). |
 
-**Response:** `200 OK` — `enrollmentId > 0` success; negative values are error codes (`-1` unauthorized, `-2` group not found, `-4` invalid/expired/exhausted code).
+**Response:** `200 OK` — `enrollmentId > 0` success; negative values: `-1` unauthorized, `-2` group not found, `-4` invalid/expired/exhausted/inactive code.
+
+On success, increments `useCount` when the code has `maxUses` set (unless the student was already enrolled).
 
 ---
 
@@ -465,54 +530,6 @@ Cookie: maq_auth=<token>
   "currencyIcon": "coin",
   "livesIcon": "heart"
 }
-```
-
----
-
-## Group generate code (lecturer)
-
-Generates a secure 6-character random hex entry code and persists it on `education.groups.entry_code` for the given group. Lecturer must own the group.
-
-**Endpoint:** `POST /api/groups/generate-code`
-
-**Headers:**
-
-| Header | Description |
-| ------ | ----------- |
-| `X-Browser-ID` | Required UUID binding for session verification. |
-
-**Request body (JSON):**
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `auth` | string (optional) | Plaintext bearer (same HMAC rules as groups). |
-| `groupId` | integer (≥ 1) | Public group ID (includes `GROUP_RESPONSE_GROUP_ID_OFFSET`). Values below the offset are accepted as raw DB ids for backwards compatibility. |
-
-**Authorization:** **strong** token + browser binding. Caller must be the **lecturer** who owns the group.
-
-**Behaviour:** Generates a unique 6-character uppercase hex code, saves it to `education.groups.entry_code`, and returns the public group id on success.
-
-**Response:** `200 OK` with JSON body:
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `statusCode` | integer | Example contract uses `200`. |
-| `code` | string | Generated 6-character code on success; empty string on error. |
-| `groupId` | integer | Public group ID on success. Negative values indicate errors: `-1` not authorized, `-2` group not found, `-3` DB / uniqueness failure. |
-
-**Example**
-
-```http
-POST /api/groups/generate-code HTTP/1.1
-Host: 127.0.0.1:8080
-Content-Type: application/json
-X-Browser-ID: <BrowserUUID>
-
-{"auth":"<token>","groupId":100137}
-```
-
-```json
-{ "statusCode": 200, "code": "A1B2C3", "groupId": 100137 }
 ```
 
 ---
@@ -800,7 +817,7 @@ Cookie: maq_auth=…
 
 | Header | Description |
 | ------ | ----------- |
-| `X-Browser-ID` | Same browser binding as for `/api/groups/new` and `/api/groups/enroll`. |
+| `X-Browser-ID` | Same browser binding as for `/api/groups/new` and `/api/groups/:groupId/enroll`. |
 
 **Request:** `Content-Type: multipart/form-data`
 
@@ -860,13 +877,17 @@ Local dev IdP: see [docs/saml-local-idp.md](./saml-local-idp.md). UAM production
 
 **GET `/api/auth/saml/metadata`** — SP metadata XML (`200`, `application/xml`).
 
-**GET `/api/auth/saml/login?organizationId=<id>`** — requires organization picker choice; sets pending-org cookie; **`302`** to org's IdP SSO URL.
+**GET `/api/auth/saml/login?organizationId=<id>&browserId=<uuid>`** — requires organization picker choice; optional **`browserId`** (RFC 4122 UUID) is embedded in **RelayState** so ACS can mint **`maq_auth`** bound to the same browser install as the SPA. Sets pending-org cookie; **`302`** to org's IdP SSO URL.
 
-**POST `/api/auth/saml/acs`** — ACS; provisions `auth.users` + `auth.accounts` for pending org.
+**POST `/api/auth/saml/acs`** — ACS; provisions `auth.users` + `auth.accounts` for pending org. When RelayState carries a valid **`browserId`**, mints **`maq_auth`** (HTTP-only cookie) for that browser without requiring a separate **`POST /api/login`**. Redirects to **`SAML_LOGIN_SUCCESS_URL`** (typically the SPA origin).
 
 **GET `/api/auth/saml/me`** — session smoke check from cookie.
 
 **GET `/api/auth/saml/logout`** — SAML SLO when org logout URL is configured.
+
+### Local development (SPA + proxy)
+
+Point **`SAML_ACS_URL`** at the **same origin** the browser uses for `/api` (e.g. `http://127.0.0.1:3000/api/auth/saml/acs` when Vite or nginx proxies `/api` to Nest on **8080**). Use **`127.0.0.1`** consistently (not a mix of `localhost` and `127.0.0.1`) so cookies and CORS align. The SPA pins **`X-Browser-ID`** before redirecting to SAML login; ACS must receive the same id via RelayState.
 
 ### CORS
 
