@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, QueryRunner, Repository } from 'typeorm';
 
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
@@ -269,13 +269,13 @@ export class StudentProgressService {
   }
 
   private async grantActivityCompletion(
-    queryRunner: import('typeorm').QueryRunner,
+    queryRunner: QueryRunner,
     groupId: number,
     accountId: number,
     activityId: number,
     rewardAmount: number,
   ): Promise<void> {
-    const enrollment = await this.findEnrollmentOrFail(groupId, accountId);
+    const enrollment = await this.findEnrollmentOrFail(groupId, accountId, queryRunner);
     const entry = queryRunner.manager.create(ActivityBacklogEntity, {
       groupId,
       accountId,
@@ -293,13 +293,13 @@ export class StudentProgressService {
   }
 
   private async revokeActivityCompletion(
-    queryRunner: import('typeorm').QueryRunner,
+    queryRunner: QueryRunner,
     groupId: number,
     accountId: number,
     activityId: number,
     rewardAmount: number,
   ): Promise<void> {
-    const enrollment = await this.findEnrollmentOrFail(groupId, accountId);
+    const enrollment = await this.findEnrollmentOrFail(groupId, accountId, queryRunner);
     const existing = await queryRunner.manager.findOne(ActivityBacklogEntity, {
       where: { groupId, accountId, activityId },
     });
@@ -348,10 +348,18 @@ export class StudentProgressService {
     }
   }
 
-  private async findEnrollmentOrFail(groupId: number, accountId: number): Promise<EnrollmentEntity> {
-    const enrollment = await this.enrollmentRepository.findOne({
-      where: { groupId, studentAccountId: accountId },
-    });
+  private async findEnrollmentOrFail(
+    groupId: number,
+    accountId: number,
+    queryRunner?: QueryRunner,
+  ): Promise<EnrollmentEntity> {
+    const enrollment = queryRunner
+      ? await queryRunner.manager.findOne(EnrollmentEntity, {
+          where: { groupId, studentAccountId: accountId },
+        })
+      : await this.enrollmentRepository.findOne({
+          where: { groupId, studentAccountId: accountId },
+        });
     if (!enrollment) {
       throw new NotFoundException(
         `Student with accountId ${accountId} is not enrolled in group ${groupId}`,
