@@ -18,6 +18,7 @@ import { StudentBadgesService } from './student-badges-service';
 import { StudentManagementService } from './student-management-service';
 import { StudentProgressService } from './student-progress-service';
 import { BulkUpdateStudentsDto } from './dto/bulk-update-student.dto';
+import { SetActivityCompletionsDto } from './dto/set-activity-completions.dto';
 
 /**
  * Participant management API for lecturers (Panel Zarządzania Uczestnikami).
@@ -108,6 +109,41 @@ export class StudentManagementController {
   }
 
   // ── Part 3: Progress management pop-up ──────────────────────────────
+
+  /**
+   * Returns account IDs that completed a group activity (single query on activity_backlog).
+   */
+  @Get(':groupId/activities/:activityId/completions')
+  getActivityCompletions(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('activityId', ParseIntPipe) activityId: number,
+    @Req() req: Request,
+  ) {
+    return this.studentProgressService.getActivityCompletions(
+      req,
+      toInternalGroupId(publicGroupId),
+      activityId,
+    );
+  }
+
+  /**
+   * Sets the target completion set for a group activity (transactional grant/revoke).
+   */
+  @Patch(':groupId/activities/:activityId/completions')
+  @HttpCode(HttpStatus.OK)
+  setActivityCompletions(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('activityId', ParseIntPipe) activityId: number,
+    @Req() req: Request,
+    @Body() dto: SetActivityCompletionsDto,
+  ) {
+    return this.studentProgressService.setActivityCompletions(
+      req,
+      toInternalGroupId(publicGroupId),
+      activityId,
+      dto,
+    );
+  }
 
   /**
    * Returns the progress tree (stages → activities with `isCompleted` flags).
