@@ -31,7 +31,10 @@
     "typeorm:migration:run": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d ./src/database/data-source.ts",
     "typeorm:migration:revert": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert -d ./src/database/data-source.ts",
     "typeorm:migration:run:dist": "node ./node_modules/typeorm/cli.js migration:run -d ./dist/database/data-source.js",
-    "typeorm:migration:revert:dist": "node ./node_modules/typeorm/cli.js migration:revert -d ./dist/database/data-source.js"
+    "typeorm:migration:revert:dist": "node ./node_modules/typeorm/cli.js migration:revert -d ./dist/database/data-source.js",
+    "idp:up": "docker compose -f idp/docker-compose.yml up -d --wait",
+    "idp:down": "docker compose -f idp/docker-compose.yml down",
+    "register:org": "node ./scripts/register-org.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

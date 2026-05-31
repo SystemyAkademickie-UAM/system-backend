@@ -46,17 +46,29 @@ export class LoginController {
     return this.loginApiService.exchangeSamlSessionForOpaqueBearerToken(req, res, browserId);
   }
 
+  @Get('me')
+  @HttpCode(HttpStatus.OK)
+  async getMe(
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+  ) {
+    return this.loginApiService.resolveAuthenticatedUserFromApiToken(req, browserId);
+  }
+
   @Get('registration-status')
   @HttpCode(HttpStatus.OK)
   async getRegistrationStatus(
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
   ) {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+    let subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
       browserId,
       undefined,
     );
+    if (!subject) {
+      subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, undefined);
+    }
     if (!subject) {
       throw new ForbiddenException('Not authenticated');
     }

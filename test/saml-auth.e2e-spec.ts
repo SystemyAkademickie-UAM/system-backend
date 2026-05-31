@@ -13,7 +13,6 @@ describe('SAML auth (e2e)', () => {
   let app: INestApplication;
   let tempDir: string;
 
-  /** Must match vars read by `SamlConfigService` / `bootstrap` SAML flow */
   beforeAll(async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'maq-saml-e2e-'));
     const pems = await selfsigned.generate(
@@ -25,15 +24,10 @@ describe('SAML auth (e2e)', () => {
     fs.writeFileSync(certPath, pems.cert, 'utf-8');
     fs.writeFileSync(keyPath, pems.private, 'utf-8');
 
-    const idpBase = 'https://idp.example.test';
-
     process.env.SAML_SP_ENTITY_ID = 'https://127.0.0.1:8080/api/auth/saml/metadata';
     process.env.SAML_ACS_URL = 'http://127.0.0.1:8080/api/auth/saml/acs';
-    process.env.SAML_IDP_ENTRY_POINT = `${idpBase}/simplesaml/saml2/idp/SSOService.php`;
-    process.env.SAML_IDP_LOGOUT_URL = `${idpBase}/simplesaml/saml2/idp/SingleLogoutService.php`;
     process.env.SAML_LOGIN_SUCCESS_URL = 'http://127.0.0.1:3000';
     process.env.SAML_JWT_SECRET = 'e2e-saml-jwt-secret-min-length';
-    process.env.SAML_IDP_CERT = pems.cert;
     process.env.SAML_SP_CERT_PATH = certPath;
     process.env.SAML_SP_PRIVATE_KEY_PATH = keyPath;
   });
@@ -60,16 +54,14 @@ describe('SAML auth (e2e)', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('GET /api/auth/saml/status reports SAML configuration', () => {
+  it('GET /api/auth/saml/status reports SAML SP configuration', () => {
     const entityId = process.env.SAML_SP_ENTITY_ID;
     return request(app.getHttpServer())
       .get('/api/auth/saml/status')
       .expect(200)
       .expect((res) => {
-        expect(res.body).toEqual({
-          configured: true,
-          entityId,
-        });
+        expect(res.body.configured).toBe(true);
+        expect(res.body.entityId).toBe(entityId);
       });
   });
 
@@ -84,19 +76,35 @@ describe('SAML auth (e2e)', () => {
       });
   });
 
-  it('GET /api/auth/saml/login redirects toward IdP entryPoint', () => {
-    return request(app.getHttpServer())
-      .get('/api/auth/saml/login')
-      .expect(302)
-      .expect('Location', /idp\.example\.test/);
+  it('GET /api/auth/saml/login without organizationId returns 400', () => {
+    return request(app.getHttpServer()).get('/api/auth/saml/login').expect(400);
   });
 
-  it('POST /api/auth/saml/acs without SAMLResponse is not a successful login', () => {
+  it('GET /api/auth/saml/organizations returns a list', () => {
+    return request(app.getHttpServer())
+      .get('/api/auth/saml/organizations')
+      .expect(200)
+      .expect((res) => {
+        expect(Array.isArray(res.body.organizations)).toBe(true);
+      });
+  });
+
+  it('POST /api/auth/saml/acs without pending organization cookie returns 400', () => {
     return request(app.getHttpServer())
       .post('/api/auth/saml/acs')
       .send({})
+      .expect(400)
       .expect((res) => {
-        expect([400, 401, 302, 500]).toContain(res.status);
+        expect(res.body.error).toBe('SAML_ORGANIZATION_PENDING_REQUIRED');
+      });
+  });
+
+  it('POST /api/auth/saml/acs accepts organization id from SAML RelayState', () => {
+    return request(app.getHttpServer())
+      .post('/api/auth/saml/acs')
+      .send({ RelayState: 'org:1' })
+      .expect((res) => {
+        expect(res.body?.error).not.toBe('SAML_ORGANIZATION_PENDING_REQUIRED');
       });
   });
 });

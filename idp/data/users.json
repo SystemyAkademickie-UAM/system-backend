@@ -1,0 +1,22 @@
+{
+  "users": [
+    {
+      "username": "student",
+      "password": "student",
+      "uid": "student",
+      "eduPersonAffiliation": ["student", "member"],
+      "eduPersonPrincipalName": "student@localhost.invalid",
+      "mail": "student@localhost.invalid",
+      "displayName": "Local Dev Student"
+    },
+    {
+      "username": "lecturer",
+      "password": "lecturer",
+      "uid": "lecturer",
+      "eduPersonAffiliation": ["faculty", "member"],
+      "eduPersonPrincipalName": "lecturer@localhost.invalid",
+      "mail": "lecturer@localhost.invalid",
+      "displayName": "Local Dev Lecturer"
+    }
+  ]
+}

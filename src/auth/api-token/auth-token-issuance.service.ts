@@ -41,4 +41,14 @@ export class AuthTokenIssuanceService {
     });
     return plaintext;
   }
+
+  /** Deletes the DB row for a plaintext token (logout). */
+  async revokePlainToken(plaintextToken: string): Promise<void> {
+    const normalized = plaintextToken.trim();
+    if (normalized === '') {
+      return;
+    }
+    const tokenHmac = this.authTokenHmacService.digestPlainTokenHex(normalized);
+    await this.authTokenRepository.delete({ tokenHmac });
+  }
 }

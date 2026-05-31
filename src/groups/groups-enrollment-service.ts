@@ -6,6 +6,7 @@ import { QueryFailedError, Repository } from 'typeorm';
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
 import {
+  ENROLL_RESULT_CODE_INVALID,
   ENROLL_RESULT_DB_ERROR,
   ENROLL_RESULT_GROUP_NOT_FOUND,
   ENROLL_RESULT_NOT_AUTHORIZED,
@@ -19,6 +20,7 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 import { RanksService } from '../gamification/ranks-service';
 import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
 import { JoinGroupQueryDto } from './dto/join-group-query.dto';
+import { EnrollmentCodesService } from './enrollment-codes-service';
 
 /**
  * HTTP response body for enrollment endpoint.
@@ -65,6 +67,7 @@ export class GroupsEnrollmentService {
     private readonly authTokenSessionService: AuthTokenSessionService,
     private readonly userRolesService: UserRolesService,
     private readonly ranksService: RanksService,
+    private readonly enrollmentCodesService: EnrollmentCodesService,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(GroupEntity)
@@ -175,14 +178,35 @@ export class GroupsEnrollmentService {
       publicGroupId >= GROUP_RESPONSE_GROUP_ID_OFFSET
         ? publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET
         : publicGroupId;
-    const groupObj = await this.groupRepository.findOne({
-      where: { id: internalGroupId, entryCode: query.code },
-    });
-    if (!groupObj) {
+    const groupExists = await this.groupRepository.exist({ where: { id: internalGroupId } });
+    if (!groupExists) {
       return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_GROUP_NOT_FOUND };
     }
-    const result = await this.enrollStudentById(studentAccountId, groupObj.id);
-    const publicGroupIdForResponse = groupObj.id + GROUP_RESPONSE_GROUP_ID_OFFSET;
+    const validatedAt = new Date();
+    const validation = await this.enrollmentCodesService.validateCodeForGroup(
+      internalGroupId,
+      query.code,
+      validatedAt,
+    );
+    if (!validation.ok) {
+      return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_CODE_INVALID };
+    }
+    const existingEnrollment = await this.enrollmentRepository.findOne({
+      where: { groupId: internalGroupId, studentAccountId },
+      select: ['id'],
+    });
+    const isNewEnrollment = existingEnrollment === null;
+    if (isNewEnrollment) {
+      const incremented = await this.enrollmentCodesService.tryIncrementUseCount(
+        validation.code.id,
+        validatedAt,
+      );
+      if (!incremented) {
+        return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_CODE_INVALID };
+      }
+    }
+    const result = await this.enrollStudentById(studentAccountId, internalGroupId);
+    const publicGroupIdForResponse = internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET;
     if (result.enrollmentId > 0) {
       return {
         statusCode: GROUP_ENROLL_API_JSON_STATUS_OK,
