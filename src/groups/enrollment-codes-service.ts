@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import {
@@ -25,6 +25,18 @@ import { UpdateEnrollmentCodeDto } from './dto/update-enrollment-code.dto';
 
 /** Max RNG retries when an auto-generated code collides within the same group (not a lecturer quota). */
 const ENROLLMENT_CODE_COLLISION_RETRIES = 32;
+
+function postgresUniqueViolation(err: unknown): err is QueryFailedError & {
+  readonly driverError: { readonly code?: string };
+} {
+  return (
+    err instanceof QueryFailedError &&
+    typeof err.driverError === 'object' &&
+    err.driverError !== null &&
+    'code' in err.driverError &&
+    err.driverError.code === '23505'
+  );
+}
 
 export type EnrollmentCodeValidationFailure =
   | 'not_found'
@@ -71,27 +83,39 @@ export class EnrollmentCodesService {
 
   async createCode(req: Request, groupId: number, dto: CreateEnrollmentCodeDto): Promise<EnrollmentCodeEntity> {
     await this.assertLecturerOwnsGroup(req, groupId, dto.auth);
-    const code = dto.code?.trim().toUpperCase() ?? (await this.generateUniqueCode(groupId));
-    if (code.length === 0) {
-      throw new ForbiddenException('Could not generate a unique enrollment code');
-    }
-    if (dto.code !== undefined && dto.code.trim() !== '') {
+
+    const explicitCode = dto.code?.trim();
+    if (explicitCode !== undefined && explicitCode !== '') {
+      const code = explicitCode.toUpperCase();
       const exists = await this.enrollmentCodeRepository.exist({ where: { groupId, code } });
       if (exists) {
         throw new ConflictException(`Enrollment code "${code}" already exists for this group`);
       }
+      try {
+        return await this.persistEnrollmentCode(groupId, code, dto);
+      } catch (err: unknown) {
+        if (postgresUniqueViolation(err)) {
+          throw new ConflictException(`Enrollment code "${code}" already exists for this group`);
+        }
+        throw err;
+      }
     }
-    const entity = this.enrollmentCodeRepository.create({
-      groupId,
-      code,
-      expiresAt: this.parseOptionalExpiresAt(dto.expiresAt),
-      maxUses: dto.maxUses ?? null,
-      useCount: 0,
-      isActive: true,
-    });
-    const saved = await this.enrollmentCodeRepository.save(entity);
-    this.logger.log(`Enrollment code id=${saved.id} created for group ${groupId}`);
-    return saved;
+
+    for (let attempt = 0; attempt < ENROLLMENT_CODE_COLLISION_RETRIES; attempt += 1) {
+      const code = crypto.randomBytes(ENROLLMENT_CODE_GENERATED_BYTE_LENGTH).toString('hex').toUpperCase();
+      try {
+        return await this.persistEnrollmentCode(groupId, code, dto);
+      } catch (err: unknown) {
+        if (postgresUniqueViolation(err)) {
+          this.logger.warn(
+            `Enrollment code collision for group ${groupId} (attempt ${attempt + 1}/${ENROLLMENT_CODE_COLLISION_RETRIES})`,
+          );
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new ForbiddenException('Could not generate a unique enrollment code');
   }
 
   async updateCode(
@@ -125,11 +149,19 @@ export class EnrollmentCodesService {
     }
   }
 
-  validateCodeEntity(code: EnrollmentCodeEntity): EnrollmentCodeValidationResult {
+  /**
+   * Code is valid only while `expiresAt` is strictly after `asOf` (same instant = expired).
+   * Mirrors the SQL guard in {@link tryIncrementUseCount}.
+   */
+  private isExpired(expiresAt: Date | null, asOf: Date): boolean {
+    return expiresAt !== null && expiresAt.getTime() <= asOf.getTime();
+  }
+
+  validateCodeEntity(code: EnrollmentCodeEntity, asOf: Date = new Date()): EnrollmentCodeValidationResult {
     if (!code.isActive) {
       return { ok: false, reason: 'inactive' };
     }
-    if (code.expiresAt !== null && code.expiresAt <= new Date()) {
+    if (this.isExpired(code.expiresAt, asOf)) {
       return { ok: false, reason: 'expired' };
     }
     if (code.maxUses !== null && code.useCount >= code.maxUses) {
@@ -138,7 +170,11 @@ export class EnrollmentCodesService {
     return { ok: true, code };
   }
 
-  async validateCodeForGroup(groupId: number, rawCode: string): Promise<EnrollmentCodeValidationResult> {
+  async validateCodeForGroup(
+    groupId: number,
+    rawCode: string,
+    asOf: Date = new Date(),
+  ): Promise<EnrollmentCodeValidationResult> {
     const normalized = rawCode.trim().toUpperCase();
     if (normalized.length === 0) {
       return { ok: false, reason: 'not_found' };
@@ -147,21 +183,23 @@ export class EnrollmentCodesService {
     if (row === null) {
       return { ok: false, reason: 'not_found' };
     }
-    return this.validateCodeEntity(row);
+    return this.validateCodeEntity(row, asOf);
   }
 
   /**
    * Atomically increments use_count when limits allow.
-   * @returns true when incremented, false when max uses already reached.
+   * Uses the same `asOf` instant as {@link validateCodeEntity} so expiry boundaries stay consistent
+   * (avoids JS `Date` vs PostgreSQL `NOW()` skew within one enroll request).
+   * @returns true when incremented, false when max uses already reached or code expired/inactive.
    */
-  async tryIncrementUseCount(codeId: number): Promise<boolean> {
+  async tryIncrementUseCount(codeId: number, asOf: Date = new Date()): Promise<boolean> {
     const result = await this.enrollmentCodeRepository
       .createQueryBuilder()
       .update(EnrollmentCodeEntity)
       .set({ useCount: () => 'use_count + 1' })
       .where('id = :codeId', { codeId })
       .andWhere('is_active = true')
-      .andWhere('(expires_at IS NULL OR expires_at > NOW())')
+      .andWhere('(expires_at IS NULL OR expires_at > :asOf)', { asOf })
       .andWhere('(max_uses IS NULL OR use_count < max_uses)')
       .execute();
     return (result.affected ?? 0) > 0;
@@ -204,6 +242,24 @@ export class EnrollmentCodesService {
     }
   }
 
+  private async persistEnrollmentCode(
+    groupId: number,
+    code: string,
+    dto: CreateEnrollmentCodeDto,
+  ): Promise<EnrollmentCodeEntity> {
+    const entity = this.enrollmentCodeRepository.create({
+      groupId,
+      code,
+      expiresAt: this.parseOptionalExpiresAt(dto.expiresAt),
+      maxUses: dto.maxUses ?? null,
+      useCount: 0,
+      isActive: true,
+    });
+    const saved = await this.enrollmentCodeRepository.save(entity);
+    this.logger.log(`Enrollment code id=${saved.id} created for group ${groupId}`);
+    return saved;
+  }
+
   private parseOptionalExpiresAt(value: string | undefined): Date | null {
     if (value === undefined || value.trim() === '') {
       return null;
@@ -213,16 +269,5 @@ export class EnrollmentCodesService {
       throw new BadRequestException('expiresAt must be a valid ISO-8601 timestamp');
     }
     return parsed;
-  }
-
-  private async generateUniqueCode(groupId: number): Promise<string> {
-    for (let attempt = 0; attempt < ENROLLMENT_CODE_COLLISION_RETRIES; attempt += 1) {
-      const code = crypto.randomBytes(ENROLLMENT_CODE_GENERATED_BYTE_LENGTH).toString('hex').toUpperCase();
-      const exists = await this.enrollmentCodeRepository.exist({ where: { groupId, code } });
-      if (!exists) {
-        return code;
-      }
-    }
-    return '';
   }
 }
