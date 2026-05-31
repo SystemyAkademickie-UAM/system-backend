@@ -182,7 +182,12 @@ export class GroupsEnrollmentService {
     if (!groupExists) {
       return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_GROUP_NOT_FOUND };
     }
-    const validation = await this.enrollmentCodesService.validateCodeForGroup(internalGroupId, query.code);
+    const validatedAt = new Date();
+    const validation = await this.enrollmentCodesService.validateCodeForGroup(
+      internalGroupId,
+      query.code,
+      validatedAt,
+    );
     if (!validation.ok) {
       return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_CODE_INVALID };
     }
@@ -192,7 +197,10 @@ export class GroupsEnrollmentService {
     });
     const isNewEnrollment = existingEnrollment === null;
     if (isNewEnrollment) {
-      const incremented = await this.enrollmentCodesService.tryIncrementUseCount(validation.code.id);
+      const incremented = await this.enrollmentCodesService.tryIncrementUseCount(
+        validation.code.id,
+        validatedAt,
+      );
       if (!incremented) {
         return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_CODE_INVALID };
       }
