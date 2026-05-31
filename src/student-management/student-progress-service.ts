@@ -155,22 +155,22 @@ export class StudentProgressService {
     const targetAccountIds = [...new Set(dto.accountIds)];
     await this.assertEnrollmentsExist(groupId, targetAccountIds);
     const rewardAmount = activity.currency ?? 0;
-    const currentRows = await this.activityBacklogRepository.find({
-      where: { groupId, activityId },
-      select: ['accountId'],
-    });
-    const currentAccountIds = new Set(
-      currentRows
-        .map((row) => row.accountId)
-        .filter((accountId): accountId is number => accountId !== null),
-    );
-    const targetSet = new Set(targetAccountIds);
-    const toGrant = targetAccountIds.filter((id) => !currentAccountIds.has(id));
-    const toRevoke = [...currentAccountIds].filter((id) => !targetSet.has(id));
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
+      const currentRows = await queryRunner.manager.find(ActivityBacklogEntity, {
+        where: { groupId, activityId },
+        select: ['accountId'],
+      });
+      const currentAccountIds = new Set(
+        currentRows
+          .map((row) => row.accountId)
+          .filter((accountId): accountId is number => accountId !== null),
+      );
+      const targetSet = new Set(targetAccountIds);
+      const toGrant = targetAccountIds.filter((id) => !currentAccountIds.has(id));
+      const toRevoke = [...currentAccountIds].filter((id) => !targetSet.has(id));
       let granted = 0;
       let revoked = 0;
       for (const accountId of toGrant) {
