@@ -47,6 +47,13 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `POST /api/drive` — lecturer session; `multipart/form-data` fields `json` (string) and `banner` (file for `post`); see [docs/api.md](./docs/api.md)
 - `POST /api/stages` — stage CRUD (method: post/modify/remove/retrieve); see [docs/api.md](./docs/api.md)
 - `POST /api/activities` — activity CRUD (method: post/modify/remove/retrieve); see [docs/api.md](./docs/api.md)
+- `GET /api/groups/:groupId/activities/:activityId/completions` — lecturer: list student account IDs with activity completed
+- `PATCH /api/groups/:groupId/activities/:activityId/completions` — lecturer: bulk set activity completions (transactional currency adjust)
+- `GET /api/groups/:groupId/students/:accountId/progress` — lecturer: progress tree with `isCompleted` flags
+- `POST /api/groups/:groupId/students/:accountId/activities/:activityId/toggle` — lecturer: toggle single activity completion
+- `POST /api/groups/:groupId/students/:accountId/badges/:badgeId/toggle` — lecturer: grant/revoke badge (revoke does not reduce `totalEarned`)
+- `DELETE /api/groups/:groupId/badges/:badgeId` — lecturer: delete badge + revoke from students (`revokedFromStudents`)
+- `DELETE /api/groups/:groupId/ranks/:rankId` — lecturer: delete rank; affected students get `rankId = null`
 - `GET /api/auth/saml/status` — SAML configuration checklist
 - `GET /api/auth/saml/metadata` — SP metadata XML (PIONIER.id / IdP)
 - `GET /api/auth/saml/organizations` — institution picker list
