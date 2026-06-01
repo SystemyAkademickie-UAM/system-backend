@@ -14,5 +14,6 @@ ENV PORT=8080
 COPY package*.json ./
 RUN npm install -g npm@11.11.0 && npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/assets ./assets
 EXPOSE 8080
 CMD ["sh", "-c", "npm run typeorm:migration:run:dist && exec node dist/main.js"]
