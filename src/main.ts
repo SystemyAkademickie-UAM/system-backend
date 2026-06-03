@@ -16,7 +16,12 @@ assertRequiredEnv();
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.useStaticAssets(join(__dirname, '..', 'assets'), { prefix: '/assets/' });
+  app.useStaticAssets(join(__dirname, '..', 'assets'), { 
+    prefix: '/assets/',
+    setHeaders: (res) => {
+      res.set('Access-Control-Allow-Origin', '*');
+    }
+  });
   app.use(cookieParser());
   app.use(passport.initialize());
   const corsOriginEnv = process.env.CORS_ORIGIN;

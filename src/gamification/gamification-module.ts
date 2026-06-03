@@ -10,6 +10,8 @@ import { UserRolesModule } from '../user-roles/user-roles-module';
 import { BadgesService } from './badges-service';
 import { RanksService } from './ranks-service';
 
+import { IconsController } from './icons-controller';
+
 /**
  * Gamification domain module – badges & ranks management.
  * Exports services so they can be injected in `GroupsModule`.
@@ -20,6 +22,7 @@ import { RanksService } from './ranks-service';
     AuthTokenSessionModule,
     UserRolesModule,
   ],
+  controllers: [IconsController],
   providers: [BadgesService, RanksService],
   exports: [BadgesService, RanksService],
 })
