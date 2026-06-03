@@ -106,7 +106,7 @@ export class GroupsService {
     private readonly enrollmentCodesService: EnrollmentCodesService,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
-  ) {}
+  ) { }
 
   async createGroup(
     req: Request,
