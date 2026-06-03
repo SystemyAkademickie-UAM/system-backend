@@ -134,6 +134,8 @@ describe('GroupsService', () => {
           teacher_surname: 'Doe',
           is_owner: false,
           is_enrolled: true,
+          currency: 'coins',
+          currency_icon: '🪙',
         },
         {
           id: 6,
@@ -144,6 +146,8 @@ describe('GroupsService', () => {
           teacher_surname: 'Smith',
           is_owner: false,
           is_enrolled: false,
+          currency: null,
+          currency_icon: null,
         },
       ]);
       const result = await service.getUserGroups(mockRequest, 'browser-id', undefined);
@@ -158,6 +162,8 @@ describe('GroupsService', () => {
             bannerId: 'img_uuid',
             lecturers: 'John Doe',
             description: 'Basic math',
+            currency: 'coins',
+            currencyIcon: '🪙',
           },
         ],
       });
