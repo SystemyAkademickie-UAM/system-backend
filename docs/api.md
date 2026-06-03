@@ -854,7 +854,53 @@ Deletes the rank. Students who had this rank get `rank_id = NULL` (“Brak”) b
 
 ---
 
-## Drive (lecturer, multipart)
+## Drive (file storage)
+
+### Serve stored object (public)
+
+**Endpoint:** `GET /api/drive/:driveRef`
+
+**Path parameter:**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `driveRef` | string (UUID v4) | Object identifier returned by `POST /api/drive`. |
+
+**Query parameters (optional):**
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `organizationId` | integer | `DRIVE_DEFAULT_ORGANIZATION_ID` | Organization storage segment. |
+
+**Authorization:** None required — banner images are publicly accessible (UUID acts as an opaque token).
+
+**Response:** `200 OK`
+
+| Header | Value |
+| ------ | ----- |
+| `Content-Type` | Detected from file magic bytes: `image/png`, `image/jpeg`, `image/gif`, `image/webp`, or `application/octet-stream`. |
+| `Content-Length` | File size in bytes. |
+| `Cache-Control` | `public, max-age=86400` |
+
+Body: raw image bytes.
+
+**Errors:**
+
+| Situation | HTTP | Description |
+| --------- | ---: | ----------- |
+| Invalid UUID format | `400` | `driveRef` does not match RFC 4122 UUID pattern. |
+| File not found on disk | `404` | No object stored for this UUID and organization. |
+
+**Example**
+
+```http
+GET /api/drive/550e8400-e29b-41d4-a716-446655440000 HTTP/1.1
+Host: 127.0.0.1:8080
+```
+
+Response: `200 OK` with `Content-Type: image/png` and raw PNG bytes.
+
+### Upload / remove object (lecturer)
 
 **Endpoint:** `POST /api/drive`
 
