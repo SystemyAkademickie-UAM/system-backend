@@ -140,6 +140,17 @@ function resolveDatabaseHostForHostCli(rawHost) {
   return rawHost.trim();
 }
 
+/** Mirrors backend postgres-ssl.config.ts — reads DATABASE_SSL from .env */
+function resolvePgSslOption() {
+  const raw = (process.env.DATABASE_SSL ?? 'false').trim().toLowerCase();
+  if (!['true', '1', 'yes'].includes(raw)) {
+    return undefined;
+  }
+  const rejectRaw = (process.env.DATABASE_SSL_REJECT_UNAUTHORIZED ?? 'true').trim().toLowerCase();
+  const rejectUnauthorized = !['false', '0', 'no'].includes(rejectRaw);
+  return { rejectUnauthorized };
+}
+
 async function registerOrganization(organizationName, metadataUrl) {
   assertDatabaseEnv();
   const parsedPort = Number.parseInt(process.env.DATABASE_PORT ?? '', 10);
@@ -147,6 +158,10 @@ async function registerOrganization(organizationName, metadataUrl) {
     throw new Error('DATABASE_PORT must be a valid integer');
   }
   const databaseHost = resolveDatabaseHostForHostCli(process.env.DATABASE_HOST ?? '');
+  const ssl = resolvePgSslOption();
+  if (ssl !== undefined) {
+    console.log(`PostgreSQL SSL enabled (rejectUnauthorized=${ssl.rejectUnauthorized})`);
+  }
 
   console.log(`Fetching metadata from ${metadataUrl}…`);
   const metadata = await fetchIdpMetadata(metadataUrl);
@@ -161,6 +176,7 @@ async function registerOrganization(organizationName, metadataUrl) {
     user: process.env.DATABASE_USER,
     password: process.env.DATABASE_PASSWORD,
     database: process.env.DATABASE_NAME,
+    ...(ssl !== undefined ? { ssl } : {}),
   });
   try {
     await client.connect();

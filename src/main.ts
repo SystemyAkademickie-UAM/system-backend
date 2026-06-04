@@ -3,6 +3,7 @@ import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
+import express from 'express';
 import passport from 'passport';
 import { AppModule } from './app-module';
 import { DEFAULT_CORS_ORIGINS } from './constants/cors-constants';
@@ -22,6 +23,8 @@ async function bootstrap(): Promise<void> {
       res.set('Access-Control-Allow-Origin', '*');
     }
   });
+  app.set('trust proxy', 1);
+  app.use(express.urlencoded({ extended: false }));
   app.use(cookieParser());
   app.use(passport.initialize());
   const corsOriginEnv = process.env.CORS_ORIGIN;

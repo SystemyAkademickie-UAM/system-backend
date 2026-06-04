@@ -968,9 +968,9 @@ Local dev IdP: see [docs/saml-local-idp.md](./saml-local-idp.md). UAM production
 
 **GET `/api/auth/saml/metadata`** — SP metadata XML (`200`, `application/xml`).
 
-**GET `/api/auth/saml/login?organizationId=<id>&browserId=<uuid>`** — requires organization picker choice; optional **`browserId`** (RFC 4122 UUID) is embedded in **RelayState** so ACS can mint **`maq_auth`** bound to the same browser install as the SPA. Sets pending-org cookie; **`302`** to org's IdP SSO URL.
+**GET `/api/auth/saml/login?organizationId=<id>&browserId=<uuid>`** — requires organization picker choice; optional **`browserId`** (RFC 4122 UUID) is embedded in **RelayState** so ACS can mint **`maq_auth`** bound to the same browser install as the SPA. Sets pending-org cookie (`SameSite=None; Secure` on HTTPS so it survives the cross-site IdP POST to ACS); **`302`** to org's IdP SSO URL.
 
-**POST `/api/auth/saml/acs`** — ACS; provisions `auth.users` + `auth.accounts` for pending org. When RelayState carries a valid **`browserId`**, mints **`maq_auth`** (HTTP-only cookie) for that browser without requiring a separate **`POST /api/login`**. Redirects to **`SAML_LOGIN_SUCCESS_URL`** (typically the SPA origin).
+**POST `/api/auth/saml/acs`** — ACS; provisions `auth.users` + `auth.accounts` for pending org. Resolves organization from **RelayState** (primary) or pending-org cookie (fallback). When RelayState carries a valid **`browserId`**, mints **`maq_auth`** (HTTP-only cookie) for that browser without requiring a separate **`POST /api/login`**. Redirects to **`SAML_LOGIN_SUCCESS_URL`** (prefer `{SPA origin}/login` for the registration wizard).
 
 **GET `/api/auth/saml/me`** — session smoke check from cookie.
 

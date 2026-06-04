@@ -107,4 +107,13 @@ describe('SAML auth (e2e)', () => {
         expect(res.body?.error).not.toBe('SAML_ORGANIZATION_PENDING_REQUIRED');
       });
   });
+
+  it('POST /api/auth/saml/acs accepts URL-encoded RelayState', () => {
+    return request(app.getHttpServer())
+      .post('/api/auth/saml/acs')
+      .send({ RelayState: encodeURIComponent('org:1|bid:550e8400-e29b-41d4-a716-446655440000') })
+      .expect((res) => {
+        expect(res.body?.error).not.toBe('SAML_ORGANIZATION_PENDING_REQUIRED');
+      });
+  });
 });

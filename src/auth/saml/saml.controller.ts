@@ -15,6 +15,7 @@ import { Strategy, type VerifiedCallback } from '@node-saml/passport-saml';
 import type { Profile } from '@node-saml/node-saml';
 import type { Request, Response } from 'express';
 import passport from 'passport';
+import type { AuthenticateOptions } from '@node-saml/passport-saml/lib/types';
 
 import { BROWSER_ID_UUID_REGEX } from '../../constants/browser-id-constants';
 import { MAQ_AUTH_COOKIE_NAME } from '../../constants/api-token-constants';
@@ -34,7 +35,14 @@ import {
 import { SamlOrganizationsService } from './saml-organizations.service';
 import { SamlService } from './saml.service';
 import type { SamlUser } from './saml.types';
-import { formatSamlRelayState, parseSamlRelayState } from './saml-relay-state.util';
+import {
+  buildClearSamlCookieOptions,
+  buildPendingOrgCookieOptions,
+  buildSamlSessionCookieOptions,
+  resolvePendingOrgCookieSameSite,
+} from './saml-cookie-options.util';
+import { parseSamlRelayState, type ParsedSamlRelayState } from './saml-relay-state.util';
+import { SamlRelayStateTokenService } from './saml-relay-state-token.service';
 
 const SAML_STRATEGY_PREFIX = 'saml-org-';
 
@@ -52,6 +60,7 @@ export class SamlController {
     private readonly samlAccountProvisioningService: SamlAccountProvisioningService,
     @Inject(forwardRef(() => LoginApiService))
     private readonly loginApiService: LoginApiService,
+    private readonly samlRelayStateTokenService: SamlRelayStateTokenService,
   ) {
     this.initializeMetadataStrategy();
   }
@@ -108,18 +117,41 @@ export class SamlController {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }
 
-  /** IdP ACS is a cross-site POST — RelayState is primary; cookie is a same-site fallback. */
-  private resolvePendingOrganizationId(req: Request): number | null {
-    const relayState = parseSamlRelayState(req.body?.RelayState ?? req.query?.RelayState);
-    if (relayState !== null) {
-      return relayState.organizationId;
+  private readRelayStateRaw(req: Request): unknown {
+    const raw = req.body?.RelayState ?? req.query?.RelayState;
+    if (typeof raw !== 'string') {
+      return raw;
     }
-    return this.parsePendingOrganizationId(req.cookies?.[SAML_PENDING_ORG_COOKIE_NAME]);
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+      return raw;
+    }
+    try {
+      return decodeURIComponent(trimmed);
+    } catch {
+      return trimmed;
+    }
   }
 
-  private resolvePendingBrowserId(req: Request): string | null {
-    const relayState = parseSamlRelayState(req.body?.RelayState ?? req.query?.RelayState);
-    return relayState?.browserId ?? null;
+  /** IdP ACS is a cross-site POST — RelayState store, legacy RelayState, then pending-org cookie. */
+  private resolvePendingLoginContext(req: Request): ParsedSamlRelayState | null {
+    const rawRelayState = this.readRelayStateRaw(req);
+    const legacyRelayState = parseSamlRelayState(rawRelayState);
+    if (legacyRelayState !== null) {
+      return legacyRelayState;
+    }
+    const storedContext = this.samlRelayStateTokenService.parseRelayStateToken(rawRelayState);
+    if (storedContext !== null) {
+      return {
+        organizationId: storedContext.organizationId,
+        browserId: storedContext.browserId,
+      };
+    }
+    const cookieOrganizationId = this.parsePendingOrganizationId(req.cookies?.[SAML_PENDING_ORG_COOKIE_NAME]);
+    if (cookieOrganizationId === null) {
+      return null;
+    }
+    return { organizationId: cookieOrganizationId, browserId: null };
   }
 
   private normalizeBrowserIdQuery(raw: string | undefined): string | undefined {
@@ -207,18 +239,20 @@ export class SamlController {
     await this.samlOrganizationsService.assertOrganizationExists(organizationId);
     const orgConfig = await this.samlOrganizationConfigService.loadOrganizationSamlConfig(organizationId);
     this.registerStrategyForOrganization(orgConfig);
-    const isProd = process.env.NODE_ENV === 'production';
     const browserId = this.normalizeBrowserIdQuery(browserIdRaw);
-    const relayState = formatSamlRelayState(organizationId, browserId);
-    Object.assign(req.query, { RelayState: relayState });
-    res.cookie(SAML_PENDING_ORG_COOKIE_NAME, String(organizationId), {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
-      maxAge: SAML_PENDING_ORG_COOKIE_MAX_AGE_MS,
-      path: '/',
-    });
-    passport.authenticate(this.strategyNameForOrganization(organizationId))(req, res, (err: unknown) => {
+    const relayState = this.samlRelayStateTokenService.createRelayStateToken(
+      organizationId,
+      browserId ?? null,
+    );
+    res.cookie(
+      SAML_PENDING_ORG_COOKIE_NAME,
+      String(organizationId),
+      buildPendingOrgCookieOptions(req, SAML_PENDING_ORG_COOKIE_MAX_AGE_MS),
+    );
+    const samlLoginOptions: AuthenticateOptions = {
+      additionalParams: { RelayState: relayState },
+    };
+    passport.authenticate(this.strategyNameForOrganization(organizationId), samlLoginOptions)(req, res, (err: unknown) => {
       if (err) {
         this.logger.error('SAML login error', err);
         res.status(500).json({ error: 'SAML_LOGIN_ERROR' });
@@ -232,18 +266,23 @@ export class SamlController {
       res.status(503).json({ error: 'SAML_NOT_CONFIGURED' });
       return;
     }
-    const pendingOrgId = this.resolvePendingOrganizationId(req);
-    if (pendingOrgId === null) {
+    const pendingLoginContext = this.resolvePendingLoginContext(req);
+    if (pendingLoginContext === null) {
+      const relayStateHint = String(this.readRelayStateRaw(req) ?? '');
+      this.logger.warn(
+        `ACS missing organization context (RelayState=${relayStateHint.length > 0 ? relayStateHint : '<empty>'}, pendingOrgCookie=${String(req.cookies?.[SAML_PENDING_ORG_COOKIE_NAME] ?? '<missing>')})`,
+      );
       res.status(400).json({ error: 'SAML_ORGANIZATION_PENDING_REQUIRED' });
       return;
     }
+    const pendingOrgId = pendingLoginContext.organizationId;
     const orgConfig = await this.samlOrganizationConfigService.loadOrganizationSamlConfig(pendingOrgId);
     this.registerStrategyForOrganization(orgConfig);
     passport.authenticate(
       this.strategyNameForOrganization(pendingOrgId),
       { session: false },
       (err: unknown, user: unknown) => {
-        void this.finalizeAcs(req, res, err, user, pendingOrgId);
+        void this.finalizeAcs(req, res, err, user, pendingOrgId, pendingLoginContext.browserId);
       },
     )(req, res);
   }
@@ -254,6 +293,7 @@ export class SamlController {
     err: unknown,
     user: unknown,
     organizationId: number,
+    pendingBrowserId: string | null,
   ): Promise<void> {
     if (err) {
       this.logger.error('ACS error', err);
@@ -289,20 +329,17 @@ export class SamlController {
       return;
     }
     const token = this.samlService.signSessionToken(samlUser, organizationId, userId);
-    const isProd = process.env.NODE_ENV === 'production';
-    res.clearCookie(SAML_PENDING_ORG_COOKIE_NAME, isProd ? { path: '/', secure: true } : { path: '/' });
-    res.cookie(SAML_SESSION_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
-      maxAge: jwtExpiresInToCookieMaxAgeMs(this.samlConfig.getJwtExpiresIn()),
-      path: '/',
-    });
-    const pendingBrowserId = this.resolvePendingBrowserId(req);
+    const pendingOrgClearOptions = buildClearSamlCookieOptions(req, resolvePendingOrgCookieSameSite(req));
+    res.clearCookie(SAML_PENDING_ORG_COOKIE_NAME, pendingOrgClearOptions);
+    res.cookie(
+      SAML_SESSION_COOKIE_NAME,
+      token,
+      buildSamlSessionCookieOptions(req, jwtExpiresInToCookieMaxAgeMs(this.samlConfig.getJwtExpiresIn())),
+    );
     if (pendingBrowserId !== null) {
       const sessionPayload = this.samlService.verifySessionToken(token);
       if (sessionPayload !== null) {
-        await this.loginApiService.mintAuthCookieFromSamlPayload(res, sessionPayload, pendingBrowserId);
+        await this.loginApiService.mintAuthCookieFromSamlPayload(req, res, sessionPayload, pendingBrowserId);
       }
     }
     res.redirect(this.samlConfig.getLoginSuccessUrl());
@@ -322,8 +359,8 @@ export class SamlController {
   }
 
   @Post('logout')
-  logout(@Res() res: Response): void {
-    this.clearBrowserAuthCookies(res);
+  logout(@Req() req: Request, @Res() res: Response): void {
+    this.clearBrowserAuthCookies(req, res);
     res.json({ success: true });
   }
 
@@ -331,7 +368,7 @@ export class SamlController {
   async samlLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
     const token = req.cookies?.[SAML_SESSION_COOKIE_NAME];
     const session = token ? this.samlService.verifySessionToken(token) : null;
-    this.clearBrowserAuthCookies(res);
+    this.clearBrowserAuthCookies(req, res);
     if (!this.samlConfig.isConfigured() || session?.organizationId === undefined) {
       res.redirect(this.samlConfig.getLogoutUrl());
       return;
@@ -378,16 +415,16 @@ export class SamlController {
     this.handleSloCallback(req, res);
   }
 
-  private handleSloCallback(_req: Request, res: Response): void {
-    this.clearBrowserAuthCookies(res);
+  private handleSloCallback(req: Request, res: Response): void {
+    this.clearBrowserAuthCookies(req, res);
     res.redirect(this.samlConfig.getLogoutUrl());
   }
 
-  private clearBrowserAuthCookies(res: Response): void {
-    const isProd = process.env.NODE_ENV === 'production';
-    const cookieOptions = isProd ? { path: '/', secure: true } : { path: '/' };
-    res.clearCookie(SAML_SESSION_COOKIE_NAME, cookieOptions);
-    res.clearCookie(MAQ_AUTH_COOKIE_NAME, cookieOptions);
-    res.clearCookie(SAML_PENDING_ORG_COOKIE_NAME, cookieOptions);
+  private clearBrowserAuthCookies(req: Request, res: Response): void {
+    const sessionClearOptions = buildClearSamlCookieOptions(req, 'lax');
+    const pendingOrgClearOptions = buildClearSamlCookieOptions(req, resolvePendingOrgCookieSameSite(req));
+    res.clearCookie(SAML_SESSION_COOKIE_NAME, sessionClearOptions);
+    res.clearCookie(MAQ_AUTH_COOKIE_NAME, sessionClearOptions);
+    res.clearCookie(SAML_PENDING_ORG_COOKIE_NAME, pendingOrgClearOptions);
   }
 }
