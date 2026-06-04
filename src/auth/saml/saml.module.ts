@@ -13,6 +13,7 @@ import { SamlAccountProvisioningService } from './saml-account-provisioning.serv
 import { SamlController } from './saml.controller';
 import { SamlOrganizationConfigService } from './saml-organization-config.service';
 import { SamlOrganizationsService } from './saml-organizations.service';
+import { SamlRelayStateTokenService } from './saml-relay-state-token.service';
 import { SamlService } from './saml.service';
 import { SamlConfigService } from './saml-config.service';
 
@@ -39,6 +40,7 @@ const DEFAULT_JWT_EXPIRES_SECONDS = 8 * 60 * 60;
     SamlOrganizationConfigService,
     SamlAccountProvisioningService,
     SamlLinkedUserService,
+    SamlRelayStateTokenService,
   ],
   exports: [SamlService, SamlConfigService, SamlOrganizationsService, SamlOrganizationConfigService],
 })

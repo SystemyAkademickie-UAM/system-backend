@@ -9,6 +9,7 @@ import {
 } from '../../constants/api-token-constants';
 import { BROWSER_ID_UUID_REGEX } from '../../constants/browser-id-constants';
 import { SAML_SESSION_COOKIE_NAME } from '../../constants/saml-constants';
+import { buildSamlSessionCookieOptions } from '../saml/saml-cookie-options.util';
 import { UserEntity } from '../../database/entities/user.entity';
 import { UserRolesService } from '../../user-roles/user-roles-service';
 import { AuthTokenHmacService } from '../api-token/auth-token-hmac.service';
@@ -79,7 +80,7 @@ export class LoginApiService {
         message: 'SAML browser session cookie expired or malformed.',
       });
     }
-    return this.issueOpaqueTokenFor(res, trimmedBrowserId, payload);
+    return this.issueOpaqueTokenFor(req, res, trimmedBrowserId, payload);
   }
 
   /**
@@ -97,6 +98,7 @@ export class LoginApiService {
   }
 
   private async issueOpaqueTokenFor(
+    req: Request,
     res: Response,
     browserUuid: string,
     payload: SamlSessionPayload,
@@ -105,14 +107,11 @@ export class LoginApiService {
     const plaintext = await this.authTokenIssuanceService.revokeAndMintPlainToken(userId, browserUuid);
     const ttlSeconds = this.authTokenHmacService.resolveExpiresAfterSeconds();
     const maxAgeMs = (ttlSeconds > 0 ? ttlSeconds : API_TOKEN_DEFAULT_TTL_SECONDS) * 1000;
-    const isProd = process.env.NODE_ENV === 'production';
-    res.cookie(MAQ_AUTH_COOKIE_NAME, plaintext, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
-      maxAge: maxAgeMs,
-      path: '/',
-    });
+    res.cookie(
+      MAQ_AUTH_COOKIE_NAME,
+      plaintext,
+      buildSamlSessionCookieOptions(req, maxAgeMs),
+    );
     return { auth: plaintext };
   }
 
@@ -136,11 +135,12 @@ export class LoginApiService {
    * Issues `maq_auth` after SAML ACS when browser id was carried in RelayState.
    */
   async mintAuthCookieFromSamlPayload(
+    req: Request,
     res: Response,
     payload: SamlSessionPayload,
     browserUuid: string,
   ): Promise<void> {
-    await this.issueOpaqueTokenFor(res, browserUuid.trim(), payload);
+    await this.issueOpaqueTokenFor(req, res, browserUuid.trim(), payload);
   }
 
   /**
