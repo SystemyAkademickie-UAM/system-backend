@@ -267,6 +267,7 @@ Retrieves groups the authenticated user belongs to: student enrollments and lect
 | `bannerId` | string \| null | Group banner reference (`education.groups.image_ref`). |
 | `lecturers` | string | Lecturer full name; empty string when unknown. |
 | `description` | string \| null | Group description. |
+| `shopOpen` | boolean | Indicates whether the group's shop is currently open. |
 
 **Example**
 
@@ -573,6 +574,7 @@ Retrieves student statistics (lives, currency, icons) scoped to a specific group
 | `currency` | string | Currency balance in this group (`gamification.enrollments`). |
 | `currencyIcon` | string | Group's currency icon (`education.groups`). |
 | `livesIcon` | string | Group's life icon (`education.groups`). |
+| `shopOpen` | boolean | Indicates whether the group's shop is currently open. |
 
 **Example**
 

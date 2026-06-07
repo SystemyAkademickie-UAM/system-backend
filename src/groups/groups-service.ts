@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { QueryFailedError, Repository } from 'typeorm';
@@ -301,11 +301,7 @@ export class GroupsService {
     try {
       internalGroupId = toInternalGroupId(publicGroupId);
     } catch {
-      return {
-        statusCode: GROUP_API_JSON_STATUS_OK,
-        group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
-        updated: false,
-      };
+      throw new BadRequestException('Invalid group ID');
     }
 
     const existing = await this.groupRepository.findOne({

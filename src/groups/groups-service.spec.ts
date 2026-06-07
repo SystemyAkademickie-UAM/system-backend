@@ -297,6 +297,15 @@ describe('GroupsService', () => {
         .rejects.toThrow('Missing or invalid session');
     });
 
+    it('should throw BadRequestException for invalid group ID', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      
+      // Pass an invalid group ID (below offset)
+      await expect(service.updateShopStatus(mockRequest, 999, { shopOpen: true }, 'browser-id'))
+        .rejects.toThrow('Invalid group ID');
+    });
+
     it('should throw ForbiddenException if group not found or not owner', async () => {
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.findAccountIdForRole.mockResolvedValue(10);

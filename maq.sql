@@ -494,8 +494,7 @@ CREATE TABLE education.groups (
     currency_icon character varying(255),
     lives integer DEFAULT 3,
     lives_icon character varying(255),
-    entry_code character varying(10),
-    shop_open boolean DEFAULT true NOT NULL
+    entry_code character varying(10)
 );
 
 
