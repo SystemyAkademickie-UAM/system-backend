@@ -26,6 +26,7 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
+import { UpdateShopStatusDto } from './dto/update-shop-status.dto';
 import { EnrollmentCodesService } from './enrollment-codes-service';
 
 export type CreateGroupResponseBody = { statusCode: number; group: number };
@@ -45,6 +46,7 @@ export type UserGroupListItem = {
   description: string | null;
   currency: string | null;
   currencyIcon: string | null;
+  shopOpen: boolean;
 };
 
 export type GetUserGroupsResponseBody = {
@@ -255,6 +257,78 @@ export class GroupsService {
 
     try {
       await this.groupRepository.update({ id: internalGroupId }, updates);
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        updated: true,
+      };
+    } catch (err: unknown) {
+      this.logGroupCreationFailure(err);
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
+        updated: false,
+      };
+    }
+  }
+
+  /**
+   * Updates the shop open/closed status for a group owned by the lecturer.
+   */
+  async updateShopStatus(
+    req: Request,
+    publicGroupId: number,
+    body: UpdateShopStatusDto,
+    browserIdHeader: string | undefined,
+  ): Promise<UpdateGroupResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      undefined,
+    );
+    if (!subject) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
+        updated: false,
+      };
+    }
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    if (lecturerAccountId === null) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
+        updated: false,
+      };
+    }
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
+        updated: false,
+      };
+    }
+
+    const existing = await this.groupRepository.findOne({
+      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!existing) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
+        updated: false,
+      };
+    }
+
+    try {
+      await this.groupRepository.update({ id: internalGroupId }, { shopOpen: body.shopOpen });
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
         group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
@@ -542,6 +616,7 @@ export class GroupsService {
     teacher_nickname: string | null;
     teacher_name: string | null;
     teacher_surname: string | null;
+    shop_open: boolean;
   }): UserGroupListItem {
     const lecturers = this.formatLecturerDisplay(
       row.teacher_nickname,
@@ -557,6 +632,7 @@ export class GroupsService {
       description: row.description ?? null,
       currency: row.currency ?? null,
       currencyIcon: row.currency_icon ?? null,
+      shopOpen: row.shop_open === true || row.shop_open === ('t' as unknown) || row.shop_open === (1 as unknown),
     };
   }
 
@@ -576,6 +652,7 @@ export class GroupsService {
       teacher_nickname: string | null;
       teacher_name: string | null;
       teacher_surname: string | null;
+      shop_open: boolean;
       is_owner: boolean;
       is_enrolled: boolean;
     }>
@@ -591,6 +668,7 @@ export class GroupsService {
         'group.description AS description',
         'group.currency AS currency',
         'group.currency_icon AS currency_icon',
+        'group.shop_open AS shop_open',
         'user.nickname AS teacher_nickname',
         'user.name AS teacher_name',
         'user.surname AS teacher_surname',
@@ -631,6 +709,7 @@ export class GroupsService {
       teacher_nickname: row.teacher_nickname ?? null,
       teacher_name: row.teacher_name ?? null,
       teacher_surname: row.teacher_surname ?? null,
+      shop_open: row.shop_open === true || row.shop_open === ('t' as unknown) || row.shop_open === (1 as unknown),
       is_owner: row.is_owner === true || row.is_owner === 't' || row.is_owner === 1,
       is_enrolled: row.is_enrolled === true || row.is_enrolled === 't' || row.is_enrolled === 1,
     }));
