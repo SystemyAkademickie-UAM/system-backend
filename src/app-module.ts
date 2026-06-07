@@ -15,6 +15,7 @@ import { StudentManagementModule } from './student-management/student-management
 import { ProfileModule } from './profile/profile-module';
 import { AdminModule } from './admin/admin-module';
 import { BacklogModule } from './backlog/backlog-module';
+import { BannersModule } from './banners/banners-module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { BacklogModule } from './backlog/backlog-module';
     StudentManagementModule,
     ProfileModule,
     BacklogModule,
+    BannersModule,
   ],
 })
 export class AppModule {}
