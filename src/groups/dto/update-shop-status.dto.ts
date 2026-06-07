@@ -1,10 +1,17 @@
-import { IsBoolean, IsNotEmpty } from 'class-validator';
+import { IsBoolean, IsDefined, IsOptional, IsString } from 'class-validator';
 
 export class UpdateShopStatusDto {
   /**
-   * Status sklepu (true = otwarty, false = zamknięty).
+   * Shop status (true = open, false = closed).
    */
-  @IsNotEmpty()
+  @IsDefined()
   @IsBoolean()
   shopOpen: boolean;
+
+  /**
+   * Optional API token (e.g. from mobile clients).
+   */
+  @IsOptional()
+  @IsString()
+  auth?: string;
 }

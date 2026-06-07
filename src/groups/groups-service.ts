@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { QueryFailedError, Repository } from 'typeorm';
@@ -284,25 +284,17 @@ export class GroupsService {
     const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
       browserIdHeader,
-      undefined,
+      body.auth,
     );
     if (!subject) {
-      return {
-        statusCode: GROUP_API_JSON_STATUS_OK,
-        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
-        updated: false,
-      };
+      throw new UnauthorizedException('Missing or invalid session');
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
       LECTURER_ROLE_NAME,
     );
     if (lecturerAccountId === null) {
-      return {
-        statusCode: GROUP_API_JSON_STATUS_OK,
-        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
-        updated: false,
-      };
+      throw new ForbiddenException('Requires lecturer privileges');
     }
 
     let internalGroupId: number;
@@ -320,11 +312,7 @@ export class GroupsService {
       where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
     });
     if (!existing) {
-      return {
-        statusCode: GROUP_API_JSON_STATUS_OK,
-        group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
-        updated: false,
-      };
+      throw new ForbiddenException('Not authorized to manage this group');
     }
 
     try {
@@ -335,7 +323,11 @@ export class GroupsService {
         updated: true,
       };
     } catch (err: unknown) {
-      this.logGroupCreationFailure(err);
+      if (err instanceof Error) {
+        this.logger.error(`updateShopStatus failed: ${err.message}`, err.stack);
+      } else {
+        this.logger.error(`updateShopStatus failed: ${String(err)}`);
+      }
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
         group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID,

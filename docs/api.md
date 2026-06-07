@@ -353,6 +353,35 @@ X-Browser-ID: <BrowserUUID>
 
 ---
 
+### Update shop status (lecturer)
+
+**Endpoint:** `PATCH /api/groups/:groupId/shop-status`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | UUID; must match `autoryzacja.tokens.browser_uuid` for this bearer. |
+
+**Request body (JSON):**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string (optional) | Plaintext bearer. |
+| `shopOpen` | boolean | Set to `true` to open the shop, `false` to close it. |
+
+**Authorization:** **strong** token + browser binding. Caller must have the **lecturer** role and must own the group. Missing or invalid auth yields `401 Unauthorized` or `403 Forbidden`.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | integer | Always `200` on success. |
+| `group` | integer | Public group id. |
+| `updated` | boolean | `true` if successful. |
+
+---
+
 ## Group posts management (lecturer & student)
 
 Manages announcements / posts in **`edukacja.posts`** for a given course group.

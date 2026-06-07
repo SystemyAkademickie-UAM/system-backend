@@ -291,15 +291,19 @@ describe('GroupsService', () => {
       });
     });
 
-    it('should return error if group not found or not owner', async () => {
+    it('should throw UnauthorizedException if subject not resolved', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
+      await expect(service.updateShopStatus(mockRequest, 100001, { shopOpen: true }, 'browser-id'))
+        .rejects.toThrow('Missing or invalid session');
+    });
+
+    it('should throw ForbiddenException if group not found or not owner', async () => {
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.findOne.mockResolvedValue(null);
 
-      const result = await service.updateShopStatus(mockRequest, 100001, { shopOpen: true }, 'browser-id');
-
-      expect(result.updated).toBe(false);
-      expect(result.group).toBe(1); // GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID
+      await expect(service.updateShopStatus(mockRequest, 100001, { shopOpen: true }, 'browser-id'))
+        .rejects.toThrow('Not authorized to manage this group');
     });
   });
 });
