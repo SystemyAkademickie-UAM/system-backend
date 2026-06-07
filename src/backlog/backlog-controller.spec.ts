@@ -1,0 +1,86 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { BacklogController } from './backlog-controller';
+import { BacklogService } from './backlog-service';
+import { UnauthorizedException } from '@nestjs/common';
+import type { Request } from 'express';
+
+describe('BacklogController', () => {
+  let controller: BacklogController;
+  let service: jest.Mocked<BacklogService>;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [BacklogController],
+      providers: [
+        {
+          provide: BacklogService,
+          useValue: {
+            getStudentBacklog: jest.fn(),
+            getGroupBacklog: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    controller = module.get<BacklogController>(BacklogController);
+    service = module.get(BacklogService);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
+  describe('getStudentBacklog', () => {
+    it('should return backlog items when successful', async () => {
+      // Arrange
+      const mockReq = {} as Request;
+      const expectedItems = [{ id: 1, type: 'SHOP_PURCHASE', date: '2026-06-07', value: '10', accountId: 1 }];
+      service.getStudentBacklog.mockResolvedValue(expectedItems);
+
+      // Act
+      const result = await controller.getStudentBacklog(1, mockReq, 'browser-id');
+
+      // Assert
+      expect(result).toEqual(expectedItems);
+      expect(service.getStudentBacklog).toHaveBeenCalledWith(mockReq, 1, 'browser-id');
+    });
+
+    it('should throw UnauthorizedException when service returns an error', async () => {
+      // Arrange
+      const mockReq = {} as Request;
+      service.getStudentBacklog.mockResolvedValue({ error: 'Unauthorized' });
+
+      // Act & Assert
+      await expect(controller.getStudentBacklog(1, mockReq, 'browser-id')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
+
+  describe('getGroupBacklog', () => {
+    it('should return group backlog items when successful', async () => {
+      // Arrange
+      const mockReq = {} as Request;
+      const expectedItems = [{ id: 1, type: 'SHOP_PURCHASE', date: '2026-06-07', value: '10', accountId: 1 }];
+      service.getGroupBacklog.mockResolvedValue(expectedItems);
+
+      // Act
+      const result = await controller.getGroupBacklog(1, mockReq, 'browser-id');
+
+      // Assert
+      expect(result).toEqual(expectedItems);
+      expect(service.getGroupBacklog).toHaveBeenCalledWith(mockReq, 1, 'browser-id');
+    });
+
+    it('should throw UnauthorizedException when service returns an error', async () => {
+      // Arrange
+      const mockReq = {} as Request;
+      service.getGroupBacklog.mockResolvedValue({ error: 'Forbidden' });
+
+      // Act & Assert
+      await expect(controller.getGroupBacklog(1, mockReq, 'browser-id')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
+});
