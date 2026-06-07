@@ -4,6 +4,8 @@ import type { Request } from 'express';
 
 import { BacklogService } from './backlog-service';
 import { BacklogEntity } from '../database/entities/backlog.entity';
+import { GroupEntity } from '../database/entities/group.entity';
+import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
@@ -11,6 +13,8 @@ import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants
 describe('BacklogService', () => {
   let service: BacklogService;
   let backlogRepository: any;
+  let groupRepository: any;
+  let enrollmentRepository: any;
   let authTokenSessionService: any;
   let userRolesService: any;
 
@@ -19,6 +23,12 @@ describe('BacklogService', () => {
       find: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
+    };
+    groupRepository = {
+      exist: jest.fn(),
+    };
+    enrollmentRepository = {
+      exist: jest.fn(),
     };
     authTokenSessionService = {
       resolveSubjectStrongFromRequest: jest.fn(),
@@ -34,6 +44,14 @@ describe('BacklogService', () => {
         {
           provide: getRepositoryToken(BacklogEntity),
           useValue: backlogRepository,
+        },
+        {
+          provide: getRepositoryToken(GroupEntity),
+          useValue: groupRepository,
+        },
+        {
+          provide: getRepositoryToken(EnrollmentEntity),
+          useValue: enrollmentRepository,
         },
         {
           provide: AuthTokenSessionService,
@@ -111,6 +129,19 @@ describe('BacklogService', () => {
       expect(result).toEqual({ error: 'Student account not found' });
     });
 
+    it('should return error if student is not enrolled', async () => {
+      // Arrange
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      enrollmentRepository.exist.mockResolvedValue(false);
+
+      // Act
+      const result = await service.getStudentBacklog({} as Request, 5, 'browser-id');
+
+      // Assert
+      expect(result).toEqual({ error: 'Forbidden: Not enrolled in this group' });
+    });
+
     it('should return backlog items for valid student', async () => {
       // Arrange
       const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 5;
@@ -120,6 +151,7 @@ describe('BacklogService', () => {
       
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.findAccountIdForRole.mockResolvedValue(studentAccountId);
+      enrollmentRepository.exist.mockResolvedValue(true);
       
       const mockEntries = [
         { id: 1, groupId: internalGroupId, accountId: studentAccountId, type: 'SHOP_PURCHASE', date: mockDate, value: 'item_1' },
@@ -172,6 +204,8 @@ describe('BacklogService', () => {
       
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('lecturer');
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.exist.mockResolvedValue(true);
       
       const mockEntries = [
         { id: 1, groupId: internalGroupId, accountId: 10, type: 'SHOP_PURCHASE', date: mockDate, value: 'item_1' },
