@@ -17,6 +17,8 @@ describe('BacklogService', () => {
   beforeEach(async () => {
     backlogRepository = {
       find: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
     };
     authTokenSessionService = {
       resolveSubjectStrongFromRequest: jest.fn(),
@@ -45,6 +47,44 @@ describe('BacklogService', () => {
     }).compile();
 
     service = module.get<BacklogService>(BacklogService);
+  });
+
+  describe('logEvent', () => {
+    it('should create and save a new backlog entry', async () => {
+      // Arrange
+      const mockEntry = { groupId: 5, accountId: 10, type: 'SHOP_PURCHASE', value: 'item_1' };
+      const savedEntry = { id: 1, ...mockEntry, date: new Date() };
+      
+      backlogRepository.create.mockReturnValue(mockEntry);
+      backlogRepository.save.mockResolvedValue(savedEntry);
+
+      // Act
+      const result = await service.logEvent(5, 10, 'SHOP_PURCHASE', 'item_1');
+
+      // Assert
+      expect(backlogRepository.create).toHaveBeenCalledWith({
+        groupId: 5,
+        accountId: 10,
+        type: 'SHOP_PURCHASE',
+        value: 'item_1',
+      });
+      expect(backlogRepository.save).toHaveBeenCalledWith(mockEntry);
+      expect(result).toEqual(savedEntry);
+    });
+
+    it('should handle null value gracefully', async () => {
+      // Arrange
+      const mockEntry = { groupId: 5, accountId: 10, type: 'ITEM_USED', value: null };
+      
+      backlogRepository.create.mockReturnValue(mockEntry);
+      backlogRepository.save.mockResolvedValue({ id: 2, ...mockEntry });
+
+      // Act
+      await service.logEvent(5, 10, 'ITEM_USED');
+
+      // Assert
+      expect(backlogRepository.create).toHaveBeenCalledWith(mockEntry);
+    });
   });
 
   describe('getStudentBacklog', () => {

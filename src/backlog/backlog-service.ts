@@ -26,6 +26,25 @@ export class BacklogService {
     private readonly userRolesService: UserRolesService,
   ) {}
 
+  /**
+   * Internal method to log events to the backlog.
+   * Used by other domains (like Gamification or Shop) to record activity.
+   */
+  async logEvent(
+    internalGroupId: number,
+    accountId: number,
+    type: string,
+    value: string | null = null,
+  ): Promise<BacklogEntity> {
+    const entry = this.backlogRepository.create({
+      groupId: internalGroupId,
+      accountId,
+      type,
+      value,
+    });
+    return this.backlogRepository.save(entry);
+  }
+
   private getInternalGroupId(publicGroupId: number): number {
     return publicGroupId >= GROUP_RESPONSE_GROUP_ID_OFFSET
       ? publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET
