@@ -6,6 +6,8 @@ import type { Request } from 'express';
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { BacklogEntity } from '../database/entities/backlog.entity';
+import { GroupEntity } from '../database/entities/group.entity';
+import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { STUDENT_ROLE_NAME, LECTURER_ROLE_NAME, ADMINISTRATOR_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
 
@@ -22,6 +24,10 @@ export class BacklogService {
   constructor(
     @InjectRepository(BacklogEntity)
     private readonly backlogRepository: Repository<BacklogEntity>,
+    @InjectRepository(GroupEntity)
+    private readonly groupRepository: Repository<GroupEntity>,
+    @InjectRepository(EnrollmentEntity)
+    private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     private readonly authTokenSessionService: AuthTokenSessionService,
     private readonly userRolesService: UserRolesService,
   ) {}
@@ -55,6 +61,17 @@ export class BacklogService {
     }
 
     const internalGroupId = this.getInternalGroupId(publicGroupId);
+
+    const isEnrolled = await this.enrollmentRepository.exist({
+      where: {
+        groupId: internalGroupId,
+        studentAccountId: studentAccountId,
+      },
+    });
+
+    if (!isEnrolled) {
+      return { error: 'Forbidden: Not enrolled in this group' };
+    }
 
     const entries = await this.backlogRepository.find({
       where: {
@@ -97,6 +114,19 @@ export class BacklogService {
     }
 
     const internalGroupId = this.getInternalGroupId(publicGroupId);
+
+    if (primaryRole === LECTURER_ROLE_NAME) {
+      const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
+      if (!lecturerAccountId) {
+        return { error: 'Forbidden: Requires lecturer privileges' };
+      }
+      const isOwner = await this.groupRepository.exist({
+        where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+      });
+      if (!isOwner) {
+        return { error: 'Forbidden: You are not the owner of this group' };
+      }
+    }
 
     const entries = await this.backlogRepository.find({
       where: {
