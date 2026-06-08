@@ -103,6 +103,17 @@ describe('BacklogService', () => {
       // Assert
       expect(backlogRepository.create).toHaveBeenCalledWith(mockEntry);
     });
+
+    it('should propagate database constraint errors (e.g., invalid groupId)', async () => {
+      // Arrange
+      const mockEntry = { groupId: 9999, accountId: 10, type: 'SHOP_PURCHASE', value: null };
+      
+      backlogRepository.create.mockReturnValue(mockEntry);
+      backlogRepository.save.mockRejectedValue(new Error('Foreign key violation'));
+
+      // Act & Assert
+      await expect(service.logEvent(9999, 10, 'SHOP_PURCHASE')).rejects.toThrow('Foreign key violation');
+    });
   });
 
   describe('getStudentBacklog', () => {
@@ -111,7 +122,7 @@ describe('BacklogService', () => {
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
 
       // Act
-      const result = await service.getStudentBacklog({} as Request, 1, 'browser-id');
+      const result = await service.getStudentBacklog({} as Request, 1, 'browser-id', undefined, 50, 0);
 
       // Assert
       expect(result).toEqual({ error: 'Unauthorized' });
@@ -123,7 +134,7 @@ describe('BacklogService', () => {
       userRolesService.findAccountIdForRole.mockResolvedValue(null);
 
       // Act
-      const result = await service.getStudentBacklog({} as Request, 1, 'browser-id');
+      const result = await service.getStudentBacklog({} as Request, 1, 'browser-id', undefined, 50, 0);
 
       // Assert
       expect(result).toEqual({ error: 'Student account not found' });
@@ -136,7 +147,8 @@ describe('BacklogService', () => {
       enrollmentRepository.exist.mockResolvedValue(false);
 
       // Act
-      const result = await service.getStudentBacklog({} as Request, 5, 'browser-id');
+      const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 5;
+      const result = await service.getStudentBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
 
       // Assert
       expect(result).toEqual({ error: 'Forbidden: Not enrolled in this group' });
@@ -159,12 +171,14 @@ describe('BacklogService', () => {
       backlogRepository.find.mockResolvedValue(mockEntries);
 
       // Act
-      const result = await service.getStudentBacklog({} as Request, publicGroupId, 'browser-id');
+      const result = await service.getStudentBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
 
       // Assert
       expect(backlogRepository.find).toHaveBeenCalledWith({
         where: { groupId: internalGroupId, accountId: studentAccountId },
         order: { date: 'DESC' },
+        take: 50,
+        skip: 0,
       });
       expect(result).toEqual([
         { id: 1, type: 'SHOP_PURCHASE', date: mockDate.toISOString(), value: 'item_1', accountId: studentAccountId },
@@ -178,7 +192,8 @@ describe('BacklogService', () => {
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
 
       // Act
-      const result = await service.getGroupBacklog({} as Request, 1, 'browser-id');
+      const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 1;
+      const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
 
       // Assert
       expect(result).toEqual({ error: 'Unauthorized' });
@@ -190,7 +205,8 @@ describe('BacklogService', () => {
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
 
       // Act
-      const result = await service.getGroupBacklog({} as Request, 1, 'browser-id');
+      const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 1;
+      const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
 
       // Assert
       expect(result).toEqual({ error: 'Forbidden: Requires lecturer privileges' });
@@ -213,12 +229,14 @@ describe('BacklogService', () => {
       backlogRepository.find.mockResolvedValue(mockEntries);
 
       // Act
-      const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id');
+      const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
 
       // Assert
       expect(backlogRepository.find).toHaveBeenCalledWith({
         where: { groupId: internalGroupId },
         order: { date: 'DESC' },
+        take: 50,
+        skip: 0,
       });
       expect(result).toEqual([
         { id: 1, type: 'SHOP_PURCHASE', date: mockDate.toISOString(), value: 'item_1', accountId: 10 },
