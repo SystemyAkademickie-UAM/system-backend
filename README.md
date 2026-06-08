@@ -53,6 +53,10 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `POST /api/groups/:groupId/students/:accountId/activities/:activityId/toggle` — lecturer: toggle single activity completion
 - `POST /api/groups/:groupId/students/:accountId/badges/:badgeId/toggle` — lecturer: grant/revoke badge (revoke does not reduce `totalEarned`)
 - `DELETE /api/groups/:groupId/badges/:badgeId` — lecturer: delete badge + revoke from students (`revokedFromStudents`)
+- `GET /api/groups/:groupId/item-categories` — list shop item categories for a group
+- `POST /api/groups/:groupId/item-categories` — lecturer: create category
+- `PATCH /api/groups/:groupId/item-categories/:categoryId` — lecturer: update category
+- `DELETE /api/groups/:groupId/item-categories/:categoryId` — lecturer: delete category (items become uncategorized)
 - `DELETE /api/groups/:groupId/ranks/:rankId` — lecturer: delete rank; affected students get `rankId = null`
 - `GET /api/auth/saml/status` — SAML configuration checklist
 - `GET /api/auth/saml/metadata` — SP metadata XML (PIONIER.id / IdP)
