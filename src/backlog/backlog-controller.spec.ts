@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BacklogController } from './backlog-controller';
 import { BacklogService } from './backlog-service';
-import { UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import type { Request } from 'express';
 
 describe('BacklogController', () => {
@@ -42,7 +42,7 @@ describe('BacklogController', () => {
 
       // Assert
       expect(result).toEqual(expectedItems);
-      expect(service.getStudentBacklog).toHaveBeenCalledWith(mockReq, 1, 'browser-id');
+      expect(service.getStudentBacklog).toHaveBeenCalledWith(mockReq, 1, 'browser-id', undefined, 50, 0);
     });
 
     it('should throw UnauthorizedException when service returns an error', async () => {
@@ -53,6 +53,17 @@ describe('BacklogController', () => {
       // Act & Assert
       await expect(controller.getStudentBacklog(1, mockReq, 'browser-id')).rejects.toThrow(
         UnauthorizedException,
+      );
+    });
+
+    it('should throw ForbiddenException when service returns a Forbidden error', async () => {
+      // Arrange
+      const mockReq = {} as Request;
+      service.getStudentBacklog.mockResolvedValue({ error: 'Forbidden: access denied' });
+
+      // Act & Assert
+      await expect(controller.getStudentBacklog(1, mockReq, 'browser-id')).rejects.toThrow(
+        ForbiddenException,
       );
     });
   });
@@ -69,17 +80,28 @@ describe('BacklogController', () => {
 
       // Assert
       expect(result).toEqual(expectedItems);
-      expect(service.getGroupBacklog).toHaveBeenCalledWith(mockReq, 1, 'browser-id');
+      expect(service.getGroupBacklog).toHaveBeenCalledWith(mockReq, 1, 'browser-id', undefined, 50, 0);
     });
 
-    it('should throw UnauthorizedException when service returns an error', async () => {
+    it('should throw UnauthorizedException when service returns an unauthorized error', async () => {
       // Arrange
       const mockReq = {} as Request;
-      service.getGroupBacklog.mockResolvedValue({ error: 'Forbidden' });
+      service.getGroupBacklog.mockResolvedValue({ error: 'Unauthorized' });
 
       // Act & Assert
       await expect(controller.getGroupBacklog(1, mockReq, 'browser-id')).rejects.toThrow(
         UnauthorizedException,
+      );
+    });
+
+    it('should throw ForbiddenException when service returns a Forbidden error', async () => {
+      // Arrange
+      const mockReq = {} as Request;
+      service.getGroupBacklog.mockResolvedValue({ error: 'Forbidden: access denied' });
+
+      // Act & Assert
+      await expect(controller.getGroupBacklog(1, mockReq, 'browser-id')).rejects.toThrow(
+        ForbiddenException,
       );
     });
   });

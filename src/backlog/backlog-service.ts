@@ -9,8 +9,7 @@ import { BacklogEntity } from '../database/entities/backlog.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { STUDENT_ROLE_NAME, LECTURER_ROLE_NAME, ADMINISTRATOR_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
-import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
-
+import { GROUP_RESPONSE_GROUP_ID_OFFSET, toInternalGroupId } from '../constants/group-api-constants';
 export type BacklogItemResponse = {
   id: number;
   type: string;
@@ -32,21 +31,18 @@ export class BacklogService {
     private readonly userRolesService: UserRolesService,
   ) {}
 
-  private getInternalGroupId(publicGroupId: number): number {
-    return publicGroupId >= GROUP_RESPONSE_GROUP_ID_OFFSET
-      ? publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET
-      : publicGroupId;
-  }
-
   async getStudentBacklog(
     req: Request,
     publicGroupId: number,
     browserIdHeader: string | undefined,
+    auth: string | undefined,
+    take: number,
+    skip: number,
   ): Promise<BacklogItemResponse[] | { error: string }> {
     const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
       browserIdHeader,
-      undefined,
+      auth,
     );
     if (!subject) {
       return { error: 'Unauthorized' };
@@ -60,7 +56,7 @@ export class BacklogService {
       return { error: 'Student account not found' };
     }
 
-    const internalGroupId = this.getInternalGroupId(publicGroupId);
+    const internalGroupId = toInternalGroupId(publicGroupId);
 
     const isEnrolled = await this.enrollmentRepository.exist({
       where: {
@@ -81,6 +77,8 @@ export class BacklogService {
       order: {
         date: 'DESC',
       },
+      take,
+      skip,
     });
 
     return entries.map(entry => ({
@@ -96,11 +94,14 @@ export class BacklogService {
     req: Request,
     publicGroupId: number,
     browserIdHeader: string | undefined,
+    auth: string | undefined,
+    take: number,
+    skip: number,
   ): Promise<BacklogItemResponse[] | { error: string }> {
     const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
       browserIdHeader,
-      undefined,
+      auth,
     );
     if (!subject) {
       return { error: 'Unauthorized' };
@@ -113,15 +114,15 @@ export class BacklogService {
       return { error: 'Forbidden: Requires lecturer privileges' };
     }
 
-    const internalGroupId = this.getInternalGroupId(publicGroupId);
+    const internalGroupId = toInternalGroupId(publicGroupId);
 
-    if (primaryRole === LECTURER_ROLE_NAME) {
-      const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
-      if (!lecturerAccountId) {
-        return { error: 'Forbidden: Requires lecturer privileges' };
+    if (primaryRole !== SUPER_ROLE_NAME) {
+      const accountId = await this.userRolesService.findAccountIdForRole(subject.userId, primaryRole!);
+      if (!accountId) {
+        return { error: 'Forbidden: Requires privileges' };
       }
       const isOwner = await this.groupRepository.exist({
-        where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+        where: { id: internalGroupId, teacherAccountId: accountId },
       });
       if (!isOwner) {
         return { error: 'Forbidden: You are not the owner of this group' };
@@ -135,6 +136,8 @@ export class BacklogService {
       order: {
         date: 'DESC',
       },
+      take,
+      skip,
     });
 
     return entries.map(entry => ({
