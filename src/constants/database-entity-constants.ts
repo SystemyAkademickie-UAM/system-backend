@@ -34,6 +34,9 @@ export const EDUCATION_GROUP_VARCHAR_MAX_LENGTH = 255;
 /** Max length for `gamification.badges.name` / `gamification.ranks.name`. */
 export const GAMIFICATION_BADGE_NAME_MAX_LENGTH = 100;
 
+/** Max length for `gamification.item_categories.name`. */
+export const GAMIFICATION_ITEM_CATEGORY_NAME_MAX_LENGTH = 100;
+
 /** Max length for `gamification.ranks.name`. */
 export const GAMIFICATION_RANK_NAME_MAX_LENGTH = 100;
 
