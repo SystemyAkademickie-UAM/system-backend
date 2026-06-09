@@ -1,22 +1,28 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import type { Request } from 'express';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
-import { UserRolesService } from '../user-roles/user-roles-service';
 import { BacklogEntity } from '../database/entities/backlog.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
-import { STUDENT_ROLE_NAME, LECTURER_ROLE_NAME, ADMINISTRATOR_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
-import { GROUP_RESPONSE_GROUP_ID_OFFSET, toInternalGroupId } from '../constants/group-api-constants';
-export type BacklogItemResponse = {
+import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { UserRolesService } from '../user-roles/user-roles-service';
+import {
+        ADMINISTRATOR_ROLE_NAME,
+        LECTURER_ROLE_NAME,
+        STUDENT_ROLE_NAME,
+        SUPER_ROLE_NAME,
+} from '../constants/role-name-constants';
+import { toInternalGroupId } from '../constants/group-api-constants';
+
+export interface BacklogItemResponse {
   id: number;
   type: string;
   date: string;
   value: string | null;
   accountId: number;
-};
+}
 
 export type BacklogEventType = 
   | 'SHOP_PURCHASE'
@@ -61,42 +67,52 @@ export class BacklogService {
     });
     return repo.save(entry);
   }
+
   async getStudentBacklog(
     req: Request,
     publicGroupId: number,
     browserIdHeader: string | undefined,
-    auth: string | undefined,
+    authHeader: string | undefined,
     take: number,
     skip: number,
   ): Promise<BacklogItemResponse[] | { error: string }> {
     const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
       browserIdHeader,
-      auth,
+      authHeader,
     );
     if (!subject) {
       return { error: 'Unauthorized' };
+    }
+
+    const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
+    if (primaryRole !== STUDENT_ROLE_NAME) {
+      return { error: 'Forbidden: Requires privilege' };
     }
 
     const studentAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
       STUDENT_ROLE_NAME,
     );
-    if (!studentAccountId) {
-      return { error: 'Student account not found' };
+    if (studentAccountId === null) {
+      return { error: 'Forbidden: Student account not found' };
     }
 
-    const internalGroupId = toInternalGroupId(publicGroupId);
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
 
     const isEnrolled = await this.enrollmentRepository.exist({
       where: {
         groupId: internalGroupId,
-        studentAccountId: studentAccountId,
+        studentAccountId,
       },
     });
-
     if (!isEnrolled) {
-      return { error: 'Forbidden: Not enrolled in this group' };
+      return { error: 'Forbidden: You are not enrolled in this group' };
     }
 
     const entries = await this.backlogRepository.find({
@@ -111,12 +127,12 @@ export class BacklogService {
       skip,
     });
 
-    return entries.map(entry => ({
+    return entries.map((entry) => ({
       id: entry.id,
-      type: entry.type || 'UNKNOWN',
-      date: entry.date ? entry.date.toISOString() : new Date().toISOString(),
+      type: entry.type ?? 'UNKNOWN',
+      date: entry.date?.toISOString() ?? new Date().toISOString(),
       value: entry.value,
-      accountId: entry.accountId || studentAccountId,
+      accountId: entry.accountId ?? 0,
     }));
   }
 
@@ -124,35 +140,49 @@ export class BacklogService {
     req: Request,
     publicGroupId: number,
     browserIdHeader: string | undefined,
-    auth: string | undefined,
+    authHeader: string | undefined,
     take: number,
     skip: number,
   ): Promise<BacklogItemResponse[] | { error: string }> {
     const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
       browserIdHeader,
-      auth,
+      authHeader,
     );
     if (!subject) {
       return { error: 'Unauthorized' };
     }
 
     const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
-    const isLecturer = primaryRole !== null && [LECTURER_ROLE_NAME, ADMINISTRATOR_ROLE_NAME, SUPER_ROLE_NAME].includes(primaryRole);
-
-    if (!isLecturer) {
-      return { error: 'Forbidden: Requires lecturer privileges' };
+    const hasPrivileges =
+      primaryRole === SUPER_ROLE_NAME ||
+      primaryRole === ADMINISTRATOR_ROLE_NAME ||
+      primaryRole === LECTURER_ROLE_NAME;
+    if (!hasPrivileges) {
+      return { error: 'Forbidden: Requires privileges' };
     }
 
-    const internalGroupId = toInternalGroupId(publicGroupId);
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
 
-    if (primaryRole !== SUPER_ROLE_NAME) {
-      const accountId = await this.userRolesService.findAccountIdForRole(subject.userId, primaryRole!);
-      if (!accountId) {
+    if (primaryRole === LECTURER_ROLE_NAME || primaryRole === ADMINISTRATOR_ROLE_NAME) {
+      const accountId = await this.userRolesService.findAccountIdForRole(
+        subject.userId,
+        primaryRole,
+      );
+      if (accountId === null) {
         return { error: 'Forbidden: Requires privileges' };
       }
+
       const isOwner = await this.groupRepository.exist({
-        where: { id: internalGroupId, teacherAccountId: accountId },
+        where: {
+          id: internalGroupId,
+          teacherAccountId: accountId,
+        },
       });
       if (!isOwner) {
         return { error: 'Forbidden: You are not the owner of this group' };
@@ -170,12 +200,12 @@ export class BacklogService {
       skip,
     });
 
-    return entries.map(entry => ({
+    return entries.map((entry) => ({
       id: entry.id,
-      type: entry.type || 'UNKNOWN',
-      date: entry.date ? entry.date.toISOString() : new Date().toISOString(),
+      type: entry.type ?? 'UNKNOWN',
+      date: entry.date?.toISOString() ?? new Date().toISOString(),
       value: entry.value,
-      accountId: entry.accountId || 0,
+      accountId: entry.accountId ?? 0,
     }));
   }
 }

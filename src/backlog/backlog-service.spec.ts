@@ -166,18 +166,20 @@ describe('BacklogService', () => {
     it('should return error if student account not found', async () => {
       // Arrange
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
       userRolesService.findAccountIdForRole.mockResolvedValue(null);
 
       // Act
       const result = await service.getStudentBacklog({} as Request, 1, 'browser-id', undefined, 50, 0);
 
       // Assert
-      expect(result).toEqual({ error: 'Student account not found' });
+      expect(result).toEqual({ error: 'Forbidden: Student account not found' });
     });
 
     it('should return error if student is not enrolled', async () => {
       // Arrange
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       enrollmentRepository.exist.mockResolvedValue(false);
 
@@ -186,7 +188,7 @@ describe('BacklogService', () => {
       const result = await service.getStudentBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
 
       // Assert
-      expect(result).toEqual({ error: 'Forbidden: Not enrolled in this group' });
+      expect(result).toEqual({ error: 'Forbidden: You are not enrolled in this group' });
     });
 
     it('should return backlog items for valid student', async () => {
@@ -195,11 +197,12 @@ describe('BacklogService', () => {
       const internalGroupId = 5;
       const studentAccountId = 10;
       const mockDate = new Date();
-      
+
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
       userRolesService.findAccountIdForRole.mockResolvedValue(studentAccountId);
       enrollmentRepository.exist.mockResolvedValue(true);
-      
+
       const mockEntries = [
         { id: 1, groupId: internalGroupId, accountId: studentAccountId, type: 'SHOP_PURCHASE', date: mockDate, value: 'item_1' },
       ];
@@ -234,7 +237,7 @@ describe('BacklogService', () => {
       expect(result).toEqual({ error: 'Unauthorized' });
     });
 
-    it('should return error if user is not lecturer', async () => {
+    it('should return error if user role does not have privileges', async () => {
       // Arrange
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
@@ -244,7 +247,23 @@ describe('BacklogService', () => {
       const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
 
       // Assert
-      expect(result).toEqual({ error: 'Forbidden: Requires lecturer privileges' });
+      expect(result).toEqual({ error: 'Forbidden: Requires privileges' });
+    });
+
+    it('should return error if lecturer does not own the group', async () => {
+      // Arrange
+      const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 5;
+
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('lecturer');
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.exist.mockResolvedValue(false);
+
+      // Act
+      const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
+
+      // Assert
+      expect(result).toEqual({ error: 'Forbidden: You are not the owner of this group' });
     });
 
     it('should return group backlog items for valid lecturer', async () => {
@@ -252,12 +271,12 @@ describe('BacklogService', () => {
       const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 5;
       const internalGroupId = 5;
       const mockDate = new Date();
-      
+
       authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('lecturer');
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.exist.mockResolvedValue(true);
-      
+
       const mockEntries = [
         { id: 1, groupId: internalGroupId, accountId: 10, type: 'SHOP_PURCHASE', date: mockDate, value: 'item_1' },
       ];
@@ -267,11 +286,8 @@ describe('BacklogService', () => {
       const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
 
       // Assert
-      expect(backlogRepository.find).toHaveBeenCalledWith({
-        where: { groupId: internalGroupId },
-        order: { date: 'DESC' },
-        take: 50,
-        skip: 0,
+      expect(groupRepository.exist).toHaveBeenCalledWith({
+        where: { id: internalGroupId, teacherAccountId: 10 },
       });
       expect(result).toEqual([
         { id: 1, type: 'SHOP_PURCHASE', date: mockDate.toISOString(), value: 'item_1', accountId: 10 },
