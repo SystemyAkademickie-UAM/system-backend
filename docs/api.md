@@ -592,7 +592,8 @@ Cookie: maq_auth=<token>
   "lives": 3,
   "currency": "100",
   "currencyIcon": "coin",
-  "livesIcon": "heart"
+  "livesIcon": "heart",
+  "shopOpen": true
 }
 ```
 
