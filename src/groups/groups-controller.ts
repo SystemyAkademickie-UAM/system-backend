@@ -5,12 +5,16 @@ import { toInternalGroupId } from '../constants/group-api-constants';
 
 import { CreateBadgeDto } from '../gamification/dto/create-badge.dto';
 import { CreateItemCategoryDto } from '../gamification/dto/create-item-category.dto';
+import { CreateShopItemDto } from '../gamification/dto/create-shop-item.dto';
+import { CreateShopItemFromTemplateDto } from '../gamification/dto/create-shop-item-from-template.dto';
 import { UpdateBadgeDto } from '../gamification/dto/update-badge.dto';
 import { UpdateItemCategoryDto } from '../gamification/dto/update-item-category.dto';
+import { UpdateShopItemDto } from '../gamification/dto/update-shop-item.dto';
 import { CreateRankDto } from '../gamification/dto/create-rank.dto';
 import { UpdateRankDto } from '../gamification/dto/update-rank.dto';
 import { BadgesService } from '../gamification/badges-service';
 import { ItemCategoriesService } from '../gamification/item-categories-service';
+import { ShopItemsService } from '../gamification/shop-items-service';
 import { RanksService } from '../gamification/ranks-service';
 import { CreateEnrollmentCodeDto } from './dto/create-enrollment-code.dto';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
@@ -33,6 +37,7 @@ export class GroupsController {
     private readonly groupsEnrollmentService: GroupsEnrollmentService,
     private readonly badgesService: BadgesService,
     private readonly itemCategoriesService: ItemCategoriesService,
+    private readonly shopItemsService: ShopItemsService,
     private readonly ranksService: RanksService,
     private readonly enrollmentCodesService: EnrollmentCodesService,
   ) {}
@@ -368,6 +373,62 @@ export class GroupsController {
       categoryId,
       body?.auth,
     );
+  }
+
+  // ========================================
+  // SHOP ITEMS CRUD
+  // ========================================
+
+  @Get(':groupId/shop-items')
+  @HttpCode(HttpStatus.OK)
+  getShopItems(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Query('auth') auth: string | undefined,
+  ) {
+    return this.shopItemsService.getItemsForGroup(req, toInternalGroupId(publicGroupId), auth);
+  }
+
+  @Post(':groupId/shop-items')
+  @HttpCode(HttpStatus.CREATED)
+  createShopItem(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Body() dto: CreateShopItemDto,
+  ) {
+    return this.shopItemsService.createItem(req, toInternalGroupId(publicGroupId), dto);
+  }
+
+  @Post(':groupId/shop-items/from-template')
+  @HttpCode(HttpStatus.CREATED)
+  createShopItemFromTemplate(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Body() dto: CreateShopItemFromTemplateDto,
+  ) {
+    return this.shopItemsService.createItemFromTemplate(req, toInternalGroupId(publicGroupId), dto);
+  }
+
+  @Patch(':groupId/shop-items/:itemId')
+  @HttpCode(HttpStatus.OK)
+  updateShopItem(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @Req() req: Request,
+    @Body() dto: UpdateShopItemDto,
+  ) {
+    return this.shopItemsService.updateItem(req, toInternalGroupId(publicGroupId), itemId, dto);
+  }
+
+  @Delete(':groupId/shop-items/:itemId')
+  @HttpCode(HttpStatus.OK)
+  deleteShopItem(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @Req() req: Request,
+    @Body() body: { auth?: string },
+  ) {
+    return this.shopItemsService.deleteItem(req, toInternalGroupId(publicGroupId), itemId, body?.auth);
   }
 
   // ========================================
