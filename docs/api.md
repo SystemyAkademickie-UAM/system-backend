@@ -567,6 +567,65 @@ Cookie: maq_auth=<token>
 
 ---
 
+## Backlog
+
+Retrieve activity and event logs for a specific group.
+
+### Get Student Backlog (Student)
+
+**Endpoint:** `GET /api/groups/:groupId/backlog/me`
+
+Retrieves the recent backlog history for the currently logged-in student in a given group.
+
+**Query Parameters:**
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `auth` | string (optional) | Access token (can also be passed via `maq_auth` cookie). |
+| `take` | integer (optional) | Number of items to retrieve (pagination limit, default 50). |
+| `skip` | integer (optional) | Number of items to skip (pagination offset, default 0). |
+
+**Headers:**
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Browser binding ID for the strong session. |
+
+**Response:** `200 OK` with JSON array of backlog items.
+
+```json
+[
+  {
+    "id": 12,
+    "type": "SHOP_PURCHASE",
+    "date": "2026-06-08T10:00:00.000Z",
+    "value": "health_potion",
+    "accountId": 42
+  }
+]
+```
+
+### Get Group Backlog (Lecturer / Admin)
+
+**Endpoint:** `GET /api/groups/:groupId/backlog`
+
+Retrieves the recent backlog history of all members in a given group.
+Requires `SUPER` role or ownership of the group (`teacherAccountId`).
+
+**Query Parameters:**
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `auth` | string (optional) | Access token (can also be passed via `maq_auth` cookie). |
+| `take` | integer (optional) | Number of items to retrieve (pagination limit, default 50). |
+| `skip` | integer (optional) | Number of items to skip (pagination offset, default 0). |
+
+**Headers:**
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Browser binding ID for the strong session. |
+
+**Response:** `200 OK` with JSON array of backlog items.
+
+---
+
 ## Stages (lecturer)
 
 Manage stages within groups. Each stage belongs to a group and contains activities.
