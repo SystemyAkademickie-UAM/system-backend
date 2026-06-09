@@ -115,7 +115,7 @@ export type BacklogItemResponse = {
                         const isOwner = await this.groupRepository.exist({
                                       where: {
                                                       id: groupId,
-                                                      lecturerId: accountId,
+                                                      teacherAccountId: accountId,
                                       },
                         });
                         if (!isOwner) {
