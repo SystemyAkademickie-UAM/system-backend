@@ -859,6 +859,49 @@ Grant: `currency` and `totalEarned` increase by `rewardAmount`. Revoke: `currenc
 
 ---
 
+## Shop item categories (lecturer)
+
+Group-scoped categories for shop catalog items (`gamification.item_categories`). Items reference a category via `gamification.items.category_id` (nullable). Item images use `gamification.items.image_ref` — a drive UUID from `POST /api/drive`, served at `GET /api/drive/:driveRef` (same as group `imageRef` / `bannerId`).
+
+**Endpoint:** `GET /api/groups/:groupId/item-categories`
+
+**Auth:** **Soft** token resolution — `maq_auth` cookie **or** query `auth`; **`X-Browser-ID` is not required**. Caller must be the **group owner (lecturer)** or an **enrolled student** in that group.
+
+**Response:** `200 OK` — array of categories ordered by `displayOrder`, then `name` (camelCase fields).
+
+**Endpoint:** `POST /api/groups/:groupId/item-categories`
+
+**Auth:** Soft token + **lecturer** role; caller must **own** the group (`education.groups.teacher_account_id`).
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | — | Opaque bearer when not using cookie. |
+| `name` | string | required | Category name (unique per group). |
+| `description` | string (optional) | — | Optional description. |
+| `displayOrder` | integer (optional) | — | Sort order in shop UI. |
+
+**Response:** `201 Created` — persisted category entity.
+
+**Errors:** `403 Forbidden` (not owner / not enrolled); `404 Not Found` (group); `409 Conflict` (duplicate name in group).
+
+**Endpoint:** `PATCH /api/groups/:groupId/item-categories/:categoryId`
+
+**Auth:** Soft token + **lecturer** who **owns** the group.
+
+**Request body:** optional `auth`, `name`, `description`, `displayOrder`.
+
+**Response:** `200 OK` — updated category.
+
+**Endpoint:** `DELETE /api/groups/:groupId/item-categories/:categoryId`
+
+**Auth:** Soft token + **lecturer** who **owns** the group.
+
+Deletes the category. Items in the category get `category_id = NULL`. Response: `{ "deleted": true }`.
+
+---
+
 ## Ranks (lecturer)
 
 Creates a rank definition in `gamification.ranks` for a course group.

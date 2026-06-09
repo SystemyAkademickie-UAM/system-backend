@@ -3,11 +3,14 @@ import type { Request } from 'express';
 
 import { toInternalGroupId } from '../constants/group-api-constants';
 
-import { BadgesService } from '../gamification/badges-service';
 import { CreateBadgeDto } from '../gamification/dto/create-badge.dto';
+import { CreateItemCategoryDto } from '../gamification/dto/create-item-category.dto';
 import { UpdateBadgeDto } from '../gamification/dto/update-badge.dto';
+import { UpdateItemCategoryDto } from '../gamification/dto/update-item-category.dto';
 import { CreateRankDto } from '../gamification/dto/create-rank.dto';
 import { UpdateRankDto } from '../gamification/dto/update-rank.dto';
+import { BadgesService } from '../gamification/badges-service';
+import { ItemCategoriesService } from '../gamification/item-categories-service';
 import { RanksService } from '../gamification/ranks-service';
 import { CreateEnrollmentCodeDto } from './dto/create-enrollment-code.dto';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
@@ -29,6 +32,7 @@ export class GroupsController {
     private readonly groupsService: GroupsService,
     private readonly groupsEnrollmentService: GroupsEnrollmentService,
     private readonly badgesService: BadgesService,
+    private readonly itemCategoriesService: ItemCategoriesService,
     private readonly ranksService: RanksService,
     private readonly enrollmentCodesService: EnrollmentCodesService,
   ) {}
@@ -292,6 +296,78 @@ export class GroupsController {
     @Body() body: { auth?: string },
   ) {
     return this.badgesService.deleteBadge(req, toInternalGroupId(publicGroupId), badgeId, body?.auth);
+  }
+
+  // ========================================
+  // SHOP ITEM CATEGORIES CRUD
+  // ========================================
+
+  /**
+   * Returns all shop item categories for the given course group.
+   * GET /groups/:groupId/item-categories
+   */
+  @Get(':groupId/item-categories')
+  @HttpCode(HttpStatus.OK)
+  getItemCategories(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Query('auth') auth: string | undefined,
+  ) {
+    return this.itemCategoriesService.getCategoriesForGroup(req, toInternalGroupId(publicGroupId), auth);
+  }
+
+  /**
+   * Creates a shop item category for the given course group.
+   * POST /groups/:groupId/item-categories
+   */
+  @Post(':groupId/item-categories')
+  @HttpCode(HttpStatus.CREATED)
+  createItemCategory(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Body() dto: CreateItemCategoryDto,
+  ) {
+    return this.itemCategoriesService.createCategory(req, toInternalGroupId(publicGroupId), dto);
+  }
+
+  /**
+   * Updates a shop item category.
+   * PATCH /groups/:groupId/item-categories/:categoryId
+   */
+  @Patch(':groupId/item-categories/:categoryId')
+  @HttpCode(HttpStatus.OK)
+  updateItemCategory(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @Req() req: Request,
+    @Body() dto: UpdateItemCategoryDto,
+  ) {
+    return this.itemCategoriesService.updateCategory(
+      req,
+      toInternalGroupId(publicGroupId),
+      categoryId,
+      dto,
+    );
+  }
+
+  /**
+   * Deletes a shop item category. Items in the category become uncategorized.
+   * DELETE /groups/:groupId/item-categories/:categoryId
+   */
+  @Delete(':groupId/item-categories/:categoryId')
+  @HttpCode(HttpStatus.OK)
+  deleteItemCategory(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @Req() req: Request,
+    @Body() body: { auth?: string },
+  ) {
+    return this.itemCategoriesService.deleteCategory(
+      req,
+      toInternalGroupId(publicGroupId),
+      categoryId,
+      body?.auth,
+    );
   }
 
   // ========================================
