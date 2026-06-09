@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { QueryFailedError, Repository } from 'typeorm';
@@ -324,11 +324,7 @@ export class GroupsService {
       } else {
         this.logger.error(`updateShopStatus failed: ${String(err)}`);
       }
-      return {
-        statusCode: GROUP_API_JSON_STATUS_OK,
-        group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID,
-        updated: false,
-      };
+      throw new InternalServerErrorException('Database update failed');
     }
   }
 
