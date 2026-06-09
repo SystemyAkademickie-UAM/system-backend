@@ -114,6 +114,41 @@ describe('BacklogService', () => {
       // Act & Assert
       await expect(service.logEvent(9999, 10, 'SHOP_PURCHASE')).rejects.toThrow('Foreign key violation');
     });
+
+    it('should use manager.getRepository when EntityManager is provided', async () => {
+      // Arrange
+      const mockEntry = { groupId: 5, accountId: 10, type: 'SHOP_PURCHASE', value: 'item_1' };
+      const savedEntry = { id: 3, ...mockEntry, date: new Date() };
+
+      const managerRepo = {
+        create: jest.fn().mockReturnValue(mockEntry),
+        save: jest.fn().mockResolvedValue(savedEntry),
+      };
+
+      const mockManager = {
+        getRepository: jest.fn().mockReturnValue(managerRepo),
+      } as unknown as import('typeorm').EntityManager;
+
+      // Act
+      const result = await service.logEvent(5, 10, 'SHOP_PURCHASE', 'item_1', mockManager);
+
+      // Assert — manager.getRepository was called with BacklogEntity
+      expect(mockManager.getRepository).toHaveBeenCalledWith(BacklogEntity);
+
+      // Assert — create/save ran on the manager's repo, NOT the default injected repo
+      expect(managerRepo.create).toHaveBeenCalledWith({
+        groupId: 5,
+        accountId: 10,
+        type: 'SHOP_PURCHASE',
+        value: 'item_1',
+      });
+      expect(managerRepo.save).toHaveBeenCalledWith(mockEntry);
+      expect(result).toEqual(savedEntry);
+
+      // Assert — the default backlogRepository was NOT used
+      expect(backlogRepository.create).not.toHaveBeenCalled();
+      expect(backlogRepository.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('getStudentBacklog', () => {
