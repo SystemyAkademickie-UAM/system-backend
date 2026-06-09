@@ -10,142 +10,139 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { STUDENT_ROLE_NAME, LECTURER_ROLE_NAME, ADMINISTRATOR_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET, toInternalGroupId } from '../constants/group-api-constants';
+
 export type BacklogItemResponse = {
-  id: number;
-  type: string;
-  date: string;
-  value: string | null;
-  accountId: number;
+    id: number;
+    type: string;
+    date: string;
+    value: string | null;
+    accountId: number;
 };
 
 @Injectable()
-export class BacklogService {
-  constructor(
-    @InjectRepository(BacklogEntity)
-    private readonly backlogRepository: Repository<BacklogEntity>,
-    @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>,
-    @InjectRepository(EnrollmentEntity)
-    private readonly enrollmentRepository: Repository<EnrollmentEntity>,
-    private readonly authTokenSessionService: AuthTokenSessionService,
-    private readonly userRolesService: UserRolesService,
-  ) {}
+  export class BacklogService {
+    constructor(
+          @InjectRepository(BacklogEntity)
+          private readonly backlogRepository: Repository<BacklogEntity>,
+          @InjectRepository(GroupEntity)
+          private readonly groupRepository: Repository<GroupEntity>,
+          @InjectRepository(EnrollmentEntity)
+          private readonly enrollmentRepository: Repository<EnrollmentEntity>,
+          private readonly authTokenSessionService: AuthTokenSessionService,
+          private readonly userRolesService: UserRolesService,
+        ) {}
 
-  async getStudentBacklog(
-    req: Request,
-    publicGroupId: number,
-    browserIdHeader: string | undefined,
-    auth: string | undefined,
-    take: number,
-    skip: number,
-  ): Promise<BacklogItemResponse[] | { error: string }> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      auth,
-    );
-    if (!subject) {
-      return { error: 'Unauthorized' };
-    }
+  public async getStudentBacklog(
+        req: Request,
+        publicGroupId: number,
+        browserIdHeader: string | undefined,
+        authHeader: string | undefined,
+        take: number,
+        skip: number,
+      ): Promise<BacklogItemResponse[] | { error: string }> {
+        const groupId = toInternalGroupId(publicGroupId);
 
-    const studentAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      STUDENT_ROLE_NAME,
-    );
-    if (!studentAccountId) {
-      return { error: 'Student account not found' };
-    }
+      const subject = await this.authTokenSessionService.getSubjectAndGroupFromRequest(req, browserIdHeader, authHeader);
+        if (!subject) {
+                return { error: 'Forbidden: Requires privilege' };
+        }
 
-    const internalGroupId = toInternalGroupId(publicGroupId);
+      const primaryRole = subject.primaryRole;
+        if (primaryRole !== STUDENT_ROLE_NAME) {
+                return { error: 'Forbidden: Requires student role' };
+        }
 
-    const isEnrolled = await this.enrollmentRepository.exist({
-      where: {
-        groupId: internalGroupId,
-        studentAccountId: studentAccountId,
-      },
-    });
+      const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
+        if (!studentAccountId) {
+                return { error: 'Forbidden: Student account not found' };
+        }
 
-    if (!isEnrolled) {
-      return { error: 'Forbidden: Not enrolled in this group' };
-    }
+      const isEnrolled = await this.enrollmentRepository.exist({
+              where: {
+                        groupId,
+                        accountId: studentAccountId,
+              },
+      });
 
-    const entries = await this.backlogRepository.find({
-      where: {
-        groupId: internalGroupId,
-        accountId: studentAccountId,
-      },
-      order: {
-        date: 'DESC',
-      },
-      take,
-      skip,
-    });
+      if (!isEnrolled) {
+              return { error: 'Forbidden: You are not enrolled in this group' };
+      }
 
-    return entries.map(entry => ({
-      id: entry.id,
-      type: entry.type || 'UNKNOWN',
-      date: entry.date ? entry.date.toISOString() : new Date().toISOString(),
-      value: entry.value,
-      accountId: entry.accountId || studentAccountId,
-    }));
+      const items = await this.backlogRepository.find({
+              where: {
+                        groupId,
+                        accountId: studentAccountId,
+              },
+              order: {
+                        date: 'DESC',
+              },
+              take,
+              skip,
+      });
+
+      return items.map((item) => ({
+              id: item.id,
+              type: item.type,
+              date: item.date.toISOString(),
+              value: item.value,
+              accountId: item.accountId,
+      }));
   }
 
-  async getGroupBacklog(
-    req: Request,
-    publicGroupId: number,
-    browserIdHeader: string | undefined,
-    auth: string | undefined,
-    take: number,
-    skip: number,
-  ): Promise<BacklogItemResponse[] | { error: string }> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      auth,
-    );
-    if (!subject) {
-      return { error: 'Unauthorized' };
-    }
+  public async getGroupBacklog(
+        req: Request,
+        publicGroupId: number,
+        browserIdHeader: string | undefined,
+        authHeader: string | undefined,
+        take: number,
+        skip: number,
+      ): Promise<BacklogItemResponse[] | { error: string }> {
+        const groupId = toInternalGroupId(publicGroupId);
 
-    const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
-    const isLecturer = primaryRole !== null && [LECTURER_ROLE_NAME, ADMINISTRATOR_ROLE_NAME, SUPER_ROLE_NAME].includes(primaryRole);
+      const subject = await this.authTokenSessionService.getSubjectAndGroupFromRequest(req, browserIdHeader, authHeader);
+        if (!subject) {
+                return { error: 'Forbidden: Requires privilege' };
+        }
 
-    if (!isLecturer) {
-      return { error: 'Forbidden: Requires lecturer privileges' };
-    }
+      const primaryRole = subject.primaryRole;
+        if (primaryRole !== SUPER_ROLE_NAME) {
+                const accountId = await this.userRolesService.findAccountIdForRole(subject.userId, primaryRole!);
+                if (!accountId) {
+                          return { error: 'Forbidden: Requires privileges' };
+                }
 
-    const internalGroupId = toInternalGroupId(publicGroupId);
+          if (primaryRole === LECTURER_ROLE_NAME) {
+                    const isOwner = await this.groupRepository.exist({
+                                where: {
+                                              id: groupId,
+                                              lecturerId: accountId,
+                                },
+                    });
+                    if (!isOwner) {
+                                return { error: 'Forbidden: You are not the owner of this group' };
+                    }
+          } else if (primaryRole !== ADMINISTRATOR_ROLE_NAME) {
+                    return { error: 'Forbidden: Requires privileges' };
+          }
+        }
 
-    if (primaryRole !== SUPER_ROLE_NAME) {
-      const accountId = await this.userRolesService.findAccountIdForRole(subject.userId, primaryRole!);
-      if (!accountId) {
-        return { error: 'Forbidden: Requires privileges' };
-      }
-      const isOwner = await this.groupRepository.exist({
-        where: { id: internalGroupId, teacherAccountId: accountId },
+      const items = await this.backlogRepository.find({
+              where: {
+                        groupId,
+              },
+              order: {
+                        date: 'DESC',
+              },
+              take,
+              skip,
       });
-      if (!isOwner) {
-        return { error: 'Forbidden: You are not the owner of this group' };
-      }
-    }
 
-    const entries = await this.backlogRepository.find({
-      where: {
-        groupId: internalGroupId,
-      },
-      order: {
-        date: 'DESC',
-      },
-      take,
-      skip,
-    });
-
-    return entries.map(entry => ({
-      id: entry.id,
-      type: entry.type || 'UNKNOWN',
-      date: entry.date ? entry.date.toISOString() : new Date().toISOString(),
-      value: entry.value,
-      accountId: entry.accountId || 0,
-    }));
+      return items.map((item) => ({
+              id: item.id,
+              type: item.type,
+              date: item.date.toISOString(),
+              value: item.value,
+              accountId: item.accountId,
+      }));
   }
 }
