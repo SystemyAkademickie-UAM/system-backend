@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
@@ -8,14 +8,21 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import { UserRolesService } from '../user-roles/user-roles-service';
-import { BacklogItemResponse } from './backlog-controller';
 import {
         ADMINISTRATOR_ROLE_NAME,
         LECTURER_ROLE_NAME,
         STUDENT_ROLE_NAME,
         SUPER_ROLE_NAME,
 } from '../constants/role-name-constants';
-import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
+import { toInternalGroupId } from '../constants/group-api-constants';
+
+export interface BacklogItemResponse {
+  id: number;
+  type: string;
+  date: string;
+  value: string | null;
+  accountId: number;
+}
 
 @Injectable()
       export class BacklogService {
@@ -44,7 +51,7 @@ import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants
                         authHeader,
                       );
             if (!subject) {
-                        return { error: 'Forbidden: Requires privilege' };
+                        return { error: 'Unauthorized' };
             }
 
           const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
@@ -60,11 +67,16 @@ import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants
                         return { error: 'Forbidden: Student account not found' };
             }
 
-          const groupId = publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET;
+          let internalGroupId: number;
+          try {
+            internalGroupId = toInternalGroupId(publicGroupId);
+          } catch {
+            throw new BadRequestException('Invalid group ID');
+          }
 
           const isEnrolled = await this.enrollmentRepository.exist({
                       where: {
-                                    groupId,
+                                    groupId: internalGroupId,
                                     studentAccountId,
                       },
           });
@@ -74,7 +86,7 @@ import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants
 
           const entries = await this.backlogRepository.find({
                       where: {
-                                    groupId,
+                                    groupId: internalGroupId,
                                     accountId: studentAccountId,
                       },
                       order: {
@@ -86,9 +98,9 @@ import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants
 
           return entries.map((entry) => ({
                       id: entry.id,
-                      type: entry.type ?? '',
+                      type: entry.type ?? 'UNKNOWN',
                       date: entry.date?.toISOString() ?? new Date().toISOString(),
-                      value: entry.value ?? '',
+                      value: entry.value,
                       accountId: entry.accountId ?? 0,
           }));
   }
@@ -107,7 +119,7 @@ import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants
                         authHeader,
                       );
             if (!subject) {
-                        return { error: 'Forbidden: Requires privilege' };
+                        return { error: 'Unauthorized' };
             }
 
           const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
@@ -119,21 +131,26 @@ import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants
                         return { error: 'Forbidden: Requires privileges' };
             }
 
-          const groupId = publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET;
+          let internalGroupId: number;
+          try {
+            internalGroupId = toInternalGroupId(publicGroupId);
+          } catch {
+            throw new BadRequestException('Invalid group ID');
+          }
 
-          if (primaryRole === LECTURER_ROLE_NAME) {
-                      const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+          if (primaryRole === LECTURER_ROLE_NAME || primaryRole === ADMINISTRATOR_ROLE_NAME) {
+                      const accountId = await this.userRolesService.findAccountIdForRole(
                                     subject.userId,
-                                    LECTURER_ROLE_NAME,
+                                    primaryRole,
                                   );
-                      if (lecturerAccountId === null) {
+                      if (accountId === null) {
                                     return { error: 'Forbidden: Requires privileges' };
                       }
 
               const isOwner = await this.groupRepository.exist({
                             where: {
-                                            id: groupId,
-                                            teacherAccountId: lecturerAccountId,
+                                            id: internalGroupId,
+                                            teacherAccountId: accountId,
                             },
               });
                       if (!isOwner) {
@@ -143,7 +160,7 @@ import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants
 
           const entries = await this.backlogRepository.find({
                       where: {
-                                    groupId,
+                                    groupId: internalGroupId,
                       },
                       order: {
                                     date: 'DESC',
@@ -154,9 +171,9 @@ import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants
 
           return entries.map((entry) => ({
                       id: entry.id,
-                      type: entry.type ?? '',
+                      type: entry.type ?? 'UNKNOWN',
                       date: entry.date?.toISOString() ?? new Date().toISOString(),
-                      value: entry.value ?? '',
+                      value: entry.value,
                       accountId: entry.accountId ?? 0,
           }));
   }

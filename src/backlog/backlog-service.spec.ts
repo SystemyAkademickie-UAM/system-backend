@@ -74,7 +74,7 @@ describe('BacklogService', () => {
                             const result = await service.getStudentBacklog({} as Request, 1, 'browser-id', undefined, 50, 0);
 
                             // Assert
-                            expect(result).toEqual({ error: 'Forbidden: Requires privilege' });
+                            expect(result).toEqual({ error: 'Unauthorized' });
                    });
 
                         it('should return error if student account not found', async () => {
@@ -148,7 +148,7 @@ describe('BacklogService', () => {
                              const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
 
                             // Assert
-                            expect(result).toEqual({ error: 'Forbidden: Requires privilege' });
+                            expect(result).toEqual({ error: 'Unauthorized' });
                    });
 
                         it('should return error if user role does not have privileges', async () => {
