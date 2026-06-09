@@ -12,6 +12,13 @@ import {
 import type { Request } from 'express';
 import { BacklogService } from './backlog-service';
 
+export interface BacklogItemResponse {
+      id: number;
+      type: string;
+      date: string;
+      value: string;
+      accountId: number;
+}
 @Controller('groups')
   export class BacklogController {
     constructor(private readonly backlogService: BacklogService) {}
