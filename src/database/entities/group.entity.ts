@@ -42,4 +42,7 @@ export class GroupEntity {
 
   @Column({ name: 'lives_icon', type: 'varchar', length: EDUCATION_GROUP_VARCHAR_MAX_LENGTH, nullable: true })
   livesIcon: string | null;
+
+  @Column({ name: 'shop_open', type: 'boolean', default: true })
+  shopOpen: boolean;
 }

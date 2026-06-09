@@ -19,6 +19,7 @@ import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { JoinGroupQueryDto } from './dto/join-group-query.dto';
 import { UpdateEnrollmentCodeDto } from './dto/update-enrollment-code.dto';
 import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
+import { UpdateShopStatusDto } from './dto/update-shop-status.dto';
 import { EnrollmentCodesService } from './enrollment-codes-service';
 import { EnrollGroupResponseBody, GroupsEnrollmentService } from './groups-enrollment-service';
 import { CreateGroupResponseBody, GenerateCodeResponseBody, GetGroupsCatalogResponseBody, GetUserGroupsResponseBody, GroupPreviewResponseBody, GroupsService, UpdateGroupResponseBody } from './groups-service';
@@ -107,6 +108,21 @@ export class GroupsController {
     @Body() body: UpdateGroupBodyDto,
   ): Promise<UpdateGroupResponseBody> {
     return this.groupsService.updateGroup(req, publicGroupId, body, browserId);
+  }
+
+  /**
+   * Updates the shop open/closed status for the group.
+   * PATCH /groups/:groupId/shop-status
+   */
+  @Patch(':groupId/shop-status')
+  @HttpCode(HttpStatus.OK)
+  updateShopStatus(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+    @Body() body: UpdateShopStatusDto,
+  ) {
+    return this.groupsService.updateShopStatus(req, publicGroupId, body, browserId);
   }
 
   /**
