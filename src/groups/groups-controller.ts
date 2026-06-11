@@ -15,6 +15,7 @@ import { UpdateRankDto } from '../gamification/dto/update-rank.dto';
 import { BadgesService } from '../gamification/badges-service';
 import { ItemCategoriesService } from '../gamification/item-categories-service';
 import { ShopItemsService } from '../gamification/shop-items-service';
+import { ShopStudentService } from '../gamification/shop-student-service';
 import { RanksService } from '../gamification/ranks-service';
 import { CreateEnrollmentCodeDto } from './dto/create-enrollment-code.dto';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
@@ -39,6 +40,7 @@ export class GroupsController {
     private readonly badgesService: BadgesService,
     private readonly itemCategoriesService: ItemCategoriesService,
     private readonly shopItemsService: ShopItemsService,
+    private readonly shopStudentService: ShopStudentService,
     private readonly ranksService: RanksService,
     private readonly enrollmentCodesService: EnrollmentCodesService,
   ) {}
@@ -445,6 +447,42 @@ export class GroupsController {
     @Body() body: { auth?: string },
   ) {
     return this.shopItemsService.deleteItem(req, toInternalGroupId(publicGroupId), itemId, body?.auth);
+  }
+
+  // ========================================
+  // SHOP ITEMS - STUDENT ACTIONS
+  // ========================================
+
+  @Post(':groupId/shop-items/:itemId/buy')
+  @HttpCode(HttpStatus.OK)
+  buyShopItem(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @Req() req: Request,
+    @Body() body: { auth?: string },
+  ) {
+    return this.shopStudentService.buyItem(req, toInternalGroupId(publicGroupId), itemId, body?.auth);
+  }
+
+  @Get(':groupId/inventory')
+  @HttpCode(HttpStatus.OK)
+  getStudentInventory(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Query('auth') auth: string | undefined,
+  ) {
+    return this.shopStudentService.getInventory(req, toInternalGroupId(publicGroupId), auth);
+  }
+
+  @Post(':groupId/inventory/:itemId/use')
+  @HttpCode(HttpStatus.OK)
+  useInventoryItem(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @Req() req: Request,
+    @Body() body: { auth?: string },
+  ) {
+    return this.shopStudentService.useItem(req, toInternalGroupId(publicGroupId), itemId, body?.auth);
   }
 
   // ========================================

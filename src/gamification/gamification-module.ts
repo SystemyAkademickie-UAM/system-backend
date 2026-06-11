@@ -11,12 +11,15 @@ import { RankEntity } from '../database/entities/rank.entity';
 import { ItemEntity } from '../database/entities/item.entity';
 import { ShopListingEntity } from '../database/entities/shop-listing.entity';
 import { DefaultItemTemplateEntity } from '../database/entities/default-item-template.entity';
+import { EarnedItemEntity } from '../database/entities/earned-item.entity';
 import { UserRolesModule } from '../user-roles/user-roles-module';
 import { BadgesService } from './badges-service';
 import { ItemCategoriesService } from './item-categories-service';
 import { RanksService } from './ranks-service';
 import { ShopItemsService } from './shop-items-service';
 import { ShopTemplatesService } from './shop-templates-service';
+import { ShopStudentService } from './shop-student-service';
+import { BacklogModule } from '../backlog/backlog-module';
 
 import { IconsController } from './icons-controller';
 import { ShopTemplatesController } from './shop-templates-controller';
@@ -37,12 +40,14 @@ import { ShopTemplatesController } from './shop-templates-controller';
       ShopListingEntity,
       DefaultItemTemplateEntity,
       EnrollmentEntity,
+      EarnedItemEntity,
     ]),
     AuthTokenSessionModule,
     UserRolesModule,
+    BacklogModule,
   ],
   controllers: [IconsController, ShopTemplatesController],
-  providers: [BadgesService, RanksService, ItemCategoriesService, ShopItemsService, ShopTemplatesService],
-  exports: [BadgesService, RanksService, ItemCategoriesService, ShopItemsService, ShopTemplatesService],
+  providers: [BadgesService, RanksService, ItemCategoriesService, ShopItemsService, ShopTemplatesService, ShopStudentService],
+  exports: [BadgesService, RanksService, ItemCategoriesService, ShopItemsService, ShopTemplatesService, ShopStudentService],
 })
 export class GamificationModule {}
