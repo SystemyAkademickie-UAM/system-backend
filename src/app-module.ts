@@ -1,6 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule, seconds } from '@nestjs/throttler';
 
+import {
+  AUTH_THROTTLE_DEFAULT_LIMIT,
+  AUTH_THROTTLE_TTL_SECONDS,
+} from './constants/throttler-constants';
 import { SamlModule } from './auth/saml/saml.module';
 import { CounterModule } from './counter/counter-module';
 import { DatabaseModule } from './database/database-module';
@@ -14,10 +19,15 @@ import { ActivitiesModule } from './activities/activities-module';
 import { StudentManagementModule } from './student-management/student-management-module';
 import { ProfileModule } from './profile/profile-module';
 import { AdminModule } from './admin/admin-module';
+import { BacklogModule } from './backlog/backlog-module';
+import { BannersModule } from './banners/banners-module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ThrottlerModule.forRoot([
+      { ttl: seconds(AUTH_THROTTLE_TTL_SECONDS), limit: AUTH_THROTTLE_DEFAULT_LIMIT },
+    ]),
     DatabaseModule,
     SamlModule,
     LoginModule,
@@ -31,6 +41,8 @@ import { AdminModule } from './admin/admin-module';
     StudentProfileModule,
     StudentManagementModule,
     ProfileModule,
+    BacklogModule,
+    BannersModule,
   ],
 })
 export class AppModule {}

@@ -1,22 +1,52 @@
 {
-  "users": [
-    {
-      "username": "student",
-      "password": "student",
-      "uid": "student",
-      "eduPersonAffiliation": ["student", "member"],
-      "eduPersonPrincipalName": "student@localhost.invalid",
-      "mail": "student@localhost.invalid",
-      "displayName": "Local Dev Student"
-    },
-    {
-      "username": "lecturer",
-      "password": "lecturer",
-      "uid": "lecturer",
-      "eduPersonAffiliation": ["faculty", "member"],
-      "eduPersonPrincipalName": "lecturer@localhost.invalid",
-      "mail": "lecturer@localhost.invalid",
-      "displayName": "Local Dev Lecturer"
-    }
-  ]
+    "users": [
+        {
+            "username": "student",
+            "password": "student",
+            "uid": "student",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student@localhost.invalid",
+            "mail": "student@localhost.invalid",
+            "displayName": "Local Dev Student"
+        },
+        {
+            "username": "lecturer",
+            "password": "lecturer",
+            "uid": "lecturer",
+            "eduPersonAffiliation": [
+                "faculty",
+                "member"
+            ],
+            "eduPersonPrincipalName": "lecturer@localhost.invalid",
+            "mail": "lecturer@localhost.invalid",
+            "displayName": "Local Dev Lecturer"
+        },
+        {
+            "username": "admin",
+            "password": "admin",
+            "uid": "admin",
+            "eduPersonAffiliation": [
+                "staff",
+                "member"
+            ],
+            "eduPersonPrincipalName": "administrator@localhost.invalid",
+            "mail": "administrator@localhost.invalid",
+            "displayName": "Administrator"
+        },
+        {
+            "username": "super",
+            "password": "super",
+            "uid": "super",
+            "eduPersonAffiliation": [
+                "staff",
+                "member"
+            ],
+            "eduPersonPrincipalName": "superadmin@localhost.invalid",
+            "mail": "superadmin@localhost.invalid",
+            "displayName": "super"
+        }
+    ]
 }

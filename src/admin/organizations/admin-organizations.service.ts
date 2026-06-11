@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -15,11 +14,9 @@ import {
   parseCertificateValidity,
 } from '../../auth/saml/x509-cert.util';
 import { fetchIdpMetadata } from '../../auth/saml/idp-metadata.util';
-import { AuthTokenSessionService } from '../../auth/api-token/auth-token-session-service';
-import { SUPER_ROLE_NAME } from '../../constants/role-name-constants';
+import { AdminAccessService } from '../admin-access.service';
 import { IdpCertificateEntity } from '../../database/entities/idp-certificate.entity';
 import { OrganizationEntity } from '../../database/entities/organization.entity';
-import { UserRolesService } from '../../user-roles/user-roles-service';
 import {
   CreateOrganizationDto,
   UpdateOrganizationDto,
@@ -49,8 +46,7 @@ export class AdminOrganizationsService {
   private readonly logger = new Logger(AdminOrganizationsService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
-    private readonly userRolesService: UserRolesService,
+    private readonly adminAccessService: AdminAccessService,
     @InjectRepository(OrganizationEntity)
     private readonly organizationRepository: Repository<OrganizationEntity>,
     @InjectRepository(IdpCertificateEntity)
@@ -284,13 +280,6 @@ export class AdminOrganizationsService {
   }
 
   private async assertSuperAdmin(req: Request, queryAuth?: string): Promise<void> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, queryAuth);
-    if (subject === null) {
-      throw new ForbiddenException('Not authorized');
-    }
-    const isSuper = await this.userRolesService.userHasRole(subject.userId, SUPER_ROLE_NAME);
-    if (!isSuper) {
-      throw new ForbiddenException('Not authorized');
-    }
+    await this.adminAccessService.assertSuperAdmin(req, queryAuth);
   }
 }

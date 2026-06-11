@@ -22,12 +22,14 @@ Start with **[docs/prerequisites.md](./docs/prerequisites.md)** (Node.js **24.14
 | [docs/docker.md](./docs/docker.md) | Docker image for this service |
 | [docs/development.md](./docs/development.md) | Tooling, CI, environment variables |
 | [docs/api.md](./docs/api.md) | Requests and responses |
+| [docs/openapi.md](./docs/openapi.md) | Swagger UI at `/api/docs`, coverage, auth in Try-it-out |
 
 The SPA is a **separate** Git repository (**system-frontend**). Clone it alongside this repo for a full stack; its `docs/` cover UI install, `VITE_API_BASE_URL`, and Docker. Prerequisites versions match this repo by design.
 
 ## API (summary)
 
 - `GET /api/counter/health` — smoke check `{ "ok": true }`
+- **OpenAPI UI** — `GET /api/docs` (dev by default; see [docs/openapi.md](./docs/openapi.md))
 - `POST /api/counter/increment` — body `{ "currentCount": number }` → `{ "count": number }` (`201`)
 - `POST /api/login` — optional exchange of `saml_session` cookie + `X-Browser-ID` → `{ "auth": "<plaintext_opaque_once>" }` (skip when ACS already minted `maq_auth`); see [docs/api.md](./docs/api.md)
 - `GET /api/login/me` — session check from `maq_auth` cookie + `X-Browser-ID` (same shape as `/auth/saml/me`)
@@ -53,6 +55,10 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `POST /api/groups/:groupId/students/:accountId/activities/:activityId/toggle` — lecturer: toggle single activity completion
 - `POST /api/groups/:groupId/students/:accountId/badges/:badgeId/toggle` — lecturer: grant/revoke badge (revoke does not reduce `totalEarned`)
 - `DELETE /api/groups/:groupId/badges/:badgeId` — lecturer: delete badge + revoke from students (`revokedFromStudents`)
+- `GET /api/groups/:groupId/item-categories` — list shop item categories for a group
+- `POST /api/groups/:groupId/item-categories` — lecturer: create category
+- `PATCH /api/groups/:groupId/item-categories/:categoryId` — lecturer: update category
+- `DELETE /api/groups/:groupId/item-categories/:categoryId` — lecturer: delete category (items become uncategorized)
 - `DELETE /api/groups/:groupId/ranks/:rankId` — lecturer: delete rank; affected students get `rankId = null`
 - `GET /api/auth/saml/status` — SAML configuration checklist
 - `GET /api/auth/saml/metadata` — SP metadata XML (PIONIER.id / IdP)

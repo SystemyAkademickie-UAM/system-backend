@@ -165,7 +165,7 @@ export class GroupsEnrollmentService {
     const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
       browserIdHeader,
-      query.auth,
+      undefined,
     );
     if (!subject) {
       return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };

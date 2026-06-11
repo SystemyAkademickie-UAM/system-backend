@@ -8,9 +8,9 @@ import {
   Param,
   ParseIntPipe,
   Patch,
-  Query,
   Req,
 } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { UpdateCurrencyDto } from './dto/update-currency.dto';
@@ -24,6 +24,7 @@ import {
  * Currency settings API for course groups.
  * Allows lecturers to read and update the currency name and icon.
  */
+@ApiTags('Group currency')
 @Controller('groups')
 export class GroupsCurrencyController {
   constructor(private readonly groupsCurrencyService: GroupsCurrencyService) {}
@@ -34,13 +35,13 @@ export class GroupsCurrencyController {
    */
   @Get(':groupId/currency')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get the current currency settings for a group' })
   getCurrencySettings(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
-    @Query('auth') auth: string | undefined,
   ): Promise<GetCurrencyResponseBody> {
-    return this.groupsCurrencyService.getCurrencySettings(req, publicGroupId, browserId, auth);
+    return this.groupsCurrencyService.getCurrencySettings(req, publicGroupId, browserId, undefined);
   }
 
   /**
@@ -49,6 +50,7 @@ export class GroupsCurrencyController {
    */
   @Patch(':groupId/currency')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update the currency name and/or icon for a group' })
   updateCurrencySettings(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,

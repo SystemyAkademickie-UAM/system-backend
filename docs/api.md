@@ -63,6 +63,11 @@ Manage institutional SAML configuration stored in **`auth.organizations`** and *
 | `/api/admin/organizations/:id/sync-from-metadata` | `POST` | Re-fetch IdP metadata from stored `metadata_url` and rotate signing certificate. |
 | `/api/admin/organizations/:id/certificates` | `POST` | Rotate IdP signing certificate (PEM body). |
 | `/api/admin/organizations/:id/certificates/:certId` | `DELETE` | Revoke certificate. |
+| `/api/admin/organizations/:organizationId/administrators` | `GET` | List organization administrators (`administrator` role). |
+| `/api/admin/organizations/:organizationId/administrators` | `POST` | Grant `administrator` role by user email (user must exist after SAML login). Body: `{ "email": "..." }`. |
+| `/api/admin/organizations/:organizationId/administrators/:accountId` | `DELETE` | Revoke organization administrator role. |
+
+**Bootstrap super admin:** set `SUPERADMIN_BOOTSTRAP_EMAIL` in `.env`. On first startup (or first SAML login with that email), when no `super` account exists, the API inserts one row in `auth.accounts`. Optional `SUPERADMIN_BOOTSTRAP_ORGANIZATION_ID` (default: first active organization).
 
 Register organizations via admin API (no migration seed). Example: UAM — `metadataUrl` = `https://sso.amu.edu.pl/simplesaml/saml2/idp/metadata.php`. Local dev IdP — see [saml-local-idp.md](./saml-local-idp.md).
 
@@ -70,7 +75,7 @@ Register organizations via admin API (no migration seed). Example: UAM — `meta
 
 ## Login (opaque API bearer issuance)
 
-Issues a **plaintext** bearer string for `{ "auth": "..." }` field used by `/api/groups/new`, `/api/groups/:groupId/enroll`, `/api/drive`, `/api/stages`, `/api/activities`, `/api/groups/:groupId/badges`, and `/api/groups/:groupId/ranks`. The server persists only **`hex(HMAC-SHA256(API_TOKEN_HMAC_SECRET, plaintext))`** in Postgres **`autoryzacja.tokens.token_hmac`** plus **`user_id`**, **`browser_uuid`** (**PostgreSQL `uuid`** — clients MUST send an RFC 4122 UUID in **`X-Browser-ID`**), **`created_at`**, **`expired_at`** — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
+Issues a **plaintext** opaque bearer token. Clients send it back as the **`maq_auth`** HTTP-only cookie (browsers, automatic) **or** an **`Authorization: Bearer <token>`** header (non-browser API clients). The token is **never** read from the URL query string. The server persists only **`hex(HMAC-SHA256(API_TOKEN_HMAC_SECRET, plaintext))`** in Postgres **`autoryzacja.tokens.token_hmac`** plus **`user_id`**, **`browser_uuid`** (**PostgreSQL `uuid`** — clients MUST send an RFC 4122 UUID in **`X-Browser-ID`**), **`created_at`**, **`expired_at`** — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
 
 **Prerequisite (legacy exchange path):** authenticate via **SAML** so the browser holds HTTP-only **`saml_session`**, then call this endpoint to mint **`maq_auth`**. When ACS receives a valid **`browserId`** in RelayState, it mints **`maq_auth`** directly and the SPA can skip this call.
 
@@ -101,7 +106,11 @@ Optional JSON is **reserved for future email/password provisioning** — omit th
 
 Rotate previous rows for `(user_id, browser_uuid)` on each issuance (single active bearer per browser install).
 
-Configure **`API_TOKEN_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=production`**) and optional **`API_TOKEN_TTL_SECONDS`**.
+Configure **`API_TOKEN_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=production`**), **`API_TOKEN_IDLE_TIMEOUT_SECONDS`** (sliding idle, default 24 min), and **`API_TOKEN_ABSOLUTE_MAX_SECONDS`** (absolute cap, default 8 h).
+
+**Session lifetime:** `maq_auth` and `saml_session` are **session cookies** (no `Max-Age`) — dropped on browser close. Server-side `expired_at` is the source of truth: a sliding idle window is refreshed on each authenticated request, never past the absolute cap measured from `created_at`. After idle expiry or the cap, the token is rejected and the user must re-authenticate.
+
+**Rate limiting:** `POST /api/login`, `POST /api/login/active-role`, and `GET /api/auth/saml/login` are throttled per client IP (`@nestjs/throttler`); exceeding the limit returns `429 Too Many Requests`.
 
 ---
 
@@ -122,7 +131,14 @@ Browser clients that already hold **`maq_auth`** (e.g. after SAML ACS mint with 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | `authenticated` | boolean | Whether the token resolves to a user. |
-| `user` | object | Present when authenticated; includes `email`, `role`, `displayName`, etc. |
+| `user` | object | Present when authenticated; includes `email`, `displayName`, `role`, `availableRoles`, etc. |
+
+The `user` object exposes role information:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `role` | string | **Active** role: the selected role from the `maq_active_role` cookie when valid, otherwise the highest-privilege role the user holds. |
+| `availableRoles` | string[] | All distinct roles the user holds, ordered highest → lowest privilege (`super`, `administrator`, `lecturer`, `student`). |
 
 When not authenticated, returns `{ "authenticated": false }` (still `200`).
 
@@ -130,9 +146,36 @@ Uses **strong** auth (`maq_auth` + matching `X-Browser-ID`) when the header is p
 
 ---
 
+## Active role selection
+
+Lets a user with more than one role choose which role is active for the UI. The choice is persisted in the HTTP-only **`maq_active_role`** cookie and reflected by `GET /api/login/me` (`user.role`). Cleared on logout.
+
+**Endpoint:** `POST /api/login/active-role`
+
+**Headers:** `X-Browser-ID` (RFC 4122 UUID bound to the token row).
+
+**Authorization:** **strong** token + browser binding when possible; **soft** fallback (`maq_auth` cookie only).
+
+**Request body:**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `role` | string | Role to activate. Must be one of the user's `availableRoles`. |
+
+**Response:** `200 OK` — same shape as `GET /api/login/me`, with `user.role` set to the selected role.
+
+**Errors:**
+
+| Status | When |
+| ------ | ---- |
+| `400 Bad Request` | The requested role is not assigned to the user. |
+| `401 Unauthorized` | No valid session. |
+
+---
+
 ## Logout (clear API auth cookies)
 
-Clears HTTP-only **`maq_auth`** and SAML session cookies for this browser origin. Revokes the current `maq_auth` database row when present. Does **not** perform IdP single logout — use **`GET /api/auth/saml/logout`** for institutional SSO sign-out.
+Clears HTTP-only **`maq_auth`**, **`maq_active_role`**, and SAML session cookies for this browser origin. Revokes the current `maq_auth` database row when present. Does **not** perform IdP single logout — use **`GET /api/auth/saml/logout`** for institutional SSO sign-out.
 
 **Endpoint:** `POST /api/logout`
 
@@ -185,7 +228,7 @@ After SAML, first-time users complete nickname, avatar, and EULA in the SPA befo
 
 **Endpoint:** `GET /api/profile`
 
-**Authorization:** **soft** (`maq_auth` cookie or query/body `auth`). No `X-Browser-ID` required.
+**Authorization:** **soft** (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). No `X-Browser-ID` required.
 
 Returns the current user's profile row (nickname, avatar, registration flags, etc.).
 
@@ -267,6 +310,7 @@ Retrieves groups the authenticated user belongs to: student enrollments and lect
 | `bannerId` | string \| null | Group banner reference (`education.groups.image_ref`). |
 | `lecturers` | string | Lecturer full name; empty string when unknown. |
 | `description` | string \| null | Group description. |
+| `shopOpen` | boolean | Indicates whether the group's shop is currently open. |
 
 **Example**
 
@@ -350,6 +394,35 @@ X-Browser-ID: <BrowserUUID>
 ```
 
 *(Example: database row id `137` → JSON `group` `100137` when offset is `100000`.)*
+
+---
+
+### Update shop status (lecturer)
+
+**Endpoint:** `PATCH /api/groups/:groupId/shop-status`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | UUID; must match `autoryzacja.tokens.browser_uuid` for this bearer. |
+
+**Request body (JSON):**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string (optional) | Plaintext bearer. |
+| `shopOpen` | boolean | Set to `true` to open the shop, `false` to close it. |
+
+**Authorization:** **strong** token + browser binding. Caller must have the **lecturer** role and must own the group. Missing or invalid auth yields `401 Unauthorized` or `403 Forbidden`.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | integer | Always `200` on success. |
+| `group` | integer | Public group id. |
+| `updated` | boolean | `true` if successful. |
 
 ---
 
@@ -474,7 +547,7 @@ Cookie: maq_auth=<token>
 
 CRUD for **`education.enrollment_codes`** — group-scoped invite codes (1–10 characters) with optional expiration and usage limits. Auto-generated codes are 6-character uppercase hex unless the lecturer supplies a custom `code`.
 
-**Authorization:** **soft** auth (`maq_auth` cookie or `auth` query/body) plus **lecturer** role; caller must own the group.
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`) plus **lecturer** role; caller must own the group.
 
 | Endpoint | Method | Description |
 | -------- | ------ | ----------- |
@@ -482,7 +555,7 @@ CRUD for **`education.enrollment_codes`** — group-scoped invite codes (1–10 
 | `/api/groups/:groupId/enrollment-codes/:codeId` | `GET` | Single code by id. |
 | `/api/groups/:groupId/enrollment-codes` | `POST` | Create code (`201`). Body: optional `code`, `expiresAt` (ISO-8601 or `null`), `maxUses`, `auth`. |
 | `/api/groups/:groupId/enrollment-codes/:codeId` | `PATCH` | Update `expiresAt`, `maxUses`, `isActive`. Body includes optional `auth`. |
-| `/api/groups/:groupId/enrollment-codes/:codeId` | `DELETE` | Delete code (`204`). Optional `auth` query param. |
+| `/api/groups/:groupId/enrollment-codes/:codeId` | `DELETE` | Delete code (`204`). Auth via `maq_auth` cookie or `Authorization: Bearer` header. |
 
 **Code object fields:** `id`, `groupId`, `code`, `expiresAt`, `maxUses`, `useCount`, `isActive`, `createdAt`, `updatedAt`.
 
@@ -544,6 +617,7 @@ Retrieves student statistics (lives, currency, icons) scoped to a specific group
 | `currency` | string | Currency balance in this group (`gamification.enrollments`). |
 | `currencyIcon` | string | Group's currency icon (`education.groups`). |
 | `livesIcon` | string | Group's life icon (`education.groups`). |
+| `shopOpen` | boolean | Indicates whether the group's shop is currently open. |
 
 **Example**
 
@@ -561,9 +635,69 @@ Cookie: maq_auth=<token>
   "lives": 3,
   "currency": "100",
   "currencyIcon": "coin",
-  "livesIcon": "heart"
+  "livesIcon": "heart",
+  "shopOpen": true
 }
 ```
+
+---
+
+## Backlog
+
+Retrieve activity and event logs for a specific group.
+
+### Get Student Backlog (Student)
+
+**Endpoint:** `GET /api/groups/:groupId/backlog/me`
+
+Retrieves the recent backlog history for the currently logged-in student in a given group.
+
+**Query Parameters:**
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `auth` | string (optional) | Access token (can also be passed via `maq_auth` cookie). |
+| `take` | integer (optional) | Number of items to retrieve (pagination limit, default 50). |
+| `skip` | integer (optional) | Number of items to skip (pagination offset, default 0). |
+
+**Headers:**
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Browser binding ID for the strong session. |
+
+**Response:** `200 OK` with JSON array of backlog items.
+
+```json
+[
+  {
+    "id": 12,
+    "type": "SHOP_PURCHASE",
+    "date": "2026-06-08T10:00:00.000Z",
+    "value": "health_potion",
+    "accountId": 42
+  }
+]
+```
+
+### Get Group Backlog (Lecturer / Admin)
+
+**Endpoint:** `GET /api/groups/:groupId/backlog`
+
+Retrieves the recent backlog history of all members in a given group.
+Requires `SUPER` role or ownership of the group (`teacherAccountId`).
+
+**Query Parameters:**
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `auth` | string (optional) | Access token (can also be passed via `maq_auth` cookie). |
+| `take` | integer (optional) | Number of items to retrieve (pagination limit, default 50). |
+| `skip` | integer (optional) | Number of items to skip (pagination offset, default 0). |
+
+**Headers:**
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Browser binding ID for the strong session. |
+
+**Response:** `200 OK` with JSON array of backlog items.
 
 ---
 
@@ -797,6 +931,49 @@ Removes the badge, revokes it from all students (currency only — `totalEarned`
 **Endpoint:** `POST /api/groups/:groupId/students/:accountId/badges/:badgeId/toggle`
 
 Grant: `currency` and `totalEarned` increase by `rewardAmount`. Revoke: `currency` decreases (min 0); **`totalEarned` unchanged**. Response: `{ "isEarned": boolean }`.
+
+---
+
+## Shop item categories (lecturer)
+
+Group-scoped categories for shop catalog items (`gamification.item_categories`). Items reference a category via `gamification.items.category_id` (nullable). Item images use `gamification.items.image_ref` — a drive UUID from `POST /api/drive`, served at `GET /api/drive/:driveRef` (same as group `imageRef` / `bannerId`).
+
+**Endpoint:** `GET /api/groups/:groupId/item-categories`
+
+**Auth:** **Soft** token resolution — `maq_auth` cookie **or** `Authorization: Bearer` header; **`X-Browser-ID` is not required**. Caller must be the **group owner (lecturer)** or an **enrolled student** in that group.
+
+**Response:** `200 OK` — array of categories ordered by `displayOrder`, then `name` (camelCase fields).
+
+**Endpoint:** `POST /api/groups/:groupId/item-categories`
+
+**Auth:** Soft token + **lecturer** role; caller must **own** the group (`education.groups.teacher_account_id`).
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | — | Opaque bearer when not using cookie. |
+| `name` | string | required | Category name (unique per group). |
+| `description` | string (optional) | — | Optional description. |
+| `displayOrder` | integer (optional) | — | Sort order in shop UI. |
+
+**Response:** `201 Created` — persisted category entity.
+
+**Errors:** `403 Forbidden` (not owner / not enrolled); `404 Not Found` (group); `409 Conflict` (duplicate name in group).
+
+**Endpoint:** `PATCH /api/groups/:groupId/item-categories/:categoryId`
+
+**Auth:** Soft token + **lecturer** who **owns** the group.
+
+**Request body:** optional `auth`, `name`, `description`, `displayOrder`.
+
+**Response:** `200 OK` — updated category.
+
+**Endpoint:** `DELETE /api/groups/:groupId/item-categories/:categoryId`
+
+**Auth:** Soft token + **lecturer** who **owns** the group.
+
+Deletes the category. Items in the category get `category_id = NULL`. Response: `{ "deleted": true }`.
 
 ---
 

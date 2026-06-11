@@ -44,6 +44,7 @@ export type StudentProfileResponseBody = {
   groupCurrencyIcon: number | null;
   lives: string | null;
   livesIcon: number | null;
+  shopOpen: boolean;
   earnedBadges: StudentProfileBadgeItem[];
   completedActivities: StudentProfileActivityItem[];
 };
@@ -64,6 +65,7 @@ type StudentProfileRow = {
   groupCurrencyIcon: number | null;
   lives: string | null;
   livesIcon: number | null;
+  shopOpen: boolean;
 };
 
 type EarnedBadgeRow = {
@@ -137,7 +139,8 @@ export class StudentProfileService {
          g.currency                   AS "groupCurrency",
          g.currency_icon              AS "groupCurrencyIcon",
          g.lives                      AS "lives",
-         g.lives_icon                 AS "livesIcon"
+         g.lives_icon                 AS "livesIcon",
+         g.shop_open                  AS "shopOpen"
        FROM gamification.enrollments e
        JOIN auth.accounts a ON a.id = e.student_account_id
        JOIN auth.users u ON u.id = a.user_id
@@ -222,6 +225,7 @@ export class StudentProfileService {
       groupCurrencyIcon: row.groupCurrencyIcon,
       lives: row.lives,
       livesIcon: row.livesIcon,
+      shopOpen: row.shopOpen === true || row.shopOpen === ('t' as unknown) || row.shopOpen === (1 as unknown),
       earnedBadges,
       completedActivities,
     };

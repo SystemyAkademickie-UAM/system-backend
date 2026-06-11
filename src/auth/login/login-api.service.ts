@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import { Repository } from 'typeorm';
 
 import {
-  API_TOKEN_DEFAULT_TTL_SECONDS,
+  MAQ_ACTIVE_ROLE_COOKIE_NAME,
   MAQ_AUTH_COOKIE_NAME,
 } from '../../constants/api-token-constants';
 import { BROWSER_ID_UUID_REGEX } from '../../constants/browser-id-constants';
@@ -12,7 +12,6 @@ import { SAML_SESSION_COOKIE_NAME } from '../../constants/saml-constants';
 import { buildSamlSessionCookieOptions } from '../saml/saml-cookie-options.util';
 import { UserEntity } from '../../database/entities/user.entity';
 import { UserRolesService } from '../../user-roles/user-roles-service';
-import { AuthTokenHmacService } from '../api-token/auth-token-hmac.service';
 import { AuthTokenIssuanceService } from '../api-token/auth-token-issuance.service';
 import { AuthTokenSessionService } from '../api-token/auth-token-session-service';
 import { SamlService } from '../saml/saml.service';
@@ -27,7 +26,10 @@ export type LoginMeResponse = {
     givenName?: string;
     surname?: string;
     displayName?: string;
+    /** Active role: the selected role if valid, otherwise the highest-privilege role. */
     role?: string;
+    /** All roles the user holds (highest to lowest privilege). */
+    availableRoles?: string[];
   };
 };
 
@@ -40,7 +42,6 @@ export class LoginApiService {
     private readonly samlService: SamlService,
     private readonly samlLinkedUserService: SamlLinkedUserService,
     private readonly authTokenIssuanceService: AuthTokenIssuanceService,
-    private readonly authTokenHmacService: AuthTokenHmacService,
     private readonly authTokenSessionService: AuthTokenSessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(UserEntity)
@@ -105,19 +106,14 @@ export class LoginApiService {
   ): Promise<{ auth: string }> {
     const userId = await this.resolveUserIdForToken(payload);
     const plaintext = await this.authTokenIssuanceService.revokeAndMintPlainToken(userId, browserUuid);
-    const ttlSeconds = this.authTokenHmacService.resolveExpiresAfterSeconds();
-    const maxAgeMs = (ttlSeconds > 0 ? ttlSeconds : API_TOKEN_DEFAULT_TTL_SECONDS) * 1000;
-    res.cookie(
-      MAQ_AUTH_COOKIE_NAME,
-      plaintext,
-      buildSamlSessionCookieOptions(req, maxAgeMs),
-    );
+    res.cookie(MAQ_AUTH_COOKIE_NAME, plaintext, buildSamlSessionCookieOptions(req));
     return { auth: plaintext };
   }
 
-  /** Clears opaque auth and SAML session cookies for browser clients. */
+  /** Clears opaque auth, active-role, and SAML session cookies for browser clients. */
   clearAuthCookies(res: Response): { success: true } {
     res.clearCookie(MAQ_AUTH_COOKIE_NAME, { path: '/' });
+    res.clearCookie(MAQ_ACTIVE_ROLE_COOKIE_NAME, { path: '/' });
     res.clearCookie(SAML_SESSION_COOKIE_NAME, { path: '/' });
     return { success: true };
   }
@@ -150,6 +146,7 @@ export class LoginApiService {
   async resolveAuthenticatedUserFromApiToken(
     req: Request,
     browserIdHeaderValue: string | undefined,
+    overrideRole?: string,
   ): Promise<LoginMeResponse> {
     let subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
       req,
@@ -166,7 +163,8 @@ export class LoginApiService {
     if (!user) {
       return { authenticated: false };
     }
-    const role = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
+    const availableRoles = await this.userRolesService.listRolesForUser(subject.userId);
+    const activeRole = this.resolveActiveRole(req, availableRoles, overrideRole);
     const displayName =
       user.nickname.trim().length > 0
         ? user.nickname.trim()
@@ -179,8 +177,48 @@ export class LoginApiService {
         givenName: user.name,
         surname: user.surname,
         displayName,
-        role: role ?? undefined,
+        role: activeRole ?? undefined,
+        availableRoles,
       },
     };
+  }
+
+  /**
+   * Selects the active role for the current user; the role must be one they hold.
+   * Persists the choice in the `maq_active_role` cookie and returns the updated session view.
+   */
+  async setActiveRole(
+    req: Request,
+    res: Response,
+    browserIdHeaderValue: string | undefined,
+    requestedRole: string,
+  ): Promise<LoginMeResponse> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongOrSoftFromRequest(
+      req,
+      browserIdHeaderValue,
+      undefined,
+    );
+    if (!subject) {
+      throw new UnauthorizedException('Not authenticated');
+    }
+    const normalizedRole = requestedRole.trim();
+    const availableRoles = await this.userRolesService.listRolesForUser(subject.userId);
+    if (!availableRoles.includes(normalizedRole)) {
+      throw new BadRequestException(`Role "${normalizedRole}" is not assigned to this user`);
+    }
+    res.cookie(MAQ_ACTIVE_ROLE_COOKIE_NAME, normalizedRole, buildSamlSessionCookieOptions(req));
+    return this.resolveAuthenticatedUserFromApiToken(req, browserIdHeaderValue, normalizedRole);
+  }
+
+  /** Active role from cookie when valid, else highest-privilege role. */
+  private resolveActiveRole(req: Request, availableRoles: string[], overrideRole?: string): string | null {
+    if (overrideRole !== undefined && availableRoles.includes(overrideRole)) {
+      return overrideRole;
+    }
+    const cookieRole = req.cookies?.[MAQ_ACTIVE_ROLE_COOKIE_NAME];
+    if (typeof cookieRole === 'string' && availableRoles.includes(cookieRole.trim())) {
+      return cookieRole.trim();
+    }
+    return availableRoles[0] ?? null;
   }
 }
