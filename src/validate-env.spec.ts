@@ -1,4 +1,5 @@
 import { API_TOKEN_HMAC_SECRET_MIN_LENGTH } from './constants/api-token-constants';
+import { SAML_JWT_SECRET_MIN_LENGTH } from './constants/saml-constants';
 import {
   assertDatabaseEnv,
   assertRequiredEnv,
@@ -105,6 +106,17 @@ describe('validate-env', () => {
       });
       expect(() => assertRequiredEnv()).toThrow(
         new RegExp(`min ${API_TOKEN_HMAC_SECRET_MIN_LENGTH} characters`),
+      );
+    });
+
+    it('requires minimum SAML_JWT_SECRET length in production', () => {
+      setMinimalValidRequiredEnv({
+        NODE_ENV: 'production',
+        API_TOKEN_HMAC_SECRET: 'a'.repeat(API_TOKEN_HMAC_SECRET_MIN_LENGTH),
+        SAML_JWT_SECRET: 'short',
+      });
+      expect(() => assertRequiredEnv()).toThrow(
+        new RegExp(`SAML_JWT_SECRET \\(min ${SAML_JWT_SECRET_MIN_LENGTH} characters`),
       );
     });
   });

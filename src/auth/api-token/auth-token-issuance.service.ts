@@ -26,15 +26,19 @@ export class AuthTokenIssuanceService {
   async revokeAndMintPlainToken(userId: number, browserUuid: string): Promise<string> {
     const plaintext = randomBytes(OPAQUE_API_TOKEN_RANDOM_BYTE_LENGTH).toString('base64url');
     const tokenHmac = this.authTokenHmacService.digestPlainTokenHex(plaintext);
-    const ttlSeconds = this.authTokenHmacService.resolveExpiresAfterSeconds();
-    const expiredAt = new Date(Date.now() + ttlSeconds * 1000);
+    const idleSeconds = this.authTokenHmacService.resolveIdleTimeoutSeconds();
+    const absoluteMaxSeconds = this.authTokenHmacService.resolveAbsoluteMaxSeconds();
+    const now = Date.now();
+    const idleExpiry = now + idleSeconds * 1000;
+    const absoluteExpiry = now + absoluteMaxSeconds * 1000;
+    const expiredAt = new Date(Math.min(idleExpiry, absoluteExpiry));
     await this.authTokenRepository.manager.transaction(async (manager) => {
       await manager.delete(AuthTokenEntity, { userId, browserUuid });
       const row = manager.create(AuthTokenEntity, {
         tokenHmac,
         userId,
         browserUuid,
-        createdAt: new Date(),
+        createdAt: new Date(now),
         expiredAt,
       });
       await manager.save(row);

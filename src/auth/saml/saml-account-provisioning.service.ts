@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { AccountEntity } from '../../database/entities/account.entity';
+import { SuperAdminBootstrapService } from '../../admin/bootstrap/super-admin-bootstrap.service';
 import { SamlLinkedUserService } from '../login/saml-linked-user.service';
 import type { SamlSessionPayload } from './saml.types';
 
@@ -15,12 +16,14 @@ export class SamlAccountProvisioningService {
 
   constructor(
     private readonly samlLinkedUserService: SamlLinkedUserService,
+    private readonly superAdminBootstrapService: SuperAdminBootstrapService,
     @InjectRepository(AccountEntity)
     private readonly accountRepository: Repository<AccountEntity>,
   ) {}
 
   async provisionFromSamlSession(payload: SamlSessionPayload, organizationId: number): Promise<number> {
     const userId = await this.samlLinkedUserService.findOrCreateFromSamlSession(payload);
+    await this.superAdminBootstrapService.tryGrantBootstrapSuperOnLogin(userId, payload.email);
     const role = payload.role?.trim();
     if (role === undefined || role === '') {
       this.logger.warn(`SAML provisioning: no mappable role for userId=${userId} org=${organizationId}`);

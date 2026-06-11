@@ -1,7 +1,9 @@
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import * as fs from 'fs';
 import * as path from 'path';
 
+@ApiTags('Icons')
 @Controller('gamification/icons')
 export class IconsController {
   /**
@@ -10,6 +12,7 @@ export class IconsController {
    */
   @Get()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List available SVG icons' })
   getIcons() {
     const iconsDir = path.join(__dirname, '..', '..', 'assets', 'icons');
     try {

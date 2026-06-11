@@ -3,8 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'node:crypto';
 
 import {
-  API_TOKEN_DEFAULT_TTL_SECONDS,
+  API_TOKEN_ABSOLUTE_MAX_DEFAULT_SECONDS,
+  API_TOKEN_ABSOLUTE_MAX_ENV_KEY,
   API_TOKEN_HMAC_SECRET_MIN_LENGTH,
+  API_TOKEN_IDLE_TIMEOUT_DEFAULT_SECONDS,
+  API_TOKEN_IDLE_TIMEOUT_ENV_KEY,
   OPAQUE_API_TOKEN_HMAC_ALGORITHM,
 } from '../../constants/api-token-constants';
 
@@ -33,16 +36,33 @@ export class AuthTokenHmacService implements OnModuleInit {
   }
 
   /**
-   * Absolute expiry instant for newly issued tokens.
+   * Sliding idle window in seconds; a session expires this long after the last request.
    */
-  resolveExpiresAfterSeconds(): number {
-    const raw = this.configService.get<string>('API_TOKEN_TTL_SECONDS', '').trim();
+  resolveIdleTimeoutSeconds(): number {
+    return this.resolvePositiveIntEnv(
+      API_TOKEN_IDLE_TIMEOUT_ENV_KEY,
+      API_TOKEN_IDLE_TIMEOUT_DEFAULT_SECONDS,
+    );
+  }
+
+  /**
+   * Absolute maximum session lifetime in seconds, measured from token creation.
+   */
+  resolveAbsoluteMaxSeconds(): number {
+    return this.resolvePositiveIntEnv(
+      API_TOKEN_ABSOLUTE_MAX_ENV_KEY,
+      API_TOKEN_ABSOLUTE_MAX_DEFAULT_SECONDS,
+    );
+  }
+
+  private resolvePositiveIntEnv(envKey: string, fallbackSeconds: number): number {
+    const raw = this.configService.get<string>(envKey, '').trim();
     if (raw === '') {
-      return API_TOKEN_DEFAULT_TTL_SECONDS;
+      return fallbackSeconds;
     }
     const parsed = Number.parseInt(raw, 10);
     if (!Number.isFinite(parsed) || parsed <= 0) {
-      return API_TOKEN_DEFAULT_TTL_SECONDS;
+      return fallbackSeconds;
     }
     return parsed;
   }
