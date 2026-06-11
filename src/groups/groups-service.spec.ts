@@ -29,6 +29,7 @@ type MockGroupRepository = {
   save: jest.Mock;
   findOne: jest.Mock;
   exist: jest.Mock;
+  update: jest.Mock;
 };
 
 const mockRequest = {} as Request;
@@ -70,6 +71,7 @@ describe('GroupsService', () => {
       save: jest.fn(),
       findOne: jest.fn(),
       exist: jest.fn(),
+      update: jest.fn(),
     };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -136,6 +138,7 @@ describe('GroupsService', () => {
           is_enrolled: true,
           currency: 'coins',
           currency_icon: '🪙',
+          shop_open: true,
         },
         {
           id: 6,
@@ -164,6 +167,7 @@ describe('GroupsService', () => {
             description: 'Basic math',
             currency: 'coins',
             currencyIcon: '🪙',
+            shopOpen: true,
           },
         ],
       });
@@ -264,6 +268,51 @@ describe('GroupsService', () => {
 
       expect(result.code).toBe('ABC123');
       expect(result.groupId).toBe(100001);
+    });
+  });
+
+  describe('updateShopStatus', () => {
+    it('should update shopOpen flag when user is owner', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({
+        id: 1,
+        teacherAccountId: 10,
+      });
+      groupRepository.update = jest.fn().mockResolvedValue({ affected: 1 });
+
+      const result = await service.updateShopStatus(mockRequest, 100001, { shopOpen: false }, 'browser-id');
+
+      expect(groupRepository.update).toHaveBeenCalledWith({ id: 1 }, { shopOpen: false });
+      expect(result).toEqual({
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: 100001,
+        updated: true,
+      });
+    });
+
+    it('should throw UnauthorizedException if subject not resolved', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
+      await expect(service.updateShopStatus(mockRequest, 100001, { shopOpen: true }, 'browser-id'))
+        .rejects.toThrow('Missing or invalid session');
+    });
+
+    it('should throw BadRequestException for invalid group ID', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      
+      // Pass an invalid group ID (below offset)
+      await expect(service.updateShopStatus(mockRequest, 999, { shopOpen: true }, 'browser-id'))
+        .rejects.toThrow('Invalid group ID');
+    });
+
+    it('should throw ForbiddenException if group not found or not owner', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.updateShopStatus(mockRequest, 100001, { shopOpen: true }, 'browser-id'))
+        .rejects.toThrow('Not authorized to manage this group');
     });
   });
 });

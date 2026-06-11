@@ -267,6 +267,7 @@ Retrieves groups the authenticated user belongs to: student enrollments and lect
 | `bannerId` | string \| null | Group banner reference (`education.groups.image_ref`). |
 | `lecturers` | string | Lecturer full name; empty string when unknown. |
 | `description` | string \| null | Group description. |
+| `shopOpen` | boolean | Indicates whether the group's shop is currently open. |
 
 **Example**
 
@@ -350,6 +351,35 @@ X-Browser-ID: <BrowserUUID>
 ```
 
 *(Example: database row id `137` → JSON `group` `100137` when offset is `100000`.)*
+
+---
+
+### Update shop status (lecturer)
+
+**Endpoint:** `PATCH /api/groups/:groupId/shop-status`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | UUID; must match `autoryzacja.tokens.browser_uuid` for this bearer. |
+
+**Request body (JSON):**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string (optional) | Plaintext bearer. |
+| `shopOpen` | boolean | Set to `true` to open the shop, `false` to close it. |
+
+**Authorization:** **strong** token + browser binding. Caller must have the **lecturer** role and must own the group. Missing or invalid auth yields `401 Unauthorized` or `403 Forbidden`.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | integer | Always `200` on success. |
+| `group` | integer | Public group id. |
+| `updated` | boolean | `true` if successful. |
 
 ---
 
@@ -544,6 +574,7 @@ Retrieves student statistics (lives, currency, icons) scoped to a specific group
 | `currency` | string | Currency balance in this group (`gamification.enrollments`). |
 | `currencyIcon` | string | Group's currency icon (`education.groups`). |
 | `livesIcon` | string | Group's life icon (`education.groups`). |
+| `shopOpen` | boolean | Indicates whether the group's shop is currently open. |
 
 **Example**
 
@@ -561,9 +592,69 @@ Cookie: maq_auth=<token>
   "lives": 3,
   "currency": "100",
   "currencyIcon": "coin",
-  "livesIcon": "heart"
+  "livesIcon": "heart",
+  "shopOpen": true
 }
 ```
+
+---
+
+## Backlog
+
+Retrieve activity and event logs for a specific group.
+
+### Get Student Backlog (Student)
+
+**Endpoint:** `GET /api/groups/:groupId/backlog/me`
+
+Retrieves the recent backlog history for the currently logged-in student in a given group.
+
+**Query Parameters:**
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `auth` | string (optional) | Access token (can also be passed via `maq_auth` cookie). |
+| `take` | integer (optional) | Number of items to retrieve (pagination limit, default 50). |
+| `skip` | integer (optional) | Number of items to skip (pagination offset, default 0). |
+
+**Headers:**
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Browser binding ID for the strong session. |
+
+**Response:** `200 OK` with JSON array of backlog items.
+
+```json
+[
+  {
+    "id": 12,
+    "type": "SHOP_PURCHASE",
+    "date": "2026-06-08T10:00:00.000Z",
+    "value": "health_potion",
+    "accountId": 42
+  }
+]
+```
+
+### Get Group Backlog (Lecturer / Admin)
+
+**Endpoint:** `GET /api/groups/:groupId/backlog`
+
+Retrieves the recent backlog history of all members in a given group.
+Requires `SUPER` role or ownership of the group (`teacherAccountId`).
+
+**Query Parameters:**
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `auth` | string (optional) | Access token (can also be passed via `maq_auth` cookie). |
+| `take` | integer (optional) | Number of items to retrieve (pagination limit, default 50). |
+| `skip` | integer (optional) | Number of items to skip (pagination offset, default 0). |
+
+**Headers:**
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Browser binding ID for the strong session. |
+
+**Response:** `200 OK` with JSON array of backlog items.
 
 ---
 
