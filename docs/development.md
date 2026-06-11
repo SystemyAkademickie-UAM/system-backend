@@ -14,7 +14,7 @@ Use `.nvmrc` with nvm / nvm-windows. CI uses Node **24.14.1** (see `.github/work
 3. Run `npm run start:dev` for watch mode (starts local Postgres, runs migrations, then Nest).
 4. Run `npm test` and `npm run test:e2e` before pushing.
 
-Exercise endpoints with any HTTP client (curl, REST client, automated tests).
+Exercise endpoints with any HTTP client (curl, REST client, automated tests) or the OpenAPI UI at `/api/docs` — see [openapi.md](./openapi.md).
 
 ## PostgreSQL migrations (TypeORM)
 
@@ -69,6 +69,11 @@ One-time network setup: see [installation.md](./installation.md#docker-compose-l
 | Variable      | Purpose                                 |
 | ------------- | --------------------------------------- |
 | `PORT`        | HTTP port (default `8080`)              |
+| `SWAGGER_ENABLED` | `true` / `false` — override OpenAPI UI at `/api/docs` (default: on in non-production) |
+| `SUPERADMIN_BOOTSTRAP_EMAIL` | First `super` account email when none exists (see [api.md](./api.md)) |
+| `SUPERADMIN_BOOTSTRAP_ORGANIZATION_ID` | Optional org id for bootstrap super |
 | `CORS_ORIGIN` | Comma-separated allowed `Origin` values (no trailing slash). Defaults include the public UI host and local Vite origins; see `.env.example`. |
+
+Interactive API explorer: [openapi.md](./openapi.md).
 
 Never commit `.env`; only `.env.example`.

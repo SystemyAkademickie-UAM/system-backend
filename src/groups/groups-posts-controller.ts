@@ -10,9 +10,9 @@ import {
   ParseIntPipe,
   Patch,
   Post,
-  Query,
   Req,
 } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { CreatePostDto } from './dto/create-post.dto';
@@ -25,12 +25,14 @@ import {
 } from './groups-posts-service';
 import { UpdatePostDto } from './dto/update-post.dto';
 
+@ApiTags('Group posts')
 @Controller('groups')
 export class GroupsPostsController {
   constructor(private readonly groupsPostsService: GroupsPostsService) {}
 
   @Post(':id/post')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Create a post in the given course group' })
   createPost(
     @Param('id', ParseIntPipe) groupId: number,
     @Req() req: Request,
@@ -42,25 +44,25 @@ export class GroupsPostsController {
 
   @Get(':id/post')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get posts for the given course group' })
   getPosts(
     @Param('id', ParseIntPipe) groupId: number,
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
-    @Query('auth') auth?: string,
   ): Promise<GetPostsResponseBody> {
-    return this.groupsPostsService.getPosts(req, groupId, browserId, auth);
+    return this.groupsPostsService.getPosts(req, groupId, browserId);
   }
 
   /** Alias for plural /posts just in case frontend prefers plural */
   @Get(':id/posts')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get posts for the given course group (plural alias)' })
   getPostsAlias(
     @Param('id', ParseIntPipe) groupId: number,
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
-    @Query('auth') auth?: string,
   ): Promise<GetPostsResponseBody> {
-    return this.groupsPostsService.getPosts(req, groupId, browserId, auth);
+    return this.groupsPostsService.getPosts(req, groupId, browserId);
   }
 
   /**
@@ -69,6 +71,7 @@ export class GroupsPostsController {
    */
   @Delete(':id/post/:postId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a post belonging to the given course group' })
   deletePost(
     @Param('id', ParseIntPipe) groupId: number,
     @Param('postId', ParseIntPipe) postId: number,
@@ -85,6 +88,7 @@ export class GroupsPostsController {
    */
   @Patch(':id/post/:postId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a post belonging to the given course group' })
   updatePost(
     @Param('id', ParseIntPipe) groupId: number,
     @Param('postId', ParseIntPipe) postId: number,

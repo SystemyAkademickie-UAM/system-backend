@@ -11,3 +11,6 @@ export const SAML_RELAY_STATE_ORG_PREFIX = 'org:';
 
 /** Pending organization cookie lifetime (15 minutes). */
 export const SAML_PENDING_ORG_COOKIE_MAX_AGE_MS = 15 * 60 * 1000;
+
+/** Minimum `SAML_JWT_SECRET` length enforced in production (session JWT signing key). */
+export const SAML_JWT_SECRET_MIN_LENGTH = 32;

@@ -9,8 +9,11 @@ import {
   Query,
   Req,
   Res,
+  UseGuards,
   forwardRef,
 } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle, ThrottlerGuard, seconds } from '@nestjs/throttler';
 import { Strategy, type VerifiedCallback } from '@node-saml/passport-saml';
 import type { Profile } from '@node-saml/node-saml';
 import type { Request, Response } from 'express';
@@ -24,7 +27,10 @@ import {
   SAML_PENDING_ORG_COOKIE_NAME,
   SAML_SESSION_COOKIE_NAME,
 } from '../../constants/saml-constants';
-import { jwtExpiresInToCookieMaxAgeMs } from './saml-jwt-expiry.util';
+import {
+  AUTH_THROTTLE_TTL_SECONDS,
+  SAML_LOGIN_THROTTLE_LIMIT,
+} from '../../constants/throttler-constants';
 import { LoginApiService } from '../login/login-api.service';
 import { SamlAccountProvisioningService } from './saml-account-provisioning.service';
 import { SamlConfigService } from './saml-config.service';
@@ -46,6 +52,7 @@ import { SamlRelayStateTokenService } from './saml-relay-state-token.service';
 
 const SAML_STRATEGY_PREFIX = 'saml-org-';
 
+@ApiTags('SAML')
 @Controller('auth/saml')
 export class SamlController {
   private readonly logger = new Logger(SamlController.name);
@@ -166,6 +173,7 @@ export class SamlController {
   }
 
   @Get('status')
+  @ApiOperation({ summary: 'Get SAML SP configuration status' })
   getStatus(): { configured: boolean; entityId?: string } {
     return {
       configured: this.samlConfig.isConfigured(),
@@ -174,12 +182,14 @@ export class SamlController {
   }
 
   @Get('organizations')
+  @ApiOperation({ summary: 'List organizations with SAML enabled' })
   async listOrganizations(): Promise<{ organizations: Awaited<ReturnType<SamlOrganizationsService['listOrganizations']>> }> {
     const organizations = await this.samlOrganizationsService.listOrganizations();
     return { organizations };
   }
 
   @Get('metadata')
+  @ApiOperation({ summary: 'Get SP metadata XML' })
   getMetadata(@Res() res: Response): void {
     if (!this.metadataStrategy) {
       res.status(503).json({ error: 'SAML_NOT_CONFIGURED' });
@@ -220,6 +230,9 @@ export class SamlController {
   }
 
   @Get('login')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: SAML_LOGIN_THROTTLE_LIMIT, ttl: seconds(AUTH_THROTTLE_TTL_SECONDS) } })
+  @ApiOperation({ summary: 'Start SAML login for an organization' })
   async login(
     @Req() req: Request,
     @Res() res: Response,
@@ -261,6 +274,7 @@ export class SamlController {
   }
 
   @Post('acs')
+  @ApiOperation({ summary: 'Handle SAML assertion consumer service callback' })
   async handleAcs(@Req() req: Request, @Res() res: Response): Promise<void> {
     if (!this.samlConfig.isConfigured()) {
       res.status(503).json({ error: 'SAML_NOT_CONFIGURED' });
@@ -331,11 +345,7 @@ export class SamlController {
     const token = this.samlService.signSessionToken(samlUser, organizationId, userId);
     const pendingOrgClearOptions = buildClearSamlCookieOptions(req, resolvePendingOrgCookieSameSite(req));
     res.clearCookie(SAML_PENDING_ORG_COOKIE_NAME, pendingOrgClearOptions);
-    res.cookie(
-      SAML_SESSION_COOKIE_NAME,
-      token,
-      buildSamlSessionCookieOptions(req, jwtExpiresInToCookieMaxAgeMs(this.samlConfig.getJwtExpiresIn())),
-    );
+    res.cookie(SAML_SESSION_COOKIE_NAME, token, buildSamlSessionCookieOptions(req));
     if (pendingBrowserId !== null) {
       const sessionPayload = this.samlService.verifySessionToken(token);
       if (sessionPayload !== null) {
@@ -346,6 +356,7 @@ export class SamlController {
   }
 
   @Get('me')
+  @ApiOperation({ summary: 'Get current SAML session user' })
   getMe(@Req() req: Request): { authenticated: boolean; user?: unknown } {
     const token = req.cookies?.[SAML_SESSION_COOKIE_NAME];
     if (!token) {
@@ -359,12 +370,14 @@ export class SamlController {
   }
 
   @Post('logout')
+  @ApiOperation({ summary: 'Clear browser auth cookies' })
   logout(@Req() req: Request, @Res() res: Response): void {
     this.clearBrowserAuthCookies(req, res);
     res.json({ success: true });
   }
 
   @Get('logout')
+  @ApiOperation({ summary: 'Initiate SAML single logout' })
   async samlLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
     const token = req.cookies?.[SAML_SESSION_COOKIE_NAME];
     const session = token ? this.samlService.verifySessionToken(token) : null;
@@ -406,11 +419,13 @@ export class SamlController {
   }
 
   @Get('slo')
+  @ApiOperation({ summary: 'Handle SAML single logout callback (GET)' })
   handleSloGet(@Req() req: Request, @Res() res: Response): void {
     this.handleSloCallback(req, res);
   }
 
   @Post('slo')
+  @ApiOperation({ summary: 'Handle SAML single logout callback (POST)' })
   handleSloPost(@Req() req: Request, @Res() res: Response): void {
     this.handleSloCallback(req, res);
   }

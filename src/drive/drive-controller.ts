@@ -12,6 +12,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
 import { DRIVE_DEFAULT_ORGANIZATION_ID, DRIVE_MAX_FILE_BYTES } from '../constants/drive-service-constants';
@@ -25,6 +26,7 @@ type MulterBannerFiles = {
  * Multipart drive API for lecturers (`banner` + stringified JSON in `json`)
  * and public read-only access to stored objects by UUID.
  */
+@ApiTags('Drive')
 @Controller('drive')
 export class DriveController {
   constructor(private readonly driveService: DriveService) {}
@@ -38,6 +40,7 @@ export class DriveController {
    * @param res Express response object for streaming raw bytes.
    */
   @Get(':driveRef')
+  @ApiOperation({ summary: 'Serve a stored drive object by UUID' })
   async serveDriveObject(
     @Param('driveRef') driveRef: string,
     @Query('organizationId') organizationIdQuery: string | undefined,
@@ -64,6 +67,7 @@ export class DriveController {
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'banner', maxCount: 1 }], { limits: { fileSize: DRIVE_MAX_FILE_BYTES } }),
   )
+  @ApiOperation({ summary: 'Upload a banner via multipart drive request' })
   handleDrive(
     @Req() req: Request,
     @Headers('x-browser-id') browserIdHeader: string | undefined,

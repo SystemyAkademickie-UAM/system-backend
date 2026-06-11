@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Headers, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Req, Get, Query } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { toInternalGroupId } from '../constants/group-api-constants';
@@ -32,6 +33,7 @@ import { CreateGroupResponseBody, GenerateCodeResponseBody, GetGroupsCatalogResp
 /**
  * Course group creation API for lecturers.
  */
+@ApiTags('Groups')
 @Controller('groups')
 export class GroupsController {
   constructor(
@@ -51,12 +53,12 @@ export class GroupsController {
    */
   @Get()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get groups for the authenticated user (student enrollments and lecturer-owned groups)' })
   getUserGroups(
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
-    @Query('auth') auth: string | undefined,
   ): Promise<GetUserGroupsResponseBody> {
-    return this.groupsService.getUserGroups(req, browserId, auth);
+    return this.groupsService.getUserGroups(req, browserId, undefined);
   }
 
   /**
@@ -65,12 +67,12 @@ export class GroupsController {
    */
   @Get('catalog')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get groups catalog split into my groups and other groups' })
   getGroupsCatalog(
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
-    @Query('auth') auth: string | undefined,
   ): Promise<GetGroupsCatalogResponseBody> {
-    return this.groupsService.getGroupsCatalog(req, browserId, auth);
+    return this.groupsService.getGroupsCatalog(req, browserId, undefined);
   }
 
   /**
@@ -79,13 +81,13 @@ export class GroupsController {
    */
   @Get(':groupId/preview')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get public group metadata and access flags' })
   getGroupPreview(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
-    @Query('auth') auth: string | undefined,
   ): Promise<GroupPreviewResponseBody> {
-    return this.groupsService.getGroupPreview(req, publicGroupId, browserId, auth);
+    return this.groupsService.getGroupPreview(req, publicGroupId, browserId, undefined);
   }
 
   /**
@@ -94,6 +96,7 @@ export class GroupsController {
    */
   @Post('new')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Create a new course group' })
   createGroup(
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
@@ -108,6 +111,7 @@ export class GroupsController {
    */
   @Patch(':groupId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update an existing group owned by the lecturer' })
   updateGroup(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
@@ -123,6 +127,7 @@ export class GroupsController {
    */
   @Patch(':groupId/shop-status')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update the shop open/closed status for the group' })
   updateShopStatus(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
@@ -138,6 +143,7 @@ export class GroupsController {
    */
   @Post(':id/enroll')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Enroll a student in a group after invite validation' })
   enrollInGroup(
     @Param('id', ParseIntPipe) groupId: number,
     @Req() req: Request,
@@ -153,13 +159,13 @@ export class GroupsController {
    */
   @Get(':groupId/access-code')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get the current entry code for a lecturer-owned group' })
   getAccessCode(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
-    @Query('auth') auth: string | undefined,
   ): Promise<GenerateCodeResponseBody> {
-    return this.groupsService.getAccessCodeForGroup(req, publicGroupId, browserId, auth);
+    return this.groupsService.getAccessCodeForGroup(req, publicGroupId, browserId, undefined);
   }
 
   /**
@@ -168,6 +174,7 @@ export class GroupsController {
    */
   @Post('generate-code')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Generate a new enrollment code for a group' })
   generateCode(
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,
@@ -181,6 +188,7 @@ export class GroupsController {
    * Auth is read from `maq_auth` cookie OR query `auth` parameter.
    */
   @Get(':groupId/invite')
+  @ApiOperation({ summary: 'Validate entry code and enroll the student' })
   joinGroup(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
@@ -195,12 +203,12 @@ export class GroupsController {
    */
   @Get(':groupId/enrollment-codes')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List enrollment codes for a lecturer-owned group' })
   listEnrollmentCodes(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Query('auth') auth: string | undefined,
   ) {
-    return this.enrollmentCodesService.listCodesForGroup(req, toInternalGroupId(publicGroupId), auth);
+    return this.enrollmentCodesService.listCodesForGroup(req, toInternalGroupId(publicGroupId));
   }
 
   /**
@@ -208,13 +216,13 @@ export class GroupsController {
    */
   @Get(':groupId/enrollment-codes/:codeId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get a single enrollment code by id' })
   getEnrollmentCode(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('codeId', ParseIntPipe) codeId: number,
     @Req() req: Request,
-    @Query('auth') auth: string | undefined,
   ) {
-    return this.enrollmentCodesService.getCodeForGroup(req, toInternalGroupId(publicGroupId), codeId, auth);
+    return this.enrollmentCodesService.getCodeForGroup(req, toInternalGroupId(publicGroupId), codeId);
   }
 
   /**
@@ -222,6 +230,7 @@ export class GroupsController {
    */
   @Post(':groupId/enrollment-codes')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create an enrollment code with optional expiration and usage limits' })
   createEnrollmentCode(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
@@ -235,6 +244,7 @@ export class GroupsController {
    */
   @Patch(':groupId/enrollment-codes/:codeId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update enrollment code limits or active flag' })
   updateEnrollmentCode(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('codeId', ParseIntPipe) codeId: number,
@@ -249,13 +259,13 @@ export class GroupsController {
    */
   @Delete(':groupId/enrollment-codes/:codeId')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete an enrollment code' })
   async deleteEnrollmentCode(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('codeId', ParseIntPipe) codeId: number,
     @Req() req: Request,
-    @Query('auth') auth: string | undefined,
   ): Promise<void> {
-    await this.enrollmentCodesService.deleteCode(req, toInternalGroupId(publicGroupId), codeId, auth);
+    await this.enrollmentCodesService.deleteCode(req, toInternalGroupId(publicGroupId), codeId);
   }
 
   // ========================================
@@ -268,12 +278,12 @@ export class GroupsController {
    */
   @Get(':groupId/badges')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get all badges for the given course group' })
   getBadges(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Query('auth') auth: string | undefined,
   ) {
-    return this.badgesService.getBadgesForGroup(req, toInternalGroupId(publicGroupId), auth);
+    return this.badgesService.getBadgesForGroup(req, toInternalGroupId(publicGroupId));
   }
 
   /**
@@ -283,6 +293,7 @@ export class GroupsController {
    */
   @Post(':groupId/badges')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a badge definition for the given course group' })
   createBadge(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
@@ -297,6 +308,7 @@ export class GroupsController {
    */
   @Patch(':groupId/badges/:badgeId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a badge definition' })
   updateBadge(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('badgeId', ParseIntPipe) badgeId: number,
@@ -312,6 +324,7 @@ export class GroupsController {
    */
   @Delete(':groupId/badges/:badgeId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a badge definition' })
   deleteBadge(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('badgeId', ParseIntPipe) badgeId: number,
@@ -331,12 +344,12 @@ export class GroupsController {
    */
   @Get(':groupId/item-categories')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get all shop item categories for the given course group' })
   getItemCategories(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Query('auth') auth: string | undefined,
   ) {
-    return this.itemCategoriesService.getCategoriesForGroup(req, toInternalGroupId(publicGroupId), auth);
+    return this.itemCategoriesService.getCategoriesForGroup(req, toInternalGroupId(publicGroupId));
   }
 
   /**
@@ -345,6 +358,7 @@ export class GroupsController {
    */
   @Post(':groupId/item-categories')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a shop item category for the given course group' })
   createItemCategory(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
@@ -359,6 +373,7 @@ export class GroupsController {
    */
   @Patch(':groupId/item-categories/:categoryId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a shop item category' })
   updateItemCategory(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('categoryId', ParseIntPipe) categoryId: number,
@@ -379,6 +394,7 @@ export class GroupsController {
    */
   @Delete(':groupId/item-categories/:categoryId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a shop item category; its items become uncategorized' })
   deleteItemCategory(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('categoryId', ParseIntPipe) categoryId: number,
@@ -399,16 +415,17 @@ export class GroupsController {
 
   @Get(':groupId/shop-items')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get all shop items for the given course group' })
   getShopItems(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Query('auth') auth: string | undefined,
   ) {
-    return this.shopItemsService.getItemsForGroup(req, toInternalGroupId(publicGroupId), auth);
+    return this.shopItemsService.getItemsForGroup(req, toInternalGroupId(publicGroupId));
   }
 
   @Post(':groupId/shop-items')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a shop item for the given course group' })
   createShopItem(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
@@ -419,6 +436,7 @@ export class GroupsController {
 
   @Post(':groupId/shop-items/from-template')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a shop item from a template' })
   createShopItemFromTemplate(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
@@ -429,6 +447,7 @@ export class GroupsController {
 
   @Patch(':groupId/shop-items/:itemId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a shop item' })
   updateShopItem(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('itemId', ParseIntPipe) itemId: number,
@@ -440,6 +459,7 @@ export class GroupsController {
 
   @Delete(':groupId/shop-items/:itemId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a shop item' })
   deleteShopItem(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('itemId', ParseIntPipe) itemId: number,
@@ -455,6 +475,7 @@ export class GroupsController {
 
   @Post(':groupId/shop-items/:itemId/buy')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Buy a shop item as a student' })
   buyShopItem(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('itemId', ParseIntPipe) itemId: number,
@@ -466,16 +487,17 @@ export class GroupsController {
 
   @Get(':groupId/inventory')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get the student inventory for the given course group' })
   getStudentInventory(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Query('auth') auth: string | undefined,
   ) {
-    return this.shopStudentService.getInventory(req, toInternalGroupId(publicGroupId), auth);
+    return this.shopStudentService.getInventory(req, toInternalGroupId(publicGroupId));
   }
 
   @Post(':groupId/inventory/:itemId/use')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Use an item from the student inventory' })
   useInventoryItem(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('itemId', ParseIntPipe) itemId: number,
@@ -495,12 +517,12 @@ export class GroupsController {
    */
   @Get(':groupId/ranks')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get all ranks for the given course group' })
   getRanks(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Query('auth') auth: string | undefined,
   ) {
-    return this.ranksService.getRanksForGroup(req, toInternalGroupId(publicGroupId), auth);
+    return this.ranksService.getRanksForGroup(req, toInternalGroupId(publicGroupId));
   }
 
   /**
@@ -510,6 +532,7 @@ export class GroupsController {
    */
   @Post(':groupId/ranks')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a rank definition for the given course group' })
   createRank(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
@@ -524,6 +547,7 @@ export class GroupsController {
    */
   @Patch(':groupId/ranks/:rankId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a rank definition' })
   updateRank(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('rankId', ParseIntPipe) rankId: number,
@@ -539,6 +563,7 @@ export class GroupsController {
    */
   @Delete(':groupId/ranks/:rankId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a rank definition' })
   deleteRank(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('rankId', ParseIntPipe) rankId: number,

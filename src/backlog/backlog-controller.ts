@@ -9,8 +9,10 @@ import {
     ForbiddenException,
     Query,
 } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { BacklogService, BacklogItemResponse } from './backlog-service';
+@ApiTags('Backlog')
 @Controller('groups')
   export class BacklogController {
     constructor(private readonly backlogService: BacklogService) {}
@@ -19,11 +21,11 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
      * Retrieves the backlog for the specific group and the currently logged-in student.
      */
   @Get(':groupId/backlog/me')
+  @ApiOperation({ summary: 'Get the backlog for the current student in the group' })
     async getStudentBacklog(
           @Param('groupId', ParseIntPipe) groupId: number,
           @Req() req: Request,
           @Headers('x-browser-id') browserId: string | undefined,
-          @Query('auth') auth?: string,
           @Query('take') take?: string,
           @Query('skip') skip?: string,
         ) {
@@ -39,7 +41,7 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
                   skipNum = isNaN(parsed) ? 0 : Math.max(0, parsed);
           }
 
-      const result = await this.backlogService.getStudentBacklog(req, groupId, browserId, auth, takeNum, skipNum);
+      const result = await this.backlogService.getStudentBacklog(req, groupId, browserId, undefined, takeNum, skipNum);
           if ('error' in result) {
                   if (result.error.startsWith('Forbidden:')) {
                             throw new ForbiddenException(result.error);
@@ -53,11 +55,11 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
      * Retrieves the entire group backlog for lecturers/admins.
      */
   @Get(':groupId/backlog')
+  @ApiOperation({ summary: 'Get the entire group backlog for lecturers/admins' })
     async getGroupBacklog(
           @Param('groupId', ParseIntPipe) groupId: number,
           @Req() req: Request,
           @Headers('x-browser-id') browserId: string | undefined,
-          @Query('auth') auth?: string,
           @Query('take') take?: string,
           @Query('skip') skip?: string,
         ) {
@@ -73,7 +75,7 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
                   skipNum = isNaN(parsed) ? 0 : Math.max(0, parsed);
           }
 
-      const result = await this.backlogService.getGroupBacklog(req, groupId, browserId, auth, takeNum, skipNum);
+      const result = await this.backlogService.getGroupBacklog(req, groupId, browserId, undefined, takeNum, skipNum);
           if ('error' in result) {
                   if (result.error.startsWith('Forbidden:')) {
                             throw new ForbiddenException(result.error);

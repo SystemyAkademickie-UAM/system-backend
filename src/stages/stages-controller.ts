@@ -1,4 +1,5 @@
 import { Body, Controller, Headers, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { StagesService, StageResponseBody } from './stages-service';
@@ -7,6 +8,7 @@ import { StagesService, StageResponseBody } from './stages-service';
  * Stage management API for lecturers.
  * Methods: post, modify, remove, retrieve.
  */
+@ApiTags('Stages')
 @Controller('stages')
 export class StagesController {
   constructor(private readonly stagesService: StagesService) {}
@@ -17,6 +19,7 @@ export class StagesController {
    */
   @Post()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Handle stage operations based on the request body method field' })
   handleStage(
     @Req() req: Request,
     @Headers('x-browser-id') browserId: string | undefined,

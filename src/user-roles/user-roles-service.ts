@@ -2,12 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import {
-  ADMINISTRATOR_ROLE_NAME,
-  LECTURER_ROLE_NAME,
-  STUDENT_ROLE_NAME,
-  SUPER_ROLE_NAME,
-} from '../constants/role-name-constants';
+import { ROLE_PRIORITY_ORDER } from '../constants/role-name-constants';
 import { AccountEntity } from '../database/entities/account.entity';
 
 /**
@@ -45,26 +40,24 @@ export class UserRolesService {
    * Picks the highest-privilege role when a user has multiple `auth.accounts` rows.
    */
   async resolvePrimaryRoleForUser(userId: number): Promise<string | null> {
+    const roles = await this.listRolesForUser(userId);
+    return roles[0] ?? null;
+  }
+
+  /**
+   * @returns distinct roles the user holds, ordered from highest to lowest privilege.
+   */
+  async listRolesForUser(userId: number): Promise<string[]> {
     const rows = await this.accountRepository.find({
       where: { userId },
       select: ['role'],
     });
     if (rows.length === 0) {
-      return null;
+      return [];
     }
     const roleNames = new Set(rows.map((row) => row.role));
-    if (roleNames.has(SUPER_ROLE_NAME)) {
-      return SUPER_ROLE_NAME;
-    }
-    if (roleNames.has(ADMINISTRATOR_ROLE_NAME)) {
-      return ADMINISTRATOR_ROLE_NAME;
-    }
-    if (roleNames.has(LECTURER_ROLE_NAME)) {
-      return LECTURER_ROLE_NAME;
-    }
-    if (roleNames.has(STUDENT_ROLE_NAME)) {
-      return STUDENT_ROLE_NAME;
-    }
-    return rows[0]?.role ?? null;
+    const ordered = ROLE_PRIORITY_ORDER.filter((role) => roleNames.has(role));
+    const unknown = [...roleNames].filter((role) => !ROLE_PRIORITY_ORDER.includes(role as never));
+    return [...ordered, ...unknown];
   }
 }

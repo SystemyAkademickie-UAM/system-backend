@@ -11,6 +11,7 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { toInternalGroupId } from '../constants/group-api-constants';
@@ -24,6 +25,7 @@ import { SetActivityCompletionsDto } from './dto/set-activity-completions.dto';
  * Participant management API for lecturers (Panel Zarządzania Uczestnikami).
  * All endpoints require lecturer authorization.
  */
+@ApiTags('Student management')
 @Controller('groups')
 export class StudentManagementController {
   constructor(
@@ -38,6 +40,7 @@ export class StudentManagementController {
    * Returns participants enrolled in the group with their stats.
    */
   @Get(':groupId/students')
+  @ApiOperation({ summary: 'List participants enrolled in the group with their stats' })
   getStudents(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
@@ -50,6 +53,7 @@ export class StudentManagementController {
    */
   @Patch(':groupId/students/bulk-update')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Bulk-update student stats (currency, totalEarned, rankId)' })
   bulkUpdate(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
@@ -63,6 +67,7 @@ export class StudentManagementController {
    */
   @Delete(':groupId/students/:accountId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove a student from the group (cascading related data)' })
   removeStudent(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('accountId', ParseIntPipe) accountId: number,
@@ -77,6 +82,7 @@ export class StudentManagementController {
    * Returns all group badges with an `isEarned` flag for the specified student.
    */
   @Get(':groupId/students/:accountId/badges')
+  @ApiOperation({ summary: 'List group badges with an isEarned flag for the student' })
   getStudentBadges(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('accountId', ParseIntPipe) accountId: number,
@@ -94,6 +100,7 @@ export class StudentManagementController {
    */
   @Post(':groupId/students/:accountId/badges/:badgeId/toggle')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Toggle (grant/revoke) a badge for the student' })
   toggleBadge(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('accountId', ParseIntPipe) accountId: number,
@@ -114,6 +121,7 @@ export class StudentManagementController {
    * Returns account IDs that completed a group activity (single query on activity_backlog).
    */
   @Get(':groupId/activities/:activityId/completions')
+  @ApiOperation({ summary: 'List account IDs that completed a group activity' })
   getActivityCompletions(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('activityId', ParseIntPipe) activityId: number,
@@ -131,6 +139,7 @@ export class StudentManagementController {
    */
   @Patch(':groupId/activities/:activityId/completions')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set the target completion set for a group activity' })
   setActivityCompletions(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('activityId', ParseIntPipe) activityId: number,
@@ -149,6 +158,7 @@ export class StudentManagementController {
    * Returns the progress tree (stages → activities with `isCompleted` flags).
    */
   @Get(':groupId/students/:accountId/progress')
+  @ApiOperation({ summary: 'Get the progress tree (stages and activities with completion flags)' })
   getStudentProgress(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('accountId', ParseIntPipe) accountId: number,
@@ -166,6 +176,7 @@ export class StudentManagementController {
    */
   @Post(':groupId/students/:accountId/activities/:activityId/toggle')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Toggle the completion status of an activity for the student' })
   toggleActivity(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('accountId', ParseIntPipe) accountId: number,
