@@ -271,6 +271,24 @@ Adjusts `gamification.student_stats.currency` and `totalEarned` like `POST .../a
 
 ---
 
+## CSV Reports (lecturer)
+
+Generates and downloads CSV reports containing student progress matrices (activity completions).
+Responses have `Content-Type: text/csv` and a `Content-Disposition` attachment header. CSV separator is `;`.
+
+**Authorization:** lecturer + soft auth. Caller must own the group.
+
+**Endpoint:** `GET /api/groups/:groupId/reports/group`
+Downloads a report for the entire group. Rows = all students, Columns = all stage/activity pairs.
+
+**Endpoint:** `GET /api/groups/:groupId/reports/stage/:stageId`
+Downloads a report restricted to a single stage. Rows = all students, Columns = activities from that stage.
+
+**Endpoint:** `GET /api/groups/:groupId/reports/student/:accountId`
+Downloads a flat report for a single student. Columns: `Student;Stage;Activity;Completed`.
+
+---
+
 ## User groups (student & lecturer)
 
 Retrieves groups the authenticated user belongs to: student enrollments and lecturer-owned groups.
