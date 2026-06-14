@@ -26,6 +26,7 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
+import { UpdateLivesConfigDto } from './dto/update-lives-config.dto';
 import { UpdateShopStatusDto } from './dto/update-shop-status.dto';
 import { EnrollmentCodesService } from './enrollment-codes-service';
 
@@ -47,6 +48,19 @@ export type UserGroupListItem = {
   currency: string | null;
   currencyIcon: string | null;
   shopOpen: boolean;
+  livesEnabled: boolean;
+  lives: number | null;
+  livesLabel: string | null;
+  livesIcon: string | null;
+  livesShopEnabled: boolean;
+};
+
+export type LivesConfigResponseBody = {
+  livesEnabled: boolean;
+  livesMax: number | null;
+  livesLabel: string | null;
+  livesIcon: string | null;
+  livesShopEnabled: boolean;
 };
 
 export type GetUserGroupsResponseBody = {
@@ -328,6 +342,130 @@ export class GroupsService {
     }
   }
 
+  /**
+   * Updates the lives system configuration for a group owned by the lecturer.
+   */
+  async updateLivesConfig(
+    req: Request,
+    publicGroupId: number,
+    body: UpdateLivesConfigDto,
+    browserIdHeader: string | undefined,
+  ): Promise<UpdateGroupResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      body.auth,
+    );
+    if (!subject) {
+      throw new UnauthorizedException('Missing or invalid session');
+    }
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    if (lecturerAccountId === null) {
+      throw new ForbiddenException('Requires lecturer privileges');
+    }
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+
+    const existing = await this.groupRepository.findOne({
+      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!existing) {
+      throw new ForbiddenException('Not authorized to manage this group');
+    }
+
+    const updates: Partial<GroupEntity> = {};
+    if (body.livesEnabled !== undefined) {
+      updates.livesEnabled = body.livesEnabled;
+    }
+    if (body.lives !== undefined) {
+      updates.lives = body.lives;
+    }
+    if (body.livesLabel !== undefined) {
+      updates.livesLabel = nullableTrimmedString(body.livesLabel);
+    }
+    if (body.livesIcon !== undefined) {
+      updates.livesIcon = nullableTrimmedString(body.livesIcon);
+    }
+    if (body.livesShopEnabled !== undefined) {
+      updates.livesShopEnabled = body.livesShopEnabled;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        updated: false,
+      };
+    }
+
+    try {
+      await this.groupRepository.update({ id: internalGroupId }, updates);
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        updated: true,
+      };
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        this.logger.error(`updateLivesConfig failed: ${err.message}`, err.stack);
+      } else {
+        this.logger.error(`updateLivesConfig failed: ${String(err)}`);
+      }
+      throw new InternalServerErrorException('Database update failed');
+    }
+  }
+
+  /**
+   * Returns the lives configuration for a group.
+   * Accessible by both the lecturer (owner) and enrolled students.
+   */
+  async getLivesConfig(
+    req: Request,
+    publicGroupId: number,
+    browserIdHeader: string | undefined,
+    queryAuth: string | undefined,
+  ): Promise<LivesConfigResponseBody> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      queryAuth,
+    );
+    if (!subject) {
+      throw new UnauthorizedException('Missing or invalid session');
+    }
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+
+    const group = await this.groupRepository.findOne({
+      where: { id: internalGroupId },
+      select: ['id', 'livesEnabled', 'lives', 'livesLabel', 'livesIcon', 'livesShopEnabled'],
+    });
+    if (!group) {
+      throw new BadRequestException('Group not found');
+    }
+
+    return {
+      livesEnabled: group.livesEnabled,
+      livesMax: group.lives,
+      livesLabel: group.livesLabel,
+      livesIcon: group.livesIcon,
+      livesShopEnabled: group.livesShopEnabled,
+    };
+  }
+
   private logGroupCreationFailure(err: unknown): void {
     if (postgresFkViolation(err)) {
       const detail =
@@ -601,12 +739,18 @@ export class GroupsService {
     teacher_name: string | null;
     teacher_surname: string | null;
     shop_open: boolean;
+    lives_enabled: boolean;
+    lives: number | null;
+    lives_label: string | null;
+    lives_icon: string | null;
+    lives_shop_enabled: boolean;
   }): UserGroupListItem {
     const lecturers = this.formatLecturerDisplay(
       row.teacher_nickname,
       row.teacher_name,
       row.teacher_surname,
     );
+    const toBool = (v: unknown) => v === true || v === ('t' as unknown) || v === (1 as unknown);
     return {
       id: row.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
       groupName: row.name,
@@ -616,7 +760,12 @@ export class GroupsService {
       description: row.description ?? null,
       currency: row.currency ?? null,
       currencyIcon: row.currency_icon ?? null,
-      shopOpen: row.shop_open === true || row.shop_open === ('t' as unknown) || row.shop_open === (1 as unknown),
+      shopOpen: toBool(row.shop_open),
+      livesEnabled: toBool(row.lives_enabled),
+      lives: row.lives ?? null,
+      livesLabel: row.lives_label ?? null,
+      livesIcon: row.lives_icon ?? null,
+      livesShopEnabled: toBool(row.lives_shop_enabled),
     };
   }
 
@@ -637,6 +786,11 @@ export class GroupsService {
       teacher_name: string | null;
       teacher_surname: string | null;
       shop_open: boolean;
+      lives_enabled: boolean;
+      lives: number | null;
+      lives_label: string | null;
+      lives_icon: string | null;
+      lives_shop_enabled: boolean;
       is_owner: boolean;
       is_enrolled: boolean;
     }>
@@ -653,6 +807,11 @@ export class GroupsService {
         'group.currency AS currency',
         'group.currency_icon AS currency_icon',
         'group.shop_open AS shop_open',
+        'group.lives_enabled AS lives_enabled',
+        'group.lives AS lives',
+        'group.lives_label AS lives_label',
+        'group.lives_icon AS lives_icon',
+        'group.lives_shop_enabled AS lives_shop_enabled',
         'user.nickname AS teacher_nickname',
         'user.name AS teacher_name',
         'user.surname AS teacher_surname',
@@ -682,6 +841,7 @@ export class GroupsService {
     }
     qb.orderBy('group.name', 'ASC');
     const rawGroups = await qb.getRawMany();
+    const toBool = (v: unknown) => v === true || v === 't' || v === 1;
     return rawGroups.map((row) => ({
       id: Number(row.id),
       name: String(row.name),
@@ -693,9 +853,14 @@ export class GroupsService {
       teacher_nickname: row.teacher_nickname ?? null,
       teacher_name: row.teacher_name ?? null,
       teacher_surname: row.teacher_surname ?? null,
-      shop_open: row.shop_open === true || row.shop_open === ('t' as unknown) || row.shop_open === (1 as unknown),
-      is_owner: row.is_owner === true || row.is_owner === 't' || row.is_owner === 1,
-      is_enrolled: row.is_enrolled === true || row.is_enrolled === 't' || row.is_enrolled === 1,
+      shop_open: toBool(row.shop_open),
+      lives_enabled: toBool(row.lives_enabled),
+      lives: row.lives ?? null,
+      lives_label: row.lives_label ?? null,
+      lives_icon: row.lives_icon ?? null,
+      lives_shop_enabled: toBool(row.lives_shop_enabled),
+      is_owner: toBool(row.is_owner),
+      is_enrolled: toBool(row.is_enrolled),
     }));
   }
 }

@@ -139,6 +139,11 @@ describe('GroupsService', () => {
           currency: 'coins',
           currency_icon: '🪙',
           shop_open: true,
+          lives_enabled: false,
+          lives: 3,
+          lives_label: null,
+          lives_icon: null,
+          lives_shop_enabled: false,
         },
         {
           id: 6,
@@ -168,6 +173,11 @@ describe('GroupsService', () => {
             currency: 'coins',
             currencyIcon: '🪙',
             shopOpen: true,
+            livesEnabled: false,
+            lives: 3,
+            livesLabel: null,
+            livesIcon: null,
+            livesShopEnabled: false,
           },
         ],
       });
@@ -313,6 +323,73 @@ describe('GroupsService', () => {
 
       await expect(service.updateShopStatus(mockRequest, 100001, { shopOpen: true }, 'browser-id'))
         .rejects.toThrow('Not authorized to manage this group');
+    });
+  });
+
+  describe('updateLivesConfig', () => {
+    it('should update lives config when user is owner', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({
+        id: 1,
+        teacherAccountId: 10,
+      });
+      groupRepository.update = jest.fn().mockResolvedValue({ affected: 1 });
+
+      const result = await service.updateLivesConfig(
+        mockRequest,
+        100001,
+        { livesEnabled: true, lives: 5, livesLabel: 'Tarcze', livesShopEnabled: true },
+        'browser-id',
+      );
+
+      expect(groupRepository.update).toHaveBeenCalledWith(
+        { id: 1 },
+        { livesEnabled: true, lives: 5, livesLabel: 'Tarcze', livesShopEnabled: true },
+      );
+      expect(result).toEqual({
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: 100001,
+        updated: true,
+      });
+    });
+
+    it('should return updated: false when no fields are provided', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({
+        id: 1,
+        teacherAccountId: 10,
+      });
+
+      const result = await service.updateLivesConfig(mockRequest, 100001, {}, 'browser-id');
+
+      expect(result.updated).toBe(false);
+    });
+
+    it('should throw UnauthorizedException if subject not resolved', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
+      await expect(
+        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }, 'browser-id'),
+      ).rejects.toThrow('Missing or invalid session');
+    });
+
+    it('should throw ForbiddenException if not lecturer', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(null);
+      await expect(
+        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }, 'browser-id'),
+      ).rejects.toThrow('Requires lecturer privileges');
+    });
+
+    it('should throw ForbiddenException if group not found or not owner', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }, 'browser-id'),
+      ).rejects.toThrow('Not authorized to manage this group');
     });
   });
 });

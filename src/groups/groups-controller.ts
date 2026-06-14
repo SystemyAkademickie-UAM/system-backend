@@ -25,10 +25,11 @@ import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { JoinGroupQueryDto } from './dto/join-group-query.dto';
 import { UpdateEnrollmentCodeDto } from './dto/update-enrollment-code.dto';
 import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
+import { UpdateLivesConfigDto } from './dto/update-lives-config.dto';
 import { UpdateShopStatusDto } from './dto/update-shop-status.dto';
 import { EnrollmentCodesService } from './enrollment-codes-service';
 import { EnrollGroupResponseBody, GroupsEnrollmentService } from './groups-enrollment-service';
-import { CreateGroupResponseBody, GenerateCodeResponseBody, GetGroupsCatalogResponseBody, GetUserGroupsResponseBody, GroupPreviewResponseBody, GroupsService, UpdateGroupResponseBody } from './groups-service';
+import { CreateGroupResponseBody, GenerateCodeResponseBody, GetGroupsCatalogResponseBody, GetUserGroupsResponseBody, GroupPreviewResponseBody, GroupsService, LivesConfigResponseBody, UpdateGroupResponseBody } from './groups-service';
 
 /**
  * Course group creation API for lecturers.
@@ -135,6 +136,37 @@ export class GroupsController {
     @Body() body: UpdateShopStatusDto,
   ) {
     return this.groupsService.updateShopStatus(req, publicGroupId, body, browserId);
+  }
+
+  /**
+   * Returns the lives system configuration for the group.
+   * GET /groups/:groupId/lives-config
+   */
+  @Get(':groupId/lives-config')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get the lives system configuration for the group' })
+  getLivesConfig(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+  ): Promise<LivesConfigResponseBody> {
+    return this.groupsService.getLivesConfig(req, publicGroupId, browserId, undefined);
+  }
+
+  /**
+   * Updates the lives system configuration for the group.
+   * PATCH /groups/:groupId/lives-config
+   */
+  @Patch(':groupId/lives-config')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update the lives system configuration for the group' })
+  updateLivesConfig(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Headers('x-browser-id') browserId: string | undefined,
+    @Body() body: UpdateLivesConfigDto,
+  ): Promise<UpdateGroupResponseBody> {
+    return this.groupsService.updateLivesConfig(req, publicGroupId, body, browserId);
   }
 
   /**
