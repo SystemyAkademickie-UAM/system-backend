@@ -10,8 +10,7 @@ import { DataSource, Repository } from 'typeorm';
 
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
-import { ActivityBacklogEntity } from '../database/entities/activity-backlog.entity';
-import { ActivityEntity } from '../database/entities/activity.entity';
+
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StageEntity } from '../database/entities/stage.entity';
@@ -57,10 +56,6 @@ export class ReportsService {
     private readonly dataSource: DataSource,
     @InjectRepository(StageEntity)
     private readonly stageRepository: Repository<StageEntity>,
-    @InjectRepository(ActivityEntity)
-    private readonly activityRepository: Repository<ActivityEntity>,
-    @InjectRepository(ActivityBacklogEntity)
-    private readonly activityBacklogRepository: Repository<ActivityBacklogEntity>,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(GroupEntity)
@@ -261,15 +256,19 @@ export class ReportsService {
   }
 
   private escapeCsvField(value: string): string {
-    if (
-      value.includes(CSV_SEPARATOR) ||
-      value.includes('"') ||
-      value.includes('\n') ||
-      value.includes('\r')
-    ) {
-      return `"${value.replace(/"/g, '""')}"`;
+    let escaped = value;
+    if (/^[=+\-@\t\r]/.test(escaped)) {
+      escaped = "'" + escaped;
     }
-    return value;
+    if (
+      escaped.includes(CSV_SEPARATOR) ||
+      escaped.includes('"') ||
+      escaped.includes('\n') ||
+      escaped.includes('\r')
+    ) {
+      return `"${escaped.replace(/"/g, '""')}"`;
+    }
+    return escaped;
   }
 
   private formatStudentName(student: StudentRow): string {
