@@ -1239,6 +1239,10 @@ Cookie: maq_auth=<token>
 
 **Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must have the **lecturer** role. The caller becomes the owner of the newly created group.
 
+Lecturers may only import templates if they have access to them:
+- **Public templates** (`isPublic: true`): Any lecturer can import.
+- **Private templates** (`isPublic: false`): Only the creator (`creatorAccountId`) can import.
+
 **URL parameters:**
 
 | Parameter | Type | Description |
@@ -1265,6 +1269,6 @@ Cookie: maq_auth=<token>
 | Status | When |
 | ------ | ---- |
 | `400 Bad Request` | Missing or blank `name` (class-validator). |
-| `403 Forbidden` | Not authenticated or not a lecturer. |
+| `403 Forbidden` | Not authenticated, not a lecturer, or caller attempts to import a private template they did not create. |
 | `404 Not Found` | Template does not exist. |
 

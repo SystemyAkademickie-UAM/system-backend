@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
@@ -32,6 +32,10 @@ export class GroupTemplatesImportService {
       const template = await manager.findOne(GroupTemplateEntity, { where: { id: templateId } });
       if (!template) {
         throw new NotFoundException(`Group template ${templateId} not found`);
+      }
+
+      if (!template.isPublic && template.creatorAccountId !== lecturerAccountId) {
+        throw new ForbiddenException(`Cannot import private template ${templateId}`);
       }
 
       const data = template.data as GroupTemplateData;
