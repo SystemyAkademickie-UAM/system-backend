@@ -1,16 +1,17 @@
-import { Body, Controller, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { AuthTokenSessionService } from '../../auth/api-token/auth-token-session-service';
-import { GroupsService } from '../groups-service';
-import { GroupTemplatesExportService } from './group-templates-export-service';
 import { toInternalGroupId } from '../../constants/group-api-constants';
+import { GroupsService } from '../groups-service';
+import { SaveGroupTemplateDto } from '../dto/save-group-template.dto';
+import { GroupTemplatesExportService } from './group-templates-export-service';
 
 @Controller('groups')
 export class GroupTemplatesController {
   constructor(
     private readonly authTokenSessionService: AuthTokenSessionService,
-    private readonly groupsService: GroupsService, // Do weryfikacji uprawnień (lub inna metoda)
+    private readonly groupsService: GroupsService,
     private readonly exportService: GroupTemplatesExportService,
   ) {}
 
@@ -19,23 +20,15 @@ export class GroupTemplatesController {
   async saveAsTemplate(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Body() body: {
-      auth?: string;
-      name: string;
-      description?: string;
-      isPublic?: boolean;
-    },
+    @Body() dto: SaveGroupTemplateDto,
   ) {
     const internalGroupId = toInternalGroupId(publicGroupId);
-    
-    // Autoryzacja - pobieramy subject
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
+
+    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
     if (!subject) {
-      throw new Error('Unauthorized'); // Można rzucić ForbiddenException
+      throw new ForbiddenException('Missing or invalid session');
     }
 
-    // Weryfikacja czy user to wykładowca i właściciel grupy
-    // groupsService ma metody pomocnicze, ale możemy po prostu użyć istniejącej asercji z GroupsService
     const accountId = await this.groupsService.assertLecturerOwnsGroupAndGetAccountId(
       subject.userId,
       internalGroupId,
@@ -44,9 +37,9 @@ export class GroupTemplatesController {
     return this.exportService.exportGroupToTemplate(
       internalGroupId,
       accountId,
-      body.name,
-      body.description,
-      body.isPublic ?? false,
+      dto.name,
+      dto.description,
+      dto.isPublic ?? false,
     );
   }
 }

@@ -1,6 +1,7 @@
-import { Column, Entity, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 import { EDUCATION_SCHEMA } from '../../constants/database-schema-constants';
+import type { GroupTemplateData } from '../../groups/group-templates/group-template-data.interface';
 
 @Entity({ schema: EDUCATION_SCHEMA, name: 'group_templates' })
 export class GroupTemplateEntity {
@@ -23,7 +24,7 @@ export class GroupTemplateEntity {
   baseGroupId: number | null;
 
   @Column({ name: 'data', type: 'jsonb', nullable: false })
-  data: any;
+  data: GroupTemplateData;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
