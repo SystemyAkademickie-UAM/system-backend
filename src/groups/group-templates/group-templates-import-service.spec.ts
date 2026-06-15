@@ -14,8 +14,8 @@ describe('GroupTemplatesImportService', () => {
   beforeEach(async () => {
     mockManager = {
       findOne: jest.fn(),
-      create: jest.fn().mockImplementation((entityClass, dto) => ({ ...dto, id: Math.floor(Math.random() * 1000) })),
-      save: jest.fn().mockImplementation((entityClass, entity) => Promise.resolve(entity)),
+      create: jest.fn().mockImplementation((entityClass: any, dto: any) => ({ ...dto, id: Math.floor(Math.random() * 1000) })),
+      save: jest.fn().mockImplementation((entityClass: any, entity: any) => Promise.resolve(entity)),
       query: jest.fn().mockResolvedValue([]),
     };
 
@@ -117,7 +117,7 @@ describe('GroupTemplatesImportService', () => {
     let savedItemId = 0;
     let savedListingId = 0;
 
-    mockManager.create.mockImplementation((entityClass, dto) => {
+    mockManager.create.mockImplementation((entityClass: any, dto: any) => {
       // Mock deterministic IDs for testing FK mapping
       let id = 1000;
       if (entityClass.name === 'GroupEntity') id = 1001;
@@ -133,7 +133,7 @@ describe('GroupTemplatesImportService', () => {
       return { ...dto, id };
     });
 
-    mockManager.save.mockImplementation((entityClass, entity) => {
+    mockManager.save.mockImplementation((entityClass: any, entity: any) => {
       if (entityClass.name === 'GroupEntity') savedGroupId = entity.id;
       if (entityClass.name === 'BadgeEntity') savedBadgeId = entity.id;
       if (entityClass.name === 'RankEntity') savedRankId = entity.id;
