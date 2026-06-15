@@ -271,6 +271,24 @@ Adjusts `gamification.student_stats.currency` and `totalEarned` like `POST .../a
 
 ---
 
+## CSV Reports (lecturer)
+
+Generates and downloads CSV reports containing student progress matrices (activity completions).
+Responses have `Content-Type: text/csv` and a `Content-Disposition` attachment header. CSV separator is `;`.
+
+**Authorization:** lecturer + soft auth. Caller must own the group.
+
+**Endpoint:** `GET /api/groups/:groupId/reports/group`
+Downloads a report for the entire group. Rows = all students, Columns = all stage/activity pairs.
+
+**Endpoint:** `GET /api/groups/:groupId/reports/stage/:stageId`
+Downloads a report restricted to a single stage. Rows = all students, Columns = activities from that stage.
+
+**Endpoint:** `GET /api/groups/:groupId/reports/student/:accountId`
+Downloads a flat report for a single student. Columns: `Student;Stage;Activity;Completed`.
+
+---
+
 ## User groups (student & lecturer)
 
 Retrieves groups the authenticated user belongs to: student enrollments and lecturer-owned groups.
@@ -423,6 +441,63 @@ X-Browser-ID: <BrowserUUID>
 | `statusCode` | integer | Always `200` on success. |
 | `group` | integer | Public group id. |
 | `updated` | boolean | `true` if successful. |
+
+---
+
+### Get lives system config
+
+**Endpoint:** `GET /api/groups/:groupId/lives-config`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | UUID; must match `auth.tokens.browser_uuid` for this bearer. |
+
+**Authorization:** **strong** token + browser binding. Any authenticated user (lecturer or enrolled student) can read the config.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `livesEnabled` | boolean | Whether the lives system is active for this group. |
+| `livesMax` | integer \| null | Maximum number of lives per student. |
+| `livesLabel` | string \| null | Custom display name for lives (e.g. "Tarcze"). |
+| `livesIcon` | string \| null | Icon reference for lives. |
+| `livesShopEnabled` | boolean | Whether "extra life" appears as a shop product. |
+
+---
+
+### Update lives system config (lecturer)
+
+**Endpoint:** `PATCH /api/groups/:groupId/lives-config`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | UUID; must match `auth.tokens.browser_uuid` for this bearer. |
+
+**Request body (JSON):** All fields are optional; only provided fields are updated.
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string (optional) | Plaintext bearer. |
+| `livesEnabled` | boolean (optional) | Enable or disable the lives system. |
+| `lives` | integer (optional, ≥ 1) | Maximum number of lives. |
+| `livesLabel` | string (optional) | Custom display name for lives. |
+| `livesIcon` | string (optional) | Icon reference for lives. |
+| `livesShopEnabled` | boolean (optional) | Whether "extra life" appears in shop. |
+
+**Authorization:** **strong** token + browser binding. Caller must have the **lecturer** role and must own the group. Missing or invalid auth yields `401 Unauthorized` or `403 Forbidden`.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | integer | Always `200` on success. |
+| `group` | integer | Public group id. |
+| `updated` | boolean | `true` if at least one field was changed. |
 
 ---
 
@@ -1028,6 +1103,33 @@ Cookie: maq_auth=…
 **Endpoint:** `DELETE /api/groups/:groupId/ranks/:rankId`
 
 Deletes the rank. Students who had this rank get `rank_id = NULL` (“Brak”) before removal. Response: `{ "deleted": true }`.
+
+---
+
+## CSV Reports (lecturer)
+
+Downloads CSV files tracking student activity completions. The endpoints return `text/csv; charset=utf-8` with a UTF-8 BOM (`\uFEFF`) to ensure Excel on Windows opens them correctly, and uses semicolons (`;`) for the Polish locale.
+
+**Auth:** **Soft** token resolution — `maq_auth` cookie **or** `Authorization: Bearer` header; **`X-Browser-ID` is not required**. Caller must be a **lecturer** who **owns** the group.
+
+**Errors:**
+- `403 Forbidden`: Token missing/invalid, caller is not a lecturer, or caller is not the group owner.
+- `404 Not Found`: The specified stage or student does not exist within the group.
+
+### Group Report
+**Endpoint:** `GET /api/groups/:groupId/reports/group`
+
+Downloads a matrix report for all students across all stages/activities.
+
+### Stage Report
+**Endpoint:** `GET /api/groups/:groupId/reports/stage/:stageId`
+
+Downloads a matrix report for all students, filtered to a single stage.
+
+### Student Report
+**Endpoint:** `GET /api/groups/:groupId/reports/student/:accountId`
+
+Downloads a flat report for a single student.
 
 ---
 
