@@ -271,6 +271,24 @@ Adjusts `gamification.student_stats.currency` and `totalEarned` like `POST .../a
 
 ---
 
+## CSV Reports (lecturer)
+
+Generates and downloads CSV reports containing student progress matrices (activity completions).
+Responses have `Content-Type: text/csv` and a `Content-Disposition` attachment header. CSV separator is `;`.
+
+**Authorization:** lecturer + soft auth. Caller must own the group.
+
+**Endpoint:** `GET /api/groups/:groupId/reports/group`
+Downloads a report for the entire group. Rows = all students, Columns = all stage/activity pairs.
+
+**Endpoint:** `GET /api/groups/:groupId/reports/stage/:stageId`
+Downloads a report restricted to a single stage. Rows = all students, Columns = activities from that stage.
+
+**Endpoint:** `GET /api/groups/:groupId/reports/student/:accountId`
+Downloads a flat report for a single student. Columns: `Student;Stage;Activity;Completed`.
+
+---
+
 ## User groups (student & lecturer)
 
 Retrieves groups the authenticated user belongs to: student enrollments and lecturer-owned groups.
@@ -1085,6 +1103,33 @@ Cookie: maq_auth=…
 **Endpoint:** `DELETE /api/groups/:groupId/ranks/:rankId`
 
 Deletes the rank. Students who had this rank get `rank_id = NULL` (“Brak”) before removal. Response: `{ "deleted": true }`.
+
+---
+
+## CSV Reports (lecturer)
+
+Downloads CSV files tracking student activity completions. The endpoints return `text/csv; charset=utf-8` with a UTF-8 BOM (`\uFEFF`) to ensure Excel on Windows opens them correctly, and uses semicolons (`;`) for the Polish locale.
+
+**Auth:** **Soft** token resolution — `maq_auth` cookie **or** `Authorization: Bearer` header; **`X-Browser-ID` is not required**. Caller must be a **lecturer** who **owns** the group.
+
+**Errors:**
+- `403 Forbidden`: Token missing/invalid, caller is not a lecturer, or caller is not the group owner.
+- `404 Not Found`: The specified stage or student does not exist within the group.
+
+### Group Report
+**Endpoint:** `GET /api/groups/:groupId/reports/group`
+
+Downloads a matrix report for all students across all stages/activities.
+
+### Stage Report
+**Endpoint:** `GET /api/groups/:groupId/reports/stage/:stageId`
+
+Downloads a matrix report for all students, filtered to a single stage.
+
+### Student Report
+**Endpoint:** `GET /api/groups/:groupId/reports/student/:accountId`
+
+Downloads a flat report for a single student.
 
 ---
 
