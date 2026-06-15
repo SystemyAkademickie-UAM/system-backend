@@ -1160,3 +1160,75 @@ Point **`SAML_ACS_URL`** at the **same origin** the browser uses for `/api` (e.g
 ### CORS
 
 The API enables **`Access-Control-Allow-Credentials`** so browsers may send cookies when `Origin` is allowlisted and the client uses credentials (see `CORS_ORIGIN`).
+
+---
+
+## Group templates (lecturer)
+
+Save a group's full configuration (settings, badges, ranks, shop items with pricing rules, posts, stages & activities) as a reusable template. Student data (enrollments, stats, backlog, earned items, enrollment codes) is **never** included.
+
+### Save group as template
+
+**Endpoint:** `POST /api/groups/:groupId/save-as-template`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must have the **lecturer** role and must own the group (`education.groups.teacher_account_id`).
+
+**URL parameters:**
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `groupId` | integer | Public group ID (includes `GROUP_RESPONSE_GROUP_ID_OFFSET`). |
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
+| `name` | string | Non-empty, min 1 char | Display name for the template. |
+| `description` | string (optional) | | Description of the template. |
+| `isPublic` | boolean (optional) | Default `false` | When `true`, the template is visible to other lecturers in the gallery. |
+
+**Response:** `201 Created` with the saved `GroupTemplateEntity` object:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | integer | Template primary key. |
+| `name` | string | Template name. |
+| `description` | string \| null | Template description. |
+| `isPublic` | boolean | Visibility flag. |
+| `creatorAccountId` | integer | Lecturer account id that created the template. |
+| `baseGroupId` | integer \| null | Source group id. |
+| `data` | object (JSONB) | Full snapshot — group settings, badges, ranks, item categories, items with shop listings (incl. rank prices & badge promotions), posts, stages with activities. |
+| `createdAt` | string (ISO-8601) | Creation timestamp. |
+
+**Errors:**
+
+| Status | When |
+| ------ | ---- |
+| `400 Bad Request` | Missing or blank `name` (class-validator). |
+| `403 Forbidden` | Not authenticated, not a lecturer, or not the group owner. |
+| `404 Not Found` | Group does not exist. |
+
+**Example**
+
+```http
+POST /api/groups/100001/save-as-template HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+Cookie: maq_auth=<token>
+
+{"name": "Kurs Algorytmów – szablon", "description": "Pełny kurs z 3 etapami", "isPublic": true}
+```
+
+```json
+{
+  "id": 1,
+  "name": "Kurs Algorytmów – szablon",
+  "description": "Pełny kurs z 3 etapami",
+  "isPublic": true,
+  "creatorAccountId": 5,
+  "baseGroupId": 1,
+  "data": { "group": { "..." }, "badges": [], "ranks": [], "..." },
+  "createdAt": "2026-06-15T19:00:00.000Z"
+}
+```
