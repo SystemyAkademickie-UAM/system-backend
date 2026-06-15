@@ -426,6 +426,63 @@ X-Browser-ID: <BrowserUUID>
 
 ---
 
+### Get lives system config
+
+**Endpoint:** `GET /api/groups/:groupId/lives-config`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | UUID; must match `auth.tokens.browser_uuid` for this bearer. |
+
+**Authorization:** **strong** token + browser binding. Any authenticated user (lecturer or enrolled student) can read the config.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `livesEnabled` | boolean | Whether the lives system is active for this group. |
+| `livesMax` | integer \| null | Maximum number of lives per student. |
+| `livesLabel` | string \| null | Custom display name for lives (e.g. "Tarcze"). |
+| `livesIcon` | string \| null | Icon reference for lives. |
+| `livesShopEnabled` | boolean | Whether "extra life" appears as a shop product. |
+
+---
+
+### Update lives system config (lecturer)
+
+**Endpoint:** `PATCH /api/groups/:groupId/lives-config`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | UUID; must match `auth.tokens.browser_uuid` for this bearer. |
+
+**Request body (JSON):** All fields are optional; only provided fields are updated.
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string (optional) | Plaintext bearer. |
+| `livesEnabled` | boolean (optional) | Enable or disable the lives system. |
+| `lives` | integer (optional, ≥ 1) | Maximum number of lives. |
+| `livesLabel` | string (optional) | Custom display name for lives. |
+| `livesIcon` | string (optional) | Icon reference for lives. |
+| `livesShopEnabled` | boolean (optional) | Whether "extra life" appears in shop. |
+
+**Authorization:** **strong** token + browser binding. Caller must have the **lecturer** role and must own the group. Missing or invalid auth yields `401 Unauthorized` or `403 Forbidden`.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | integer | Always `200` on success. |
+| `group` | integer | Public group id. |
+| `updated` | boolean | `true` if at least one field was changed. |
+
+---
+
 ## Group posts management (lecturer & student)
 
 Manages announcements / posts in **`edukacja.posts`** for a given course group.
