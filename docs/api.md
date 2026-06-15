@@ -1232,3 +1232,39 @@ Cookie: maq_auth=<token>
   "createdAt": "2026-06-15T19:00:00.000Z"
 }
 ```
+
+### Create group from template
+
+**Endpoint:** `POST /api/groups/from-template/:templateId`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must have the **lecturer** role. The caller becomes the owner of the newly created group.
+
+**URL parameters:**
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `templateId` | integer | Primary key of the template. |
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
+| `name` | string | Non-empty, min 1 char | Display name for the newly created group. |
+| `subjectName` | string (optional) | | Overrides the subject name from the template. If omitted, the template's value is used. |
+
+**Response:** `201 Created` with the new public group ID:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | integer | `201` |
+| `group` | integer | Public ID of the newly created group (includes `GROUP_RESPONSE_GROUP_ID_OFFSET`). |
+
+**Errors:**
+
+| Status | When |
+| ------ | ---- |
+| `400 Bad Request` | Missing or blank `name` (class-validator). |
+| `403 Forbidden` | Not authenticated or not a lecturer. |
+| `404 Not Found` | Template does not exist. |
+

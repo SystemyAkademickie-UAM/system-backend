@@ -111,15 +111,20 @@ export class GroupsService {
   ) { }
 
   async assertLecturerOwnsGroupAndGetAccountId(userId: number, internalGroupId: number): Promise<number> {
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(userId, LECTURER_ROLE_NAME);
-    if (lecturerAccountId === null) {
-      throw new ForbiddenException('Requires lecturer privileges');
-    }
+    const lecturerAccountId = await this.assertLecturerAndGetAccountId(userId);
     const group = await this.groupRepository.findOne({
       where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
     });
     if (!group) {
       throw new ForbiddenException('Not authorized to manage this group');
+    }
+    return lecturerAccountId;
+  }
+
+  async assertLecturerAndGetAccountId(userId: number): Promise<number> {
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(userId, LECTURER_ROLE_NAME);
+    if (lecturerAccountId === null) {
+      throw new ForbiddenException('Requires lecturer privileges');
     }
     return lecturerAccountId;
   }
