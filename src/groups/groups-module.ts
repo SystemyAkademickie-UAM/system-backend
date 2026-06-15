@@ -19,6 +19,8 @@ import { GroupsPostsService } from './groups-posts-service';
 import { GroupsCurrencyController } from './groups-currency-controller';
 import { GroupsCurrencyService } from './groups-currency-service';
 import { GroupTemplatesController } from './group-templates/group-templates-controller';
+import { GroupTemplatesCrudController } from './group-templates/group-templates-crud-controller';
+import { GroupTemplatesCrudService } from './group-templates/group-templates-crud-service';
 import { GroupTemplatesExportService } from './group-templates/group-templates-export-service';
 import { GroupTemplatesImportService } from './group-templates/group-templates-import-service';
 
@@ -41,6 +43,7 @@ import { GroupTemplatesImportService } from './group-templates/group-templates-i
     GroupsPostsController,
     GroupsCurrencyController,
     GroupTemplatesController,
+    GroupTemplatesCrudController,
   ],
   providers: [
     GroupsService,
@@ -50,6 +53,7 @@ import { GroupTemplatesImportService } from './group-templates/group-templates-i
     GroupsCurrencyService,
     GroupTemplatesExportService,
     GroupTemplatesImportService,
+    GroupTemplatesCrudService,
   ],
 })
 export class GroupsModule {}

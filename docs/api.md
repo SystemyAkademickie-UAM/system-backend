@@ -1374,3 +1374,80 @@ Lecturers may only import templates if they have access to them:
 | `403 Forbidden` | Not authenticated, not a lecturer, or caller attempts to import a private template they did not create. |
 | `404 Not Found` | Template does not exist. |
 
+### List group templates (Gallery)
+
+**Endpoint:** `GET /api/group-templates`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or query `auth`). Caller must have the **lecturer** role.
+
+Retrieves a paginated list of templates without the heavy `data` payload.
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
+| `scope` | string (optional) | `public` | `public` to list all public templates. `my` to list all templates created by the caller (both public and private). |
+| `limit` | integer (optional)| `20` | Max results to return (1-100). |
+| `offset` | integer (optional)| `0` | Number of results to skip. |
+
+**Response:** `200 OK`
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "Template name",
+      "description": "Template description",
+      "isPublic": true,
+      "creatorAccountId": 5,
+      "baseGroupId": 100010,
+      "createdAt": "2026-06-15T20:00:00.000Z"
+    }
+  ],
+  "total": 1,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+### Get template details
+
+**Endpoint:** `GET /api/group-templates/:templateId`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or query `auth`). Caller must have the **lecturer** role. 
+
+Provides full template information, including the `data` snapshot. Fails with `403 Forbidden` if the template is private and the caller is not the creator.
+
+### Update template
+
+**Endpoint:** `PATCH /api/group-templates/:templateId`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must be the **lecturer** who created the template.
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
+| `name` | string (optional) | Min 1 char | Update the template name. |
+| `description` | string (optional) | | Update the template description. |
+| `isPublic` | boolean (optional)| | Update visibility. |
+
+**Errors:**
+- `403 Forbidden` if caller is not the creator.
+- `404 Not Found` if template does not exist.
+
+### Delete template
+
+**Endpoint:** `DELETE /api/group-templates/:templateId`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must be the **lecturer** who created the template.
+
+Permanently deletes the template from the database. Does not affect any groups already created from this template, nor does it delete associated files like banners from the drive.
+
+**Errors:**
+- `403 Forbidden` if caller is not the creator.
+- `404 Not Found` if template does not exist.
+
