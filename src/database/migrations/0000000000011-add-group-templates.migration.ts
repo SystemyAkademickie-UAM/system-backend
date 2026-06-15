@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class addGroupTemplates0000000000010 implements MigrationInterface {
-  name = 'addGroupTemplates0000000000010';
+export class addGroupTemplates0000000000011 implements MigrationInterface {
+  name = 'addGroupTemplates0000000000011';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
