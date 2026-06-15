@@ -2,10 +2,12 @@ import { Body, Controller, ForbiddenException, HttpCode, HttpStatus, Param, Pars
 import type { Request } from 'express';
 
 import { AuthTokenSessionService } from '../../auth/api-token/auth-token-session-service';
-import { toInternalGroupId } from '../../constants/group-api-constants';
+import { GROUP_RESPONSE_GROUP_ID_OFFSET, toInternalGroupId } from '../../constants/group-api-constants';
 import { GroupsService } from '../groups-service';
+import { CreateGroupFromTemplateDto } from '../dto/create-group-from-template.dto';
 import { SaveGroupTemplateDto } from '../dto/save-group-template.dto';
 import { GroupTemplatesExportService } from './group-templates-export-service';
+import { GroupTemplatesImportService } from './group-templates-import-service';
 
 @Controller('groups')
 export class GroupTemplatesController {
@@ -13,6 +15,7 @@ export class GroupTemplatesController {
     private readonly authTokenSessionService: AuthTokenSessionService,
     private readonly groupsService: GroupsService,
     private readonly exportService: GroupTemplatesExportService,
+    private readonly importService: GroupTemplatesImportService,
   ) {}
 
   @Post(':groupId/save-as-template')
@@ -41,5 +44,32 @@ export class GroupTemplatesController {
       dto.description,
       dto.isPublic ?? false,
     );
+  }
+
+  @Post('from-template/:templateId')
+  @HttpCode(HttpStatus.CREATED)
+  async createFromTemplate(
+    @Param('templateId', ParseIntPipe) templateId: number,
+    @Req() req: Request,
+    @Body() dto: CreateGroupFromTemplateDto,
+  ) {
+    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    if (!subject) {
+      throw new ForbiddenException('Missing or invalid session');
+    }
+
+    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
+
+    const newGroup = await this.importService.createGroupFromTemplate(
+      templateId,
+      lecturerAccountId,
+      dto.name,
+      dto.subjectName,
+    );
+
+    return {
+      statusCode: HttpStatus.CREATED,
+      group: newGroup.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
+    };
   }
 }
