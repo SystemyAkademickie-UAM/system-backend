@@ -34,7 +34,16 @@ export class GroupTemplatesCrudService {
     limit: number,
     offset: number,
   ): Promise<PaginatedGroupTemplates> {
-    const query = this.templatesRepository.createQueryBuilder('t');
+    const query = this.templatesRepository.createQueryBuilder('t')
+      .select([
+        't.id',
+        't.name',
+        't.description',
+        't.isPublic',
+        't.creatorAccountId',
+        't.baseGroupId',
+        't.createdAt',
+      ]);
 
     if (scope === 'my') {
       query.where('t.creator_account_id = :accountId', { accountId: lecturerAccountId });

@@ -14,6 +14,7 @@ describe('GroupTemplatesCrudService', () => {
 
   beforeEach(async () => {
     mockQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
