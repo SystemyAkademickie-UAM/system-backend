@@ -416,4 +416,72 @@ describe('GroupsService', () => {
       ).rejects.toThrow('Not authorized to manage this group');
     });
   });
+
+  describe('getLivesConfig', () => {
+    it('should return config when user is owner', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockImplementation(async (userId, role) => {
+        if (role === LECTURER_ROLE_NAME) return 10;
+        return null;
+      });
+      jest.spyOn(service as any, 'fetchAllGroupsWithMembershipFlags').mockResolvedValue([{
+        is_owner: true,
+        is_enrolled: false,
+        lives_enabled: true,
+        lives: 5,
+        lives_label: 'Serca',
+        lives_icon: 'heart.png',
+        lives_shop_enabled: false,
+      }]);
+
+      const result = await service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined);
+
+      expect(result).toEqual({
+        livesEnabled: true,
+        livesMax: 5,
+        livesLabel: 'Serca',
+        livesIcon: 'heart.png',
+        livesShopEnabled: false,
+      });
+    });
+
+    it('should return config when user is enrolled student', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockImplementation(async (userId, role) => {
+        if (role === STUDENT_ROLE_NAME) return 20;
+        return null;
+      });
+      jest.spyOn(service as any, 'fetchAllGroupsWithMembershipFlags').mockResolvedValue([{
+        is_owner: false,
+        is_enrolled: true,
+        lives_enabled: false,
+        lives: null,
+        lives_label: null,
+        lives_icon: null,
+        lives_shop_enabled: false,
+      }]);
+
+      const result = await service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined);
+
+      expect(result.livesEnabled).toBe(false);
+    });
+
+    it('should throw ForbiddenException for authenticated non-member', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(null);
+      jest.spyOn(service as any, 'fetchAllGroupsWithMembershipFlags').mockResolvedValue([{
+        is_owner: false,
+        is_enrolled: false,
+      }]);
+
+      await expect(service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined))
+        .rejects.toThrow('Access denied');
+    });
+
+    it('should throw UnauthorizedException if subject not resolved', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
+      await expect(service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined))
+        .rejects.toThrow('Missing or invalid session');
+    });
+  });
 });

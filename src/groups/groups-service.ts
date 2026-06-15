@@ -449,20 +449,37 @@ export class GroupsService {
       throw new BadRequestException('Invalid group ID');
     }
 
-    const group = await this.groupRepository.findOne({
-      where: { id: internalGroupId },
-      select: ['id', 'livesEnabled', 'lives', 'livesLabel', 'livesIcon', 'livesShopEnabled'],
-    });
-    if (!group) {
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    const studentAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      STUDENT_ROLE_NAME,
+    );
+
+    const rows = await this.fetchAllGroupsWithMembershipFlags(
+      lecturerAccountId,
+      studentAccountId,
+      internalGroupId,
+    );
+    const row = rows[0];
+    if (!row) {
       throw new BadRequestException('Group not found');
     }
 
+    const isOwner = Boolean(row.is_owner);
+    const isEnrolled = Boolean(row.is_enrolled);
+    if (!isOwner && !isEnrolled) {
+      throw new ForbiddenException('Access denied');
+    }
+
     return {
-      livesEnabled: group.livesEnabled,
-      livesMax: group.lives,
-      livesLabel: group.livesLabel,
-      livesIcon: group.livesIcon,
-      livesShopEnabled: group.livesShopEnabled,
+      livesEnabled: row.lives_enabled,
+      livesMax: row.lives,
+      livesLabel: row.lives_label,
+      livesIcon: row.lives_icon,
+      livesShopEnabled: row.lives_shop_enabled,
     };
   }
 

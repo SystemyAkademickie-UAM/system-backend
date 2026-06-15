@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 /**
  * Payload for `PATCH /groups/:groupId/lives-config`.
@@ -33,11 +33,13 @@ export class UpdateLivesConfigDto {
   /** Custom display name for lives (e.g. "Tarcze", "Serca"). */
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   livesLabel?: string;
 
   /** Icon reference for lives. */
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   livesIcon?: string;
 
   /** Whether "extra life" appears as a purchasable shop product. */

@@ -27,8 +27,8 @@ ALTER TABLE "education"."groups" DROP COLUMN IF EXISTS "lives_enabled";
  * Pre-existing columns `lives` (integer, default 3) and `lives_icon` (varchar)
  * are left untouched.
  */
-export class LivesSystem0000000000010 implements MigrationInterface {
-  name = 'LivesSystem0000000000010';
+export class LivesSystem0000000000011 implements MigrationInterface {
+  name = 'LivesSystem0000000000011';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(UP_SQL);
