@@ -257,6 +257,7 @@ export class ActivitiesService {
     if (!subject) {
       return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'retrieve', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
+    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     try {
       let activities: ActivityEntity[];
       if (body.stageId) {
@@ -267,6 +268,21 @@ export class ActivitiesService {
       } else {
         activities = await this.activityRepository.find({ order: { id: 'ASC' } });
       }
+
+      if (!isLecturer && activities.length > 0) {
+        const stageIds = [...new Set(activities.map(a => a.stageId))];
+        // Cannot use In without importing, so just query by array or use loop.
+        // Actually, typeorm find with array of ids works with `In`, but if not imported, `id: Any(stageIds)` or simple loop.
+        // I will just fetch all stages for these IDs to avoid modifying imports if possible.
+        // Wait, I can just use a query builder:
+        const stages = await this.stageRepository.createQueryBuilder('s')
+          .where('s.id IN (:...stageIds)', { stageIds })
+          .getMany();
+        
+        const visibleStageIds = new Set(stages.filter(s => s.visibilityStatus !== 0).map(s => s.id));
+        activities = activities.filter(a => visibleStageIds.has(a.stageId));
+      }
+
       return {
         statusCode: ACTIVITY_API_JSON_STATUS_OK,
         method: 'retrieve',

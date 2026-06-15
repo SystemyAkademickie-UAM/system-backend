@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { GAMIFICATION_BADGE_NAME_MAX_LENGTH, EDUCATION_GROUP_VARCHAR_MAX_LENGTH } from '../../constants/database-entity-constants';
 
 export class UpdateShopItemDto {
@@ -42,4 +42,9 @@ export class UpdateShopItemDto {
   @IsInt()
   @Min(1)
   perStudentLimit?: number;
+
+  /** Toggle shop item visibility. When set to `true`, `publishedAt` is auto-set. */
+  @IsOptional()
+  @IsBoolean()
+  isPublished?: boolean;
 }

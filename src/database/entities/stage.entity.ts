@@ -18,4 +18,8 @@ export class StageEntity {
 
   @Column({ name: 'name', type: 'varchar', length: EDUCATION_STAGE_NAME_MAX_LENGTH, nullable: false })
   name: string;
+
+  /** Stage visibility: 0=hidden, 1=visible, 2=unlockable */
+  @Column({ name: 'visibility_status', type: 'integer', default: 0 })
+  visibilityStatus: number;
 }

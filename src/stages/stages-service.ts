@@ -24,7 +24,7 @@ export type StageResponseBody = {
   statusCode: number;
   method: StageMethod;
   stage: number;
-  stages?: Array<{ id: number; groupId: number; name: string }>;
+  stages?: Array<{ id: number; groupId: number; name: string; visibilityStatus: number }>;
 };
 
 function toInternalGroupId(publicGroupId: number): number {
@@ -106,6 +106,7 @@ export class StagesService {
       const entity = this.stageRepository.create({
         groupId: internalGroupId,
         name: body.name.trim(),
+        visibilityStatus: body.visibilityStatus ?? 0, // Default to hidden (0) if not provided
       });
       const saved = await this.stageRepository.save(entity);
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'post', stage: saved.id };
@@ -141,6 +142,9 @@ export class StagesService {
       }
       if (body.groupId !== undefined) {
         existing.groupId = toInternalGroupId(body.groupId);
+      }
+      if (body.visibilityStatus !== undefined) {
+        existing.visibilityStatus = body.visibilityStatus;
       }
       await this.stageRepository.save(existing);
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: existing.id };
@@ -206,6 +210,7 @@ export class StagesService {
           id: s.id,
           groupId: toPublicGroupId(s.groupId),
           name: s.name,
+          visibilityStatus: s.visibilityStatus,
         })),
       };
     } catch (err) {

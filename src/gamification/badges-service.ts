@@ -45,8 +45,15 @@ export class BadgesService {
       throw new ForbiddenException('Not authorized');
     }
     await this.assertGroupExists(groupId);
+    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
+
+    const whereClause: any = { groupId };
+    if (!isLecturer) {
+      whereClause.isPublished = true;
+    }
+
     return this.badgeRepository.find({
-      where: { groupId },
+      where: whereClause,
       order: { id: 'ASC' },
     });
   }
@@ -70,6 +77,10 @@ export class BadgesService {
     if (dto.storyDescription !== undefined) badge.storyDescription = dto.storyDescription;
     if (dto.rewardAmount !== undefined) badge.rewardAmount = dto.rewardAmount;
     if (dto.rarity !== undefined) badge.rarity = dto.rarity;
+    if (dto.isPublished !== undefined) {
+      badge.isPublished = dto.isPublished;
+      badge.publishedAt = dto.isPublished ? new Date() : null;
+    }
     const saved = await this.badgeRepository.save(badge);
     this.logger.log(`Badge "${saved.name}" (id=${saved.id}) updated in group ${groupId}`);
     return saved;

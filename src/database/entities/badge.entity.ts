@@ -35,6 +35,14 @@ export class BadgeEntity {
 
   @Column({ name: 'rarity', type: 'varchar', length: 20, default: 'common' })
   rarity: string;
+
+  /** Whether the badge is visible to students. */
+  @Column({ name: 'is_published', type: 'boolean', default: false })
+  isPublished: boolean;
+
+  /** Set automatically by the backend when `isPublished` flips to `true`. */
+  @Column({ name: 'published_at', type: 'timestamp', nullable: true })
+  publishedAt: Date | null;
 }
 
 export enum BadgeRarity {
