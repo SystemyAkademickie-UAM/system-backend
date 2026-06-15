@@ -16,4 +16,9 @@ export class CreatePostDto {
   @IsString()
   @IsNotEmpty()
   content: string;
+
+  /** ISO-8601 creation date sent from the frontend (e.g. `"2026-06-15T20:00:00.000Z"`). */
+  @IsOptional()
+  @IsString()
+  createdAt?: string;
 }

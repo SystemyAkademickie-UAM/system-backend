@@ -271,6 +271,97 @@ Adjusts `gamification.student_stats.currency` and `totalEarned` like `POST .../a
 
 ---
 
+## Group posts (lecturer & student)
+
+Post announcements for a group. Posts support a publishing workflow: new posts start unpublished (hidden); the lecturer can publish/unpublish them at any time.
+
+### Create post
+
+**Endpoint:** `POST /api/groups/:id/post`
+
+**Authorization:** lecturer + strong token + browser binding. Must own the group.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `title` | string | yes | Post title. |
+| `content` | string | yes | Post body (text). |
+| `createdAt` | string (ISO-8601) | no | Creation date from the frontend. Defaults to server `now()` if omitted. |
+| `auth` | string | no | Plaintext bearer (alternative to cookie). |
+
+Posts are created with `isPublished: false` and `publishedAt: null`.
+
+**Response:** `200 OK`
+
+```json
+{ "status": 200, "post": 42 }
+```
+
+`post` is the new post ID, or `-1` (not authorized) / `-2` (creation error).
+
+### Get posts
+
+**Endpoint:** `GET /api/groups/:id/post`
+
+**Authorization:** lecturer or enrolled student + strong token + browser binding.
+
+- **Lecturer (group owner):** sees **all** posts (published and unpublished).
+- **Student (enrolled):** sees **only published** posts (`isPublished: true`).
+
+**Response:** `200 OK`
+
+```json
+{
+  "status": 200,
+  "posts": [
+    {
+      "id": 42,
+      "title": "Welcome",
+      "content": "First lecture info…",
+      "isPublished": true,
+      "createdAt": "2026-06-15T20:00:00.000Z",
+      "publishedAt": "2026-06-15T21:30:00.000Z"
+    }
+  ]
+}
+```
+
+### Update post
+
+**Endpoint:** `PATCH /api/groups/:id/post/:postId`
+
+**Authorization:** lecturer + strong token + browser binding. Must own the group.
+
+**Request body (all fields optional):**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `title` | string | New title. |
+| `content` | string | New content. |
+| `isPublished` | boolean | Toggle visibility. When set to `true`, backend auto-sets `publishedAt` to current timestamp. When set to `false`, `publishedAt` resets to `null`. |
+| `auth` | string | Plaintext bearer (alternative to cookie). |
+
+**Response:** `200 OK`
+
+```json
+{ "status": 200, "updated": true }
+```
+
+### Delete post
+
+**Endpoint:** `DELETE /api/groups/:id/post/:postId`
+
+**Authorization:** lecturer + strong token + browser binding. Must own the group.
+
+**Response:** `200 OK`
+
+```json
+{ "status": 200, "deleted": true }
+```
+
+---
+
 ## User groups (student & lecturer)
 
 Retrieves groups the authenticated user belongs to: student enrollments and lecturer-owned groups.

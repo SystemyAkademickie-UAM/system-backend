@@ -43,8 +43,10 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/groups/:groupId/enrollment-codes` — lecturer CRUD for invite codes (`education.enrollment_codes`); see [docs/api.md](./docs/api.md)
 - `POST /api/groups/:groupId/enroll` — student enrollment → `{ "statusCode", "enrollmentId" }`; see [docs/api.md](./docs/api.md)
 - `GET /api/groups/:groupId/invite?code=` — student join by enrollment code → `{ "statusCode", "enrollmentId", "groupId?" }`
-- `POST /api/groups/:id/post` — lecturer opaque bearer + post payload → `{ "status", "post" }`; see [docs/api.md](./docs/api.md)
-- `GET /api/groups/:id/post` — lecturer/student opaque bearer → `{ "status", "posts" }`; see [docs/api.md](./docs/api.md)
+- `POST /api/groups/:id/post` — lecturer: create post (with `createdAt` from frontend); starts unpublished → `{ "status", "post" }`
+- `GET /api/groups/:id/post` — lecturer sees all posts; students see only published → `{ "status", "posts" }`
+- `PATCH /api/groups/:id/post/:postId` — lecturer: update post title/content/isPublished; setting `isPublished: true` auto-sets `publishedAt`
+- `DELETE /api/groups/:id/post/:postId` — lecturer: delete post
 - `GET /api/groups/:groupId/student-profile` — student group-scoped profile → `{ "studentAccountId", "groupId", "lives", "currency", ... }`; see [docs/api.md](./docs/api.md)
 - `POST /api/drive` — lecturer session; `multipart/form-data` fields `json` (string) and `banner` (file for `post`); see [docs/api.md](./docs/api.md)
 - `POST /api/stages` — stage CRUD (method: post/modify/remove/retrieve); see [docs/api.md](./docs/api.md)

@@ -19,4 +19,16 @@ export class PostEntity {
 
   @Column({ name: 'content', type: 'text', nullable: true })
   content: string | null;
+
+  /** Whether the post is visible to students. */
+  @Column({ name: 'is_published', type: 'boolean', default: false })
+  isPublished: boolean;
+
+  /** Creation timestamp sent from the frontend. */
+  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
+  createdAt: Date | null;
+
+  /** Set automatically by the backend when `isPublished` flips to `true`. */
+  @Column({ name: 'published_at', type: 'timestamp', nullable: true })
+  publishedAt: Date | null;
 }
