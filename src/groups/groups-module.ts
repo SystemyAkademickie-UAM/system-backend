@@ -19,16 +19,41 @@ import { GroupsPostsService } from './groups-posts-service';
 import { GroupsCurrencyController } from './groups-currency-controller';
 import { GroupsCurrencyService } from './groups-currency-service';
 import { GroupTemplatesController } from './group-templates/group-templates-controller';
+import { GroupTemplatesCrudController } from './group-templates/group-templates-crud-controller';
+import { GroupTemplatesCrudService } from './group-templates/group-templates-crud-service';
 import { GroupTemplatesExportService } from './group-templates/group-templates-export-service';
+import { GroupTemplatesImportService } from './group-templates/group-templates-import-service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([GroupEntity, EnrollmentEntity, EnrollmentCodeEntity, PostEntity, StudentStatsEntity, GroupTemplateEntity]),
+    TypeOrmModule.forFeature([
+      GroupEntity,
+      EnrollmentEntity,
+      EnrollmentCodeEntity,
+      PostEntity,
+      StudentStatsEntity,
+      GroupTemplateEntity,
+    ]),
     AuthTokenSessionModule,
     UserRolesModule,
     GamificationModule,
   ],
-  controllers: [GroupsController, GroupsPostsController, GroupsCurrencyController, GroupTemplatesController],
-  providers: [GroupsService, GroupsEnrollmentService, EnrollmentCodesService, GroupsPostsService, GroupsCurrencyService, GroupTemplatesExportService],
+  controllers: [
+    GroupsController,
+    GroupsPostsController,
+    GroupsCurrencyController,
+    GroupTemplatesController,
+    GroupTemplatesCrudController,
+  ],
+  providers: [
+    GroupsService,
+    GroupsEnrollmentService,
+    EnrollmentCodesService,
+    GroupsPostsService,
+    GroupsCurrencyService,
+    GroupTemplatesExportService,
+    GroupTemplatesImportService,
+    GroupTemplatesCrudService,
+  ],
 })
 export class GroupsModule {}

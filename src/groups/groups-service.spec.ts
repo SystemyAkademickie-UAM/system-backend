@@ -139,6 +139,11 @@ describe('GroupsService', () => {
           currency: 'coins',
           currency_icon: '🪙',
           shop_open: true,
+          lives_enabled: false,
+          lives: 3,
+          lives_label: null,
+          lives_icon: null,
+          lives_shop_enabled: false,
         },
         {
           id: 6,
@@ -168,6 +173,11 @@ describe('GroupsService', () => {
             currency: 'coins',
             currencyIcon: '🪙',
             shopOpen: true,
+            livesEnabled: false,
+            lives: 3,
+            livesLabel: null,
+            livesIcon: null,
+            livesShopEnabled: false,
           },
         ],
       });
@@ -191,6 +201,14 @@ describe('GroupsService', () => {
           teacher_surname: 'Lee',
           is_owner: true,
           is_enrolled: false,
+          currency: null,
+          currency_icon: null,
+          shop_open: true,
+          lives_enabled: false,
+          lives: 3,
+          lives_label: null,
+          lives_icon: null,
+          lives_shop_enabled: false,
         },
         {
           id: 2,
@@ -201,6 +219,14 @@ describe('GroupsService', () => {
           teacher_surname: 'Kay',
           is_owner: false,
           is_enrolled: false,
+          currency: null,
+          currency_icon: null,
+          shop_open: true,
+          lives_enabled: false,
+          lives: 3,
+          lives_label: null,
+          lives_icon: null,
+          lives_shop_enabled: false,
         },
       ]);
       const result = await service.getGroupsCatalog(mockRequest, 'browser-id', undefined);
@@ -245,6 +271,14 @@ describe('GroupsService', () => {
           teacher_surname: null,
           is_owner: true,
           is_enrolled: false,
+          currency: null,
+          currency_icon: null,
+          shop_open: true,
+          lives_enabled: false,
+          lives: 3,
+          lives_label: null,
+          lives_icon: null,
+          lives_shop_enabled: false,
         },
       ]);
       const result = await service.getUserGroups(mockRequest, 'browser-id', undefined);
@@ -313,6 +347,141 @@ describe('GroupsService', () => {
 
       await expect(service.updateShopStatus(mockRequest, 100001, { shopOpen: true }, 'browser-id'))
         .rejects.toThrow('Not authorized to manage this group');
+    });
+  });
+
+  describe('updateLivesConfig', () => {
+    it('should update lives config when user is owner', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({
+        id: 1,
+        teacherAccountId: 10,
+      });
+      groupRepository.update = jest.fn().mockResolvedValue({ affected: 1 });
+
+      const result = await service.updateLivesConfig(
+        mockRequest,
+        100001,
+        { livesEnabled: true, lives: 5, livesLabel: 'Tarcze', livesShopEnabled: true },
+        'browser-id',
+      );
+
+      expect(groupRepository.update).toHaveBeenCalledWith(
+        { id: 1 },
+        { livesEnabled: true, lives: 5, livesLabel: 'Tarcze', livesShopEnabled: true },
+      );
+      expect(result).toEqual({
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: 100001,
+        updated: true,
+      });
+    });
+
+    it('should return updated: false when no fields are provided', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({
+        id: 1,
+        teacherAccountId: 10,
+      });
+
+      const result = await service.updateLivesConfig(mockRequest, 100001, {}, 'browser-id');
+
+      expect(result.updated).toBe(false);
+    });
+
+    it('should throw UnauthorizedException if subject not resolved', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
+      await expect(
+        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }, 'browser-id'),
+      ).rejects.toThrow('Missing or invalid session');
+    });
+
+    it('should throw ForbiddenException if not lecturer', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(null);
+      await expect(
+        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }, 'browser-id'),
+      ).rejects.toThrow('Requires lecturer privileges');
+    });
+
+    it('should throw ForbiddenException if group not found or not owner', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }, 'browser-id'),
+      ).rejects.toThrow('Not authorized to manage this group');
+    });
+  });
+
+  describe('getLivesConfig', () => {
+    it('should return config when user is owner', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockImplementation(async (userId, role) => {
+        if (role === LECTURER_ROLE_NAME) return 10;
+        return null;
+      });
+      jest.spyOn(service as any, 'fetchAllGroupsWithMembershipFlags').mockResolvedValue([{
+        is_owner: true,
+        is_enrolled: false,
+        lives_enabled: true,
+        lives: 5,
+        lives_label: 'Serca',
+        lives_icon: 'heart.png',
+        lives_shop_enabled: false,
+      }]);
+
+      const result = await service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined);
+
+      expect(result).toEqual({
+        livesEnabled: true,
+        livesMax: 5,
+        livesLabel: 'Serca',
+        livesIcon: 'heart.png',
+        livesShopEnabled: false,
+      });
+    });
+
+    it('should return config when user is enrolled student', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockImplementation(async (userId, role) => {
+        if (role === STUDENT_ROLE_NAME) return 20;
+        return null;
+      });
+      jest.spyOn(service as any, 'fetchAllGroupsWithMembershipFlags').mockResolvedValue([{
+        is_owner: false,
+        is_enrolled: true,
+        lives_enabled: false,
+        lives: null,
+        lives_label: null,
+        lives_icon: null,
+        lives_shop_enabled: false,
+      }]);
+
+      const result = await service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined);
+
+      expect(result.livesEnabled).toBe(false);
+    });
+
+    it('should throw ForbiddenException for authenticated non-member', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(null);
+      jest.spyOn(service as any, 'fetchAllGroupsWithMembershipFlags').mockResolvedValue([{
+        is_owner: false,
+        is_enrolled: false,
+      }]);
+
+      await expect(service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined))
+        .rejects.toThrow('Access denied');
+    });
+
+    it('should throw UnauthorizedException if subject not resolved', async () => {
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
+      await expect(service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined))
+        .rejects.toThrow('Missing or invalid session');
     });
   });
 });

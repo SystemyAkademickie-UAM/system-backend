@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -15,6 +16,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { toInternalGroupId } from '../constants/group-api-constants';
+import { ReportsService } from './reports-service';
 import { StudentBadgesService } from './student-badges-service';
 import { StudentManagementService } from './student-management-service';
 import { StudentProgressService } from './student-progress-service';
@@ -32,6 +34,7 @@ export class StudentManagementController {
     private readonly studentManagementService: StudentManagementService,
     private readonly studentBadgesService: StudentBadgesService,
     private readonly studentProgressService: StudentProgressService,
+    private readonly reportsService: ReportsService,
   ) {}
 
   // ── Part 1: Student list table ──────────────────────────────────────
@@ -188,6 +191,63 @@ export class StudentManagementController {
       toInternalGroupId(publicGroupId),
       accountId,
       activityId,
+    );
+  }
+
+  // ── Part 4: CSV reports ─────────────────────────────────────────────
+
+  /**
+   * Downloads a CSV report for the entire group (all students × all stages/activities).
+   */
+  @Get(':groupId/reports/group')
+  @HttpCode(HttpStatus.OK)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="report-group.csv"')
+  @ApiOperation({ summary: 'Download CSV report for the entire group' })
+  getGroupReport(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+  ): Promise<string> {
+    return this.reportsService.generateGroupReport(req, toInternalGroupId(publicGroupId));
+  }
+
+  /**
+   * Downloads a CSV report for a single stage (all students × activities from that stage).
+   */
+  @Get(':groupId/reports/stage/:stageId')
+  @HttpCode(HttpStatus.OK)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="report-stage.csv"')
+  @ApiOperation({ summary: 'Download CSV report for a single stage' })
+  getStageReport(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('stageId', ParseIntPipe) stageId: number,
+    @Req() req: Request,
+  ): Promise<string> {
+    return this.reportsService.generateStageReport(
+      req,
+      toInternalGroupId(publicGroupId),
+      stageId,
+    );
+  }
+
+  /**
+   * Downloads a CSV report for a single student (all stages/activities for one student).
+   */
+  @Get(':groupId/reports/student/:accountId')
+  @HttpCode(HttpStatus.OK)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="report-student.csv"')
+  @ApiOperation({ summary: 'Download CSV report for a single student' })
+  getStudentReport(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('accountId', ParseIntPipe) accountId: number,
+    @Req() req: Request,
+  ): Promise<string> {
+    return this.reportsService.generateStudentReport(
+      req,
+      toInternalGroupId(publicGroupId),
+      accountId,
     );
   }
 }
