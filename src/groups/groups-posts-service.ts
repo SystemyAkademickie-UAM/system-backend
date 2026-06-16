@@ -121,13 +121,14 @@ export class GroupsPostsService {
         : publicGroupId;
 
     let authorized = false;
+    let ownsGroup = false;
 
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
       LECTURER_ROLE_NAME,
     );
     if (lecturerAccountId !== null) {
-      const ownsGroup = await this.groupRepository.exist({
+      ownsGroup = await this.groupRepository.exist({
         where: { id: groupId, teacherAccountId: lecturerAccountId },
       });
       if (ownsGroup) {
@@ -155,8 +156,7 @@ export class GroupsPostsService {
     }
 
     try {
-      const isLecturer = authorized && lecturerAccountId !== null;
-      const whereClause = isLecturer
+      const whereClause = ownsGroup
         ? { groupId }
         : { groupId, isPublished: true };
       const posts = await this.postRepository.find({

@@ -5,6 +5,7 @@ import { AuthTokenSessionModule } from '../auth/api-token/auth-token-session-mod
 import { EnrollmentCodeEntity } from '../database/entities/enrollment-code.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
+import { GroupTemplateEntity } from '../database/entities/group-template.entity';
 import { PostEntity } from '../database/entities/post.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { GamificationModule } from '../gamification/gamification-module';
@@ -17,16 +18,42 @@ import { GroupsPostsController } from './groups-posts-controller';
 import { GroupsPostsService } from './groups-posts-service';
 import { GroupsCurrencyController } from './groups-currency-controller';
 import { GroupsCurrencyService } from './groups-currency-service';
+import { GroupTemplatesController } from './group-templates/group-templates-controller';
+import { GroupTemplatesCrudController } from './group-templates/group-templates-crud-controller';
+import { GroupTemplatesCrudService } from './group-templates/group-templates-crud-service';
+import { GroupTemplatesExportService } from './group-templates/group-templates-export-service';
+import { GroupTemplatesImportService } from './group-templates/group-templates-import-service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([GroupEntity, EnrollmentEntity, EnrollmentCodeEntity, PostEntity, StudentStatsEntity]),
+    TypeOrmModule.forFeature([
+      GroupEntity,
+      EnrollmentEntity,
+      EnrollmentCodeEntity,
+      PostEntity,
+      StudentStatsEntity,
+      GroupTemplateEntity,
+    ]),
     AuthTokenSessionModule,
     UserRolesModule,
     GamificationModule,
   ],
-  controllers: [GroupsController, GroupsPostsController, GroupsCurrencyController],
-  providers: [GroupsService, GroupsEnrollmentService, EnrollmentCodesService, GroupsPostsService, GroupsCurrencyService],
+  controllers: [
+    GroupsController,
+    GroupsPostsController,
+    GroupsCurrencyController,
+    GroupTemplatesController,
+    GroupTemplatesCrudController,
+  ],
+  providers: [
+    GroupsService,
+    GroupsEnrollmentService,
+    EnrollmentCodesService,
+    GroupsPostsService,
+    GroupsCurrencyService,
+    GroupTemplatesExportService,
+    GroupTemplatesImportService,
+    GroupTemplatesCrudService,
+  ],
 })
 export class GroupsModule {}
-

@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsISO8601, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreatePostDto {
   /** Optional when using `maq_auth` cookie (browser clients). */
@@ -19,6 +19,6 @@ export class CreatePostDto {
 
   /** ISO-8601 creation date sent from the frontend (e.g. `"2026-06-15T20:00:00.000Z"`). */
   @IsOptional()
-  @IsString()
+  @IsISO8601()
   createdAt?: string;
 }

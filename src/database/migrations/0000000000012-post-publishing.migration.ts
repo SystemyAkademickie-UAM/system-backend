@@ -23,8 +23,8 @@ ALTER TABLE education.posts DROP COLUMN IF EXISTS is_published;
  * - `created_at` (timestamp) — creation date sent from the frontend.
  * - `published_at` (timestamp) — auto-set by the backend when `is_published` flips to `true`.
  */
-export class PostPublishing0000000000011 implements MigrationInterface {
-  name = 'PostPublishing0000000000011';
+export class PostPublishing0000000000012 implements MigrationInterface {
+  name = 'PostPublishing0000000000012';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(UP_SQL);

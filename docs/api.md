@@ -271,94 +271,21 @@ Adjusts `gamification.student_stats.currency` and `totalEarned` like `POST .../a
 
 ---
 
-## Group posts (lecturer & student)
+## CSV Reports (lecturer)
 
-Post announcements for a group. Posts support a publishing workflow: new posts start unpublished (hidden); the lecturer can publish/unpublish them at any time.
+Generates and downloads CSV reports containing student progress matrices (activity completions).
+Responses have `Content-Type: text/csv` and a `Content-Disposition` attachment header. CSV separator is `;`.
 
-### Create post
+**Authorization:** lecturer + soft auth. Caller must own the group.
 
-**Endpoint:** `POST /api/groups/:id/post`
+**Endpoint:** `GET /api/groups/:groupId/reports/group`
+Downloads a report for the entire group. Rows = all students, Columns = all stage/activity pairs.
 
-**Authorization:** lecturer + strong token + browser binding. Must own the group.
+**Endpoint:** `GET /api/groups/:groupId/reports/stage/:stageId`
+Downloads a report restricted to a single stage. Rows = all students, Columns = activities from that stage.
 
-**Request body:**
-
-| Field | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| `title` | string | yes | Post title. |
-| `content` | string | yes | Post body (text). |
-| `createdAt` | string (ISO-8601) | no | Creation date from the frontend. Defaults to server `now()` if omitted. |
-| `auth` | string | no | Plaintext bearer (alternative to cookie). |
-
-Posts are created with `isPublished: false` and `publishedAt: null`.
-
-**Response:** `200 OK`
-
-```json
-{ "status": 200, "post": 42 }
-```
-
-`post` is the new post ID, or `-1` (not authorized) / `-2` (creation error).
-
-### Get posts
-
-**Endpoint:** `GET /api/groups/:id/post`
-
-**Authorization:** lecturer or enrolled student + strong token + browser binding.
-
-- **Lecturer (group owner):** sees **all** posts (published and unpublished).
-- **Student (enrolled):** sees **only published** posts (`isPublished: true`).
-
-**Response:** `200 OK`
-
-```json
-{
-  "status": 200,
-  "posts": [
-    {
-      "id": 42,
-      "title": "Welcome",
-      "content": "First lecture info…",
-      "isPublished": true,
-      "createdAt": "2026-06-15T20:00:00.000Z",
-      "publishedAt": "2026-06-15T21:30:00.000Z"
-    }
-  ]
-}
-```
-
-### Update post
-
-**Endpoint:** `PATCH /api/groups/:id/post/:postId`
-
-**Authorization:** lecturer + strong token + browser binding. Must own the group.
-
-**Request body (all fields optional):**
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `title` | string | New title. |
-| `content` | string | New content. |
-| `isPublished` | boolean | Toggle visibility. When set to `true`, backend auto-sets `publishedAt` to current timestamp. When set to `false`, `publishedAt` resets to `null`. |
-| `auth` | string | Plaintext bearer (alternative to cookie). |
-
-**Response:** `200 OK`
-
-```json
-{ "status": 200, "updated": true }
-```
-
-### Delete post
-
-**Endpoint:** `DELETE /api/groups/:id/post/:postId`
-
-**Authorization:** lecturer + strong token + browser binding. Must own the group.
-
-**Response:** `200 OK`
-
-```json
-{ "status": 200, "deleted": true }
-```
+**Endpoint:** `GET /api/groups/:groupId/reports/student/:accountId`
+Downloads a flat report for a single student. Columns: `Student;Stage;Activity;Completed`.
 
 ---
 
@@ -517,9 +444,66 @@ X-Browser-ID: <BrowserUUID>
 
 ---
 
+### Get lives system config
+
+**Endpoint:** `GET /api/groups/:groupId/lives-config`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | UUID; must match `auth.tokens.browser_uuid` for this bearer. |
+
+**Authorization:** **strong** token + browser binding. Any authenticated user (lecturer or enrolled student) can read the config.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `livesEnabled` | boolean | Whether the lives system is active for this group. |
+| `livesMax` | integer \| null | Maximum number of lives per student. |
+| `livesLabel` | string \| null | Custom display name for lives (e.g. "Tarcze"). |
+| `livesIcon` | string \| null | Icon reference for lives. |
+| `livesShopEnabled` | boolean | Whether "extra life" appears as a shop product. |
+
+---
+
+### Update lives system config (lecturer)
+
+**Endpoint:** `PATCH /api/groups/:groupId/lives-config`
+
+**Headers:**
+
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | UUID; must match `auth.tokens.browser_uuid` for this bearer. |
+
+**Request body (JSON):** All fields are optional; only provided fields are updated.
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `auth` | string (optional) | Plaintext bearer. |
+| `livesEnabled` | boolean (optional) | Enable or disable the lives system. |
+| `lives` | integer (optional, ≥ 1) | Maximum number of lives. |
+| `livesLabel` | string (optional) | Custom display name for lives. |
+| `livesIcon` | string (optional) | Icon reference for lives. |
+| `livesShopEnabled` | boolean (optional) | Whether "extra life" appears in shop. |
+
+**Authorization:** **strong** token + browser binding. Caller must have the **lecturer** role and must own the group. Missing or invalid auth yields `401 Unauthorized` or `403 Forbidden`.
+
+**Response:** `200 OK` with JSON body:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | integer | Always `200` on success. |
+| `group` | integer | Public group id. |
+| `updated` | boolean | `true` if at least one field was changed. |
+
+---
+
 ## Group posts management (lecturer & student)
 
-Manages announcements / posts in **`edukacja.posts`** for a given course group.
+Manages announcements / posts in **`edukacja.posts`** for a given course group. Posts support a publishing workflow: new posts start unpublished (hidden); the lecturer can publish/unpublish them at any time.
 
 ### Create post (lecturer)
 
@@ -538,8 +522,11 @@ Manages announcements / posts in **`edukacja.posts`** for a given course group.
 | `auth` | string | Plaintext bearer (same HMAC rules as groups). |
 | `title` | string | Title of the announcement (non-empty). |
 | `content` | string | Body text of the announcement (non-empty). |
+| `createdAt` | string (ISO-8601) | (Optional) Creation date from the frontend. Defaults to server `now()` if omitted. |
 
-**Authorization:** **strong** token + browser binding. Caller must have **`autoryzacja.konta`** with **`rola = lecturer`** and must own the group (`edukacja.grupy.teacher_account_id`). Missing lecturer account, invalid token, browser mismatch, or ownership mismatch yields `{ "status": 200, "post": 1 }`.
+Posts are created with `isPublished: false` and `publishedAt: null`.
+
+**Authorization:** **strong** token + browser binding. Caller must have **`autoryzacja.konta`** with **`rola = lecturer`** and must own the group (`edukacja.grupy.teacher_account_id`). Missing lecturer account, invalid token, browser mismatch, or ownership mismatch yields `{ "status": 200, "post": -1 }` (or `-2` for creation error).
 
 **Response example:**
 ```json
@@ -565,6 +552,8 @@ Manages announcements / posts in **`edukacja.posts`** for a given course group.
 | `auth` | string | Plaintext bearer (optional if passed via `maq_auth` cookie). |
 
 **Authorization:** **strong** token + browser binding. Caller must either be the lecturer owning the group OR a student enrolled in the group (`grywalizacja.zapisy`). Unauthorized callers receive an empty posts array.
+- **Lecturer (group owner):** sees **all** posts (published and unpublished).
+- **Student (enrolled):** sees **only published** posts (`isPublished: true`).
 
 **Response example:**
 ```json
@@ -574,10 +563,48 @@ Manages announcements / posts in **`edukacja.posts`** for a given course group.
     {
       "id": 15,
       "title": "Zmiana terminu zajęć",
-      "content": "Zajęcia w czwartek zostają odwołane."
+      "content": "Zajęcia w czwartek zostają odwołane.",
+      "isPublished": true,
+      "createdAt": "2026-06-15T20:00:00.000Z",
+      "publishedAt": "2026-06-15T21:30:00.000Z"
     }
   ]
 }
+```
+
+---
+
+### Update post (lecturer)
+
+**Endpoint:** `PATCH /api/groups/:id/post/:postId`
+
+**Authorization:** lecturer + strong token + browser binding. Must own the group.
+
+**Request body (all fields optional):**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `title` | string | New title. |
+| `content` | string | New content. |
+| `isPublished` | boolean | Toggle visibility. When set to `true`, backend auto-sets `publishedAt` to current timestamp. When set to `false`, `publishedAt` resets to `null`. |
+| `auth` | string | Plaintext bearer (alternative to cookie). |
+
+**Response example:**
+```json
+{ "status": 200, "updated": true }
+```
+
+---
+
+### Delete post (lecturer)
+
+**Endpoint:** `DELETE /api/groups/:id/post/:postId`
+
+**Authorization:** lecturer + strong token + browser binding. Must own the group.
+
+**Response example:**
+```json
+{ "status": 200, "deleted": true }
 ```
 
 ---
@@ -1122,6 +1149,33 @@ Deletes the rank. Students who had this rank get `rank_id = NULL` (“Brak”) b
 
 ---
 
+## CSV Reports (lecturer)
+
+Downloads CSV files tracking student activity completions. The endpoints return `text/csv; charset=utf-8` with a UTF-8 BOM (`\uFEFF`) to ensure Excel on Windows opens them correctly, and uses semicolons (`;`) for the Polish locale.
+
+**Auth:** **Soft** token resolution — `maq_auth` cookie **or** `Authorization: Bearer` header; **`X-Browser-ID` is not required**. Caller must be a **lecturer** who **owns** the group.
+
+**Errors:**
+- `403 Forbidden`: Token missing/invalid, caller is not a lecturer, or caller is not the group owner.
+- `404 Not Found`: The specified stage or student does not exist within the group.
+
+### Group Report
+**Endpoint:** `GET /api/groups/:groupId/reports/group`
+
+Downloads a matrix report for all students across all stages/activities.
+
+### Stage Report
+**Endpoint:** `GET /api/groups/:groupId/reports/stage/:stageId`
+
+Downloads a matrix report for all students, filtered to a single stage.
+
+### Student Report
+**Endpoint:** `GET /api/groups/:groupId/reports/student/:accountId`
+
+Downloads a flat report for a single student.
+
+---
+
 ## Drive (file storage)
 
 ### Serve stored object (public)
@@ -1251,3 +1305,192 @@ Point **`SAML_ACS_URL`** at the **same origin** the browser uses for `/api` (e.g
 ### CORS
 
 The API enables **`Access-Control-Allow-Credentials`** so browsers may send cookies when `Origin` is allowlisted and the client uses credentials (see `CORS_ORIGIN`).
+
+---
+
+## Group templates (lecturer)
+
+Save a group's full configuration (settings, badges, ranks, shop items with pricing rules, posts, stages & activities) as a reusable template. Student data (enrollments, stats, backlog, earned items, enrollment codes) is **never** included.
+
+### Save group as template
+
+**Endpoint:** `POST /api/groups/:groupId/save-as-template`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must have the **lecturer** role and must own the group (`education.groups.teacher_account_id`).
+
+**URL parameters:**
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `groupId` | integer | Public group ID (includes `GROUP_RESPONSE_GROUP_ID_OFFSET`). |
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
+| `name` | string | Non-empty, min 1 char | Display name for the template. |
+| `description` | string (optional) | | Description of the template. |
+| `isPublic` | boolean (optional) | Default `false` | When `true`, the template is visible to other lecturers in the gallery. |
+
+**Response:** `201 Created` with the saved `GroupTemplateEntity` object:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | integer | Template primary key. |
+| `name` | string | Template name. |
+| `description` | string \| null | Template description. |
+| `isPublic` | boolean | Visibility flag. |
+| `creatorAccountId` | integer | Lecturer account id that created the template. |
+| `baseGroupId` | integer \| null | Source group id. |
+| `data` | object (JSONB) | Full snapshot — group settings, badges, ranks, item categories, items with shop listings (incl. rank prices & badge promotions), posts, stages with activities. |
+| `createdAt` | string (ISO-8601) | Creation timestamp. |
+
+**Errors:**
+
+| Status | When |
+| ------ | ---- |
+| `400 Bad Request` | Missing or blank `name` (class-validator). |
+| `403 Forbidden` | Not authenticated, not a lecturer, or not the group owner. |
+| `404 Not Found` | Group does not exist. |
+
+**Example**
+
+```http
+POST /api/groups/100001/save-as-template HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+Cookie: maq_auth=<token>
+
+{"name": "Kurs Algorytmów – szablon", "description": "Pełny kurs z 3 etapami", "isPublic": true}
+```
+
+```json
+{
+  "id": 1,
+  "name": "Kurs Algorytmów – szablon",
+  "description": "Pełny kurs z 3 etapami",
+  "isPublic": true,
+  "creatorAccountId": 5,
+  "baseGroupId": 1,
+  "data": { "group": { "..." }, "badges": [], "ranks": [], "..." },
+  "createdAt": "2026-06-15T19:00:00.000Z"
+}
+```
+
+### Create group from template
+
+**Endpoint:** `POST /api/groups/from-template/:templateId`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must have the **lecturer** role. The caller becomes the owner of the newly created group.
+
+Lecturers may only import templates if they have access to them:
+- **Public templates** (`isPublic: true`): Any lecturer can import.
+- **Private templates** (`isPublic: false`): Only the creator (`creatorAccountId`) can import.
+
+**URL parameters:**
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `templateId` | integer | Primary key of the template. |
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
+| `name` | string | Non-empty, min 1 char | Display name for the newly created group. |
+| `subjectName` | string (optional) | | Overrides the subject name from the template. If omitted, the template's value is used. |
+
+**Response:** `201 Created` with the new public group ID:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | integer | `201` |
+| `group` | integer | Public ID of the newly created group (includes `GROUP_RESPONSE_GROUP_ID_OFFSET`). |
+
+**Errors:**
+
+| Status | When |
+| ------ | ---- |
+| `400 Bad Request` | Missing or blank `name` (class-validator). |
+| `403 Forbidden` | Not authenticated, not a lecturer, or caller attempts to import a private template they did not create. |
+| `404 Not Found` | Template does not exist. |
+
+### List group templates (Gallery)
+
+**Endpoint:** `GET /api/group-templates`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or query `auth`). Caller must have the **lecturer** role.
+
+Retrieves a paginated list of templates without the heavy `data` payload.
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
+| `scope` | string (optional) | `public` | `public` to list all public templates. `my` to list all templates created by the caller (both public and private). |
+| `limit` | integer (optional)| `20` | Max results to return (1-100). |
+| `offset` | integer (optional)| `0` | Number of results to skip. |
+
+**Response:** `200 OK`
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "Template name",
+      "description": "Template description",
+      "isPublic": true,
+      "creatorAccountId": 5,
+      "baseGroupId": 100010,
+      "createdAt": "2026-06-15T20:00:00.000Z"
+    }
+  ],
+  "total": 1,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+### Get template details
+
+**Endpoint:** `GET /api/group-templates/:templateId`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or query `auth`). Caller must have the **lecturer** role. 
+
+Provides full template information, including the `data` snapshot. Fails with `403 Forbidden` if the template is private and the caller is not the creator.
+
+### Update template
+
+**Endpoint:** `PATCH /api/group-templates/:templateId`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must be the **lecturer** who created the template.
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
+| `name` | string (optional) | Min 1 char | Update the template name. |
+| `description` | string (optional) | | Update the template description. |
+| `isPublic` | boolean (optional)| | Update visibility. |
+
+**Errors:**
+- `403 Forbidden` if caller is not the creator.
+- `404 Not Found` if template does not exist.
+
+### Delete template
+
+**Endpoint:** `DELETE /api/group-templates/:templateId`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must be the **lecturer** who created the template.
+
+Permanently deletes the template from the database. Does not affect any groups already created from this template, nor does it delete associated files like banners from the drive.
+
+**Errors:**
+- `403 Forbidden` if caller is not the creator.
+- `404 Not Found` if template does not exist.
+

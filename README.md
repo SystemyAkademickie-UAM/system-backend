@@ -61,6 +61,8 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `POST /api/groups/:groupId/item-categories` — lecturer: create category
 - `PATCH /api/groups/:groupId/item-categories/:categoryId` — lecturer: update category
 - `DELETE /api/groups/:groupId/item-categories/:categoryId` — lecturer: delete category (items become uncategorized)
+- `GET /api/groups/:groupId/lives-config` — lives system configuration for the group (any authenticated user)
+- `PATCH /api/groups/:groupId/lives-config` — lecturer: update lives system configuration (enabled, label, shop toggle)
 - `DELETE /api/groups/:groupId/ranks/:rankId` — lecturer: delete rank; affected students get `rankId = null`
 - `GET /api/auth/saml/status` — SAML configuration checklist
 - `GET /api/auth/saml/metadata` — SP metadata XML (PIONIER.id / IdP)
