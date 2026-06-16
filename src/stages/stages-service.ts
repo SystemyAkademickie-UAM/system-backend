@@ -191,16 +191,21 @@ export class StagesService {
     if (!subject) {
       return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'retrieve', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
+    
+    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
+    const filterHidden = !isLecturer;
+    const visibilityCondition = filterHidden ? { visibilityStatus: 1 } : {};
+
     try {
       let stages: StageEntity[];
       if (body.groupId) {
         const internalGroupId = toInternalGroupId(body.groupId);
-        stages = await this.stageRepository.find({ where: { groupId: internalGroupId }, order: { id: 'ASC' } });
+        stages = await this.stageRepository.find({ where: { groupId: internalGroupId, ...visibilityCondition }, order: { id: 'ASC' } });
       } else if (body.stageId) {
-        const single = await this.stageRepository.findOne({ where: { id: body.stageId } });
+        const single = await this.stageRepository.findOne({ where: { id: body.stageId, ...visibilityCondition } });
         stages = single ? [single] : [];
       } else {
-        stages = await this.stageRepository.find({ order: { id: 'ASC' } });
+        stages = await this.stageRepository.find({ where: { ...visibilityCondition }, order: { id: 'ASC' } });
       }
       return {
         statusCode: STAGE_API_JSON_STATUS_OK,

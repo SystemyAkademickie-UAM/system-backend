@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import {
@@ -271,13 +271,9 @@ export class ActivitiesService {
 
       if (!isLecturer && activities.length > 0) {
         const stageIds = [...new Set(activities.map(a => a.stageId))];
-        // Cannot use In without importing, so just query by array or use loop.
-        // Actually, typeorm find with array of ids works with `In`, but if not imported, `id: Any(stageIds)` or simple loop.
-        // I will just fetch all stages for these IDs to avoid modifying imports if possible.
-        // Wait, I can just use a query builder:
-        const stages = await this.stageRepository.createQueryBuilder('s')
-          .where('s.id IN (:...stageIds)', { stageIds })
-          .getMany();
+        const stages = await this.stageRepository.find({
+          where: { id: In(stageIds) },
+        });
         
         const visibleStageIds = new Set(stages.filter(s => s.visibilityStatus !== 0).map(s => s.id));
         activities = activities.filter(a => visibleStageIds.has(a.stageId));

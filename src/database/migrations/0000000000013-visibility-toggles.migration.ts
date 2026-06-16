@@ -15,6 +15,10 @@ ADD COLUMN IF NOT EXISTS published_at timestamp without time zone DEFAULT NULL;
 
 ALTER TABLE education.stages
 ADD COLUMN IF NOT EXISTS visibility_status integer NOT NULL DEFAULT 0;
+
+UPDATE gamification.badges SET is_published = true, published_at = NOW();
+UPDATE gamification.items SET is_published = true, published_at = NOW();
+UPDATE education.stages SET visibility_status = 1;
 `.trim();
 
 const DOWN_SQL = `
