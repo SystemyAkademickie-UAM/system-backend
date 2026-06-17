@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
@@ -35,7 +35,7 @@ export class RanksService {
   async getRanksForGroup(req: Request, groupId: number, queryAuth?: string): Promise<RankEntity[]> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, queryAuth);
     if (!subject) {
-      throw new ForbiddenException('Not authorized');
+      throw new UnauthorizedException('Not authorized');
     }
     await this.assertGroupExists(groupId);
     return this.rankRepository.find({
@@ -50,7 +50,7 @@ export class RanksService {
   async updateRank(req: Request, groupId: number, rankId: number, dto: UpdateRankDto): Promise<RankEntity> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
     if (!subject) {
-      throw new ForbiddenException('Not authorized');
+      throw new UnauthorizedException('Not authorized');
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
@@ -82,7 +82,7 @@ export class RanksService {
   async deleteRank(req: Request, groupId: number, rankId: number, bodyAuth?: string): Promise<{ deleted: boolean }> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, bodyAuth);
     if (!subject) {
-      throw new ForbiddenException('Not authorized');
+      throw new UnauthorizedException('Not authorized');
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
@@ -131,7 +131,7 @@ export class RanksService {
   async createRank(req: Request, groupId: number, dto: CreateRankDto): Promise<RankEntity> {
     const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
     if (!subject) {
-      throw new ForbiddenException('Not authorized');
+      throw new UnauthorizedException('Not authorized');
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
