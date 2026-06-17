@@ -35,4 +35,7 @@ export class RankEntity {
 
   @Column({ name: 'unique_store_items', type: 'text', array: true, nullable: true })
   uniqueStoreItems: string[] | null;
+
+  @Column({ name: 'discount', type: 'decimal', precision: 5, scale: 2, nullable: true, default: 0 })
+  discount: number;
 }

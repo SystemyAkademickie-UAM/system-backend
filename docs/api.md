@@ -1120,7 +1120,8 @@ Creates a rank definition in `gamification.ranks` for a course group.
 | `icon` | string | required | Icon (emoji or id). |
 | `requiredPoints` | integer | required, ≥ 0 | Points threshold. |
 | `storyDescription` | string (optional) | — | Narrative text. |
-| `storeDiscount` | integer (optional) | ≥ 0 | Shop discount (default `0`). |
+| `storeDiscount` | integer (optional) | ≥ 0 | Flat currency shop discount (default `0`). |
+| `discount` | number (optional) | 0-100 | Percentage shop discount (default `0`). |
 | `uniqueStoreItems` | string[] (optional) | — | Exclusive shop item names. |
 
 **Response:** `201 Created` — persisted rank entity (camelCase fields).
