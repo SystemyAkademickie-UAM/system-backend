@@ -35,4 +35,12 @@ export class ItemEntity {
 
   @Column({ name: 'educational_description', type: 'text', nullable: true })
   educationalDescription: string | null;
+
+  /** Whether the item is visible to students. */
+  @Column({ name: 'is_published', type: 'boolean', default: false })
+  isPublished: boolean;
+
+  /** Set automatically by the backend when `isPublished` flips to `true`. */
+  @Column({ name: 'published_at', type: 'timestamp', nullable: true })
+  publishedAt: Date | null;
 }

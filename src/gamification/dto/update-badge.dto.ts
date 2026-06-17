@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { BadgeRarity } from '../../database/entities/badge.entity';
 
 /**
@@ -35,4 +35,9 @@ export class UpdateBadgeDto {
   @IsOptional()
   @IsEnum(BadgeRarity)
   rarity?: BadgeRarity;
+
+  /** Toggle badge visibility. When set to `true`, `publishedAt` is auto-set. */
+  @IsOptional()
+  @IsBoolean()
+  isPublished?: boolean;
 }

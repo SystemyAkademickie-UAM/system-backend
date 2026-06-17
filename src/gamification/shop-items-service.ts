@@ -41,8 +41,12 @@ export class ShopItemsService {
   ) {}
 
   async getItemsForGroup(req: Request, groupId: number, queryAuth?: string) {
-    await this.assertCanReadGroupShop(req, groupId, queryAuth);
-    const items = await this.itemRepository.find({ where: { groupId } });
+    const isLecturer = await this.assertCanReadGroupShop(req, groupId, queryAuth);
+    const whereClause: any = { groupId };
+    if (!isLecturer) {
+      whereClause.isPublished = true;
+    }
+    const items = await this.itemRepository.find({ where: whereClause });
     if (items.length === 0) return [];
     const listings = await this.shopListingRepository.find({
       where: items.map((i) => ({ itemId: i.id })),
@@ -166,6 +170,10 @@ export class ShopItemsService {
       if (dto.educationalDescription !== undefined) item.educationalDescription = dto.educationalDescription;
       if (dto.imageRef !== undefined) item.imageRef = dto.imageRef;
       if (dto.categoryId !== undefined) item.categoryId = dto.categoryId;
+      if (dto.isPublished !== undefined) {
+        item.isPublished = dto.isPublished;
+        item.publishedAt = dto.isPublished ? new Date() : null;
+      }
 
       const savedItem = await queryRunner.manager.save(item);
 
@@ -237,7 +245,7 @@ export class ShopItemsService {
     }
   }
 
-  private async assertCanReadGroupShop(req: Request, groupId: number, queryAuth?: string): Promise<void> {
+  private async assertCanReadGroupShop(req: Request, groupId: number, queryAuth?: string): Promise<boolean> {
     const subject = await this.resolveSubject(req, queryAuth);
     await this.assertGroupExists(groupId);
     const group = await this.groupRepository.findOne({ where: { id: groupId }, select: ['id', 'teacherAccountId'] });
@@ -246,7 +254,7 @@ export class ShopItemsService {
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
     if (lecturerAccountId !== null && group.teacherAccountId === lecturerAccountId) {
-      return;
+      return true;
     }
     const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
     if (studentAccountId === null) {
@@ -256,5 +264,6 @@ export class ShopItemsService {
     if (!isEnrolled) {
       throw new ForbiddenException('Not authorized');
     }
+    return false;
   }
 }

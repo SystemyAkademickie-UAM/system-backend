@@ -840,6 +840,7 @@ Manage stages within groups. Each stage belongs to a group and contains activiti
 | `stageId` | integer (optional) | Stage primary key (`education.stages.id`). Required for `modify`/`remove`. |
 | `groupId` | integer (optional) | Public group ID (includes `GROUP_RESPONSE_GROUP_ID_OFFSET = 100000`). Required for `post`. |
 | `name` | string (optional) | Stage name. Required for `post`. |
+| `visibilityStatus` | integer (optional) | Controls visibility (0 = hidden, 1 = visible). Defaults to 0. |
 
 **Authorization:**
 - `post`: **strong** auth (token + browser binding) + lecturer role.
@@ -853,7 +854,7 @@ Manage stages within groups. Each stage belongs to a group and contains activiti
 | `statusCode` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
 | `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
 | `stage` | integer | For `post`/`modify`: stage DB id (positive); for `remove`: the removed id; for `retrieve`: count of stages returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = invalid request. |
-| `stages` | array (optional) | For `retrieve`: array of `{ id, groupId, name }` — `id` is DB id; `groupId` is public (with offset). |
+| `stages` | array (optional) | For `retrieve`: array of `{ id, groupId, name, visibilityStatus }` — `id` is DB id; `groupId` is public (with offset). |
 
 All responses use this flat JSON shape only (no Nest `message` / `error` fields).
 
@@ -1020,8 +1021,9 @@ Creates a badge definition in `gamification.badges` for a course group.
 | `educationalDescription` | string | required | Educational text. |
 | `storyDescription` | string (optional) | — | Narrative text. |
 | `rewardAmount` | integer (optional) | ≥ 0 | Reward points (default `0`). |
+| `isPublished` | boolean (optional) | — | Visibility toggle. When false, students cannot see it. Auto-sets `publishedAt` on true. (default `false`). |
 
-**Response:** `201 Created` — persisted badge entity (camelCase fields).
+**Response:** `201 Created` — persisted badge entity (camelCase fields, including `isPublished` and `publishedAt`).
 
 **Errors:** `403 Forbidden` when token is missing/invalid or caller is not a lecturer; `404 Not Found` when the group does not exist.
 

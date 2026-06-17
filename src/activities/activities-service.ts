@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
 import {
@@ -257,6 +257,7 @@ export class ActivitiesService {
     if (!subject) {
       return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'retrieve', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
+    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     try {
       let activities: ActivityEntity[];
       if (body.stageId) {
@@ -267,6 +268,17 @@ export class ActivitiesService {
       } else {
         activities = await this.activityRepository.find({ order: { id: 'ASC' } });
       }
+
+      if (!isLecturer && activities.length > 0) {
+        const stageIds = [...new Set(activities.map(a => a.stageId))];
+        const stages = await this.stageRepository.find({
+          where: { id: In(stageIds) },
+        });
+        
+        const visibleStageIds = new Set(stages.filter(s => s.visibilityStatus !== 0).map(s => s.id));
+        activities = activities.filter(a => visibleStageIds.has(a.stageId));
+      }
+
       return {
         statusCode: ACTIVITY_API_JSON_STATUS_OK,
         method: 'retrieve',
