@@ -9,6 +9,8 @@ ADD COLUMN IF NOT EXISTS created_at timestamp without time zone DEFAULT NULL;
 
 ALTER TABLE education.posts
 ADD COLUMN IF NOT EXISTS published_at timestamp without time zone DEFAULT NULL;
+
+UPDATE education.posts SET is_published = true, published_at = COALESCE(published_at, NOW());
 `.trim();
 
 const DOWN_SQL = `
