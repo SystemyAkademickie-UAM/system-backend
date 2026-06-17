@@ -52,6 +52,7 @@ export interface GroupTemplateRank {
   storyDescription: string | null;
   storeDiscount: number | null;
   uniqueStoreItems: string[] | null;
+  discount: number;
 }
 
 export interface GroupTemplateItemCategory {

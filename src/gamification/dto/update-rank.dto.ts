@@ -1,4 +1,4 @@
-import { IsArray, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsInt, IsNumber, IsOptional, IsString, Min, Max } from 'class-validator';
 
 /**
  * DTO for updating a rank within a course group.
@@ -27,6 +27,7 @@ export class UpdateRankDto {
   @IsString()
   storyDescription?: string;
 
+  /** Flat currency discount in the store (integer). */
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -36,4 +37,11 @@ export class UpdateRankDto {
   @IsArray()
   @IsString({ each: true })
   uniqueStoreItems?: string[];
+
+  /** Percentage discount (decimal %, 0-100) in the store. Differs from flat `storeDiscount`. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discount?: number;
 }

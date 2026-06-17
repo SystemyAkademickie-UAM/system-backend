@@ -68,6 +68,7 @@ export class RanksService {
     if (dto.storyDescription !== undefined) rank.storyDescription = dto.storyDescription;
     if (dto.storeDiscount !== undefined) rank.storeDiscount = dto.storeDiscount;
     if (dto.uniqueStoreItems !== undefined) rank.uniqueStoreItems = dto.uniqueStoreItems;
+    if (dto.discount !== undefined) rank.discount = dto.discount;
 
     const saved = await this.rankRepository.save(rank);
     await this.recalculateRanksForGroup(groupId);
@@ -147,6 +148,7 @@ export class RanksService {
       storyDescription: dto.storyDescription ?? null,
       storeDiscount: dto.storeDiscount ?? 0,
       uniqueStoreItems: dto.uniqueStoreItems ?? null,
+      discount: dto.discount ?? 0,
     });
 
     const saved = await this.rankRepository.save(entity);

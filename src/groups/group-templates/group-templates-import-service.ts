@@ -83,6 +83,7 @@ export class GroupTemplatesImportService {
           storyDescription: oldRank.storyDescription,
           storeDiscount: oldRank.storeDiscount,
           uniqueStoreItems: oldRank.uniqueStoreItems, // raw strings, no ID mapping needed usually
+          discount: oldRank.discount ?? 0,
         });
         const savedRank = await manager.save(RankEntity, rankEntity);
         rankIdMap.set(oldRank.id, savedRank.id);
