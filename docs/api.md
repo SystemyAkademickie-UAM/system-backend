@@ -503,7 +503,7 @@ X-Browser-ID: <BrowserUUID>
 
 ## Group posts management (lecturer & student)
 
-Manages announcements / posts in **`edukacja.posts`** for a given course group.
+Manages announcements / posts in **`edukacja.posts`** for a given course group. Posts support a publishing workflow: new posts start unpublished (hidden); the lecturer can publish/unpublish them at any time.
 
 ### Create post (lecturer)
 
@@ -522,8 +522,11 @@ Manages announcements / posts in **`edukacja.posts`** for a given course group.
 | `auth` | string | Plaintext bearer (same HMAC rules as groups). |
 | `title` | string | Title of the announcement (non-empty). |
 | `content` | string | Body text of the announcement (non-empty). |
+| `createdAt` | string (ISO-8601) | (Optional) Creation date from the frontend. Defaults to server `now()` if omitted. |
 
-**Authorization:** **strong** token + browser binding. Caller must have **`autoryzacja.konta`** with **`rola = lecturer`** and must own the group (`edukacja.grupy.teacher_account_id`). Missing lecturer account, invalid token, browser mismatch, or ownership mismatch yields `{ "status": 200, "post": 1 }`.
+Posts are created with `isPublished: false` and `publishedAt: null`.
+
+**Authorization:** **strong** token + browser binding. Caller must have **`autoryzacja.konta`** with **`rola = lecturer`** and must own the group (`edukacja.grupy.teacher_account_id`). Missing lecturer account, invalid token, browser mismatch, or ownership mismatch yields `{ "status": 200, "post": -1 }` (or `-2` for creation error).
 
 **Response example:**
 ```json
@@ -549,6 +552,8 @@ Manages announcements / posts in **`edukacja.posts`** for a given course group.
 | `auth` | string | Plaintext bearer (optional if passed via `maq_auth` cookie). |
 
 **Authorization:** **strong** token + browser binding. Caller must either be the lecturer owning the group OR a student enrolled in the group (`grywalizacja.zapisy`). Unauthorized callers receive an empty posts array.
+- **Lecturer (group owner):** sees **all** posts (published and unpublished).
+- **Student (enrolled):** sees **only published** posts (`isPublished: true`).
 
 **Response example:**
 ```json
@@ -558,10 +563,48 @@ Manages announcements / posts in **`edukacja.posts`** for a given course group.
     {
       "id": 15,
       "title": "Zmiana terminu zajęć",
-      "content": "Zajęcia w czwartek zostają odwołane."
+      "content": "Zajęcia w czwartek zostają odwołane.",
+      "isPublished": true,
+      "createdAt": "2026-06-15T20:00:00.000Z",
+      "publishedAt": "2026-06-15T21:30:00.000Z"
     }
   ]
 }
+```
+
+---
+
+### Update post (lecturer)
+
+**Endpoint:** `PATCH /api/groups/:id/post/:postId`
+
+**Authorization:** lecturer + strong token + browser binding. Must own the group.
+
+**Request body (all fields optional):**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `title` | string | New title. |
+| `content` | string | New content. |
+| `isPublished` | boolean | Toggle visibility. When set to `true`, backend auto-sets `publishedAt` to current timestamp. When set to `false`, `publishedAt` resets to `null`. |
+| `auth` | string | Plaintext bearer (alternative to cookie). |
+
+**Response example:**
+```json
+{ "status": 200, "updated": true }
+```
+
+---
+
+### Delete post (lecturer)
+
+**Endpoint:** `DELETE /api/groups/:id/post/:postId`
+
+**Authorization:** lecturer + strong token + browser binding. Must own the group.
+
+**Response example:**
+```json
+{ "status": 200, "deleted": true }
 ```
 
 ---

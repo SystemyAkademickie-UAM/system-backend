@@ -21,7 +21,14 @@ import { UpdatePostDto } from './dto/update-post.dto';
 export type CreatePostResponseBody = { status: number; post: number };
 export type GetPostsResponseBody = {
   status: number;
-  posts: Array<{ id: number; title: string; content: string }>;
+  posts: Array<{
+    id: number;
+    title: string;
+    content: string;
+    isPublished: boolean;
+    createdAt: string | null;
+    publishedAt: string | null;
+  }>;
 };
 export type DeletePostResponseBody = { status: number; deleted: boolean };
 export type UpdatePostResponseBody = { status: number; updated: boolean };
@@ -76,10 +83,14 @@ export class GroupsPostsService {
     }
 
     try {
+      const createdAt = body.createdAt ? new Date(body.createdAt) : new Date();
       const entity = this.postRepository.create({
         groupId,
         title: body.title,
         content: body.content,
+        isPublished: false,
+        createdAt,
+        publishedAt: null,
       });
       const saved = await this.postRepository.save(entity);
       return { status: GROUP_API_JSON_STATUS_OK, post: saved.id };
@@ -110,13 +121,14 @@ export class GroupsPostsService {
         : publicGroupId;
 
     let authorized = false;
+    let ownsGroup = false;
 
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
       LECTURER_ROLE_NAME,
     );
     if (lecturerAccountId !== null) {
-      const ownsGroup = await this.groupRepository.exist({
+      ownsGroup = await this.groupRepository.exist({
         where: { id: groupId, teacherAccountId: lecturerAccountId },
       });
       if (ownsGroup) {
@@ -144,10 +156,13 @@ export class GroupsPostsService {
     }
 
     try {
+      const whereClause = ownsGroup
+        ? { groupId }
+        : { groupId, isPublished: true };
       const posts = await this.postRepository.find({
-        where: { groupId },
+        where: whereClause,
         order: { id: 'DESC' },
-        select: ['id', 'title', 'content'],
+        select: ['id', 'title', 'content', 'isPublished', 'createdAt', 'publishedAt'],
       });
       return {
         status: GROUP_API_JSON_STATUS_OK,
@@ -155,6 +170,9 @@ export class GroupsPostsService {
           id: p.id,
           title: p.title ?? '',
           content: p.content ?? '',
+          isPublished: p.isPublished,
+          createdAt: p.createdAt ? p.createdAt.toISOString() : null,
+          publishedAt: p.publishedAt ? p.publishedAt.toISOString() : null,
         })),
       };
     } catch (err: unknown) {
@@ -249,7 +267,10 @@ export class GroupsPostsService {
       const updateData: Partial<PostEntity> = {};
       if (body.title !== undefined) updateData.title = body.title;
       if (body.content !== undefined) updateData.content = body.content;
-
+      if (body.isPublished !== undefined) {
+        updateData.isPublished = body.isPublished;
+        updateData.publishedAt = body.isPublished ? new Date() : null;
+      }
       const result = await this.postRepository.update({ id: postId, groupId }, updateData);
       return {
         status: GROUP_API_JSON_STATUS_OK,
