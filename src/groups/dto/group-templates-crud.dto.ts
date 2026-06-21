@@ -50,3 +50,15 @@ export class UpdateGroupTemplateDto {
   @IsBoolean()
   isPublic?: boolean;
 }
+
+export class CloneGroupTemplateDto {
+  /** Optional when using `maq_auth` cookie (browser clients). */
+  @IsOptional()
+  @IsString()
+  auth?: string;
+
+  @Transform(({ value }) => (value === undefined || value === null ? undefined : String(value).trim()))
+  @IsString()
+  @MinLength(1)
+  name: string;
+}
