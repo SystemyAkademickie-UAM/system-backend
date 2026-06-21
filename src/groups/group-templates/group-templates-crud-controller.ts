@@ -9,6 +9,7 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  Post,
   Query,
   Req,
 } from '@nestjs/common';
@@ -16,7 +17,7 @@ import type { Request } from 'express';
 
 import { AuthTokenSessionService } from '../../auth/api-token/auth-token-session-service';
 import { GroupsService } from '../groups-service';
-import { GetGroupTemplatesQueryDto, UpdateGroupTemplateDto } from '../dto/group-templates-crud.dto';
+import { CloneGroupTemplateDto, GetGroupTemplatesQueryDto, UpdateGroupTemplateDto } from '../dto/group-templates-crud.dto';
 import { GroupTemplatesCrudService } from './group-templates-crud-service';
 
 @Controller('group-templates')
@@ -98,5 +99,22 @@ export class GroupTemplatesCrudController {
     const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
 
     await this.crudService.deleteTemplate(templateId, lecturerAccountId);
+  }
+
+  @Post(':id/clone')
+  @HttpCode(HttpStatus.CREATED)
+  async cloneTemplate(
+    @Param('id', ParseIntPipe) templateId: number,
+    @Body() dto: CloneGroupTemplateDto,
+    @Req() req: Request,
+  ) {
+    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    if (!subject) {
+      throw new ForbiddenException('Missing or invalid session');
+    }
+
+    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
+
+    return this.crudService.cloneTemplate(templateId, lecturerAccountId, dto.name);
   }
 }

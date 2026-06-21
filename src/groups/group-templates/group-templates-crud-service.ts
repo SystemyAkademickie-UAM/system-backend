@@ -124,4 +124,30 @@ export class GroupTemplatesCrudService {
     // Hard delete - does not affect groups created from it, and does not remove images.
     await this.templatesRepository.delete(templateId);
   }
+
+  async cloneTemplate(
+    templateId: number,
+    lecturerAccountId: number,
+    newName: string,
+  ): Promise<GroupTemplateEntity> {
+    const template = await this.templatesRepository.findOne({ where: { id: templateId } });
+    if (!template) {
+      throw new NotFoundException(`Group template ${templateId} not found`);
+    }
+
+    if (!template.isPublic && template.creatorAccountId !== lecturerAccountId) {
+      throw new ForbiddenException(`Cannot clone private template ${templateId}`);
+    }
+
+    const clonedTemplate = this.templatesRepository.create({
+      name: newName,
+      description: template.description,
+      isPublic: false,
+      creatorAccountId: lecturerAccountId,
+      baseGroupId: template.baseGroupId,
+      data: template.data,
+    });
+
+    return this.templatesRepository.save(clonedTemplate);
+  }
 }
