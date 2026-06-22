@@ -35,8 +35,7 @@ const VALID_AFFILIATIONS = new Set<EduPersonAffiliation>([
 export class SamlService {
   constructor(
     private readonly jwtService: JwtService,
-    private readonly samlConfig: SamlConfigService,
-  ) {}
+    private readonly samlConfig: SamlConfigService) {}
 
   /**
    * Map SAML profile to SamlUser. Handles both friendly names and OID URNs.

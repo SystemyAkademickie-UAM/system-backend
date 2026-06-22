@@ -40,8 +40,7 @@ async function bootstrap(): Promise<void> {
           connectSrc: ["'self'"],
         },
       },
-    }),
-  );
+    }));
   app.use(express.urlencoded({ extended: false }));
   app.use(cookieParser());
   app.use(passport.initialize());
@@ -56,8 +55,7 @@ async function bootstrap(): Promise<void> {
   });
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
-  );
+    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   setupSwagger(app);
   await app.listen(HTTP_PORT, HTTP_HOST);
 }

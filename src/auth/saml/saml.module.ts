@@ -8,12 +8,13 @@ import { IdpCertificateEntity } from '../../database/entities/idp-certificate.en
 import { OrganizationEntity } from '../../database/entities/organization.entity';
 import { UserEntity } from '../../database/entities/user.entity';
 import { LoginModule } from '../login/login-module';
+import { SessionModule } from '../session/session.module';
 import { SuperAdminBootstrapModule } from '../../admin/bootstrap/super-admin-bootstrap.module';
+import { OrganizationLoginModule } from '../organization-login/organization-login.module';
 import { SamlLinkedUserService } from '../login/saml-linked-user.service';
 import { SamlAccountProvisioningService } from './saml-account-provisioning.service';
 import { SamlController } from './saml.controller';
 import { SamlOrganizationConfigService } from './saml-organization-config.service';
-import { SamlOrganizationsService } from './saml-organizations.service';
 import { SamlRelayStateTokenService } from './saml-relay-state-token.service';
 import { SamlService } from './saml.service';
 import { SamlConfigService } from './saml-config.service';
@@ -37,6 +38,8 @@ function resolveSamlJwtSecret(config: ConfigService): string {
 @Module({
   imports: [
     forwardRef(() => LoginModule),
+    OrganizationLoginModule,
+    SessionModule,
     SuperAdminBootstrapModule,
     TypeOrmModule.forFeature([OrganizationEntity, IdpCertificateEntity, AccountEntity, UserEntity]),
     JwtModule.registerAsync({
@@ -52,12 +55,11 @@ function resolveSamlJwtSecret(config: ConfigService): string {
   providers: [
     SamlService,
     SamlConfigService,
-    SamlOrganizationsService,
     SamlOrganizationConfigService,
     SamlAccountProvisioningService,
     SamlLinkedUserService,
     SamlRelayStateTokenService,
   ],
-  exports: [SamlService, SamlConfigService, SamlOrganizationsService, SamlOrganizationConfigService],
+  exports: [SamlService, SamlConfigService, SamlOrganizationConfigService],
 })
 export class SamlModule {}

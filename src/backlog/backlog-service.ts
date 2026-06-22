@@ -6,7 +6,7 @@ import type { Request } from 'express';
 import { BacklogEntity } from '../database/entities/backlog.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import {
         ADMINISTRATOR_ROLE_NAME,
@@ -43,9 +43,8 @@ export class BacklogService {
     private readonly groupRepository: Repository<GroupEntity>,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
-    private readonly authTokenSessionService: AuthTokenSessionService,
-    private readonly userRolesService: UserRolesService,
-  ) {}
+    private readonly sessionService: SessionService,
+    private readonly userRolesService: UserRolesService) {}
 
   /**
    * Internal method to log events to the backlog.
@@ -56,8 +55,7 @@ export class BacklogService {
     accountId: number,
     type: BacklogEventType,
     value: string | null = null,
-    manager?: EntityManager,
-  ): Promise<BacklogEntity> {
+    manager?: EntityManager): Promise<BacklogEntity> {
     const repo = manager ? manager.getRepository(BacklogEntity) : this.backlogRepository;
     const entry = repo.create({
       groupId: internalGroupId,
@@ -71,16 +69,10 @@ export class BacklogService {
   async getStudentBacklog(
     req: Request,
     publicGroupId: number,
-    browserIdHeader: string | undefined,
-    authHeader: string | undefined,
     take: number,
     skip: number,
   ): Promise<BacklogItemResponse[] | { error: string }> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      authHeader,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return { error: 'Unauthorized' };
     }
@@ -92,8 +84,7 @@ export class BacklogService {
 
     const studentAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      STUDENT_ROLE_NAME,
-    );
+      STUDENT_ROLE_NAME);
     if (studentAccountId === null) {
       return { error: 'Forbidden: Student account not found' };
     }
@@ -139,16 +130,10 @@ export class BacklogService {
   async getGroupBacklog(
     req: Request,
     publicGroupId: number,
-    browserIdHeader: string | undefined,
-    authHeader: string | undefined,
     take: number,
     skip: number,
   ): Promise<BacklogItemResponse[] | { error: string }> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      authHeader,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return { error: 'Unauthorized' };
     }
@@ -172,8 +157,7 @@ export class BacklogService {
     if (primaryRole === LECTURER_ROLE_NAME || primaryRole === ADMINISTRATOR_ROLE_NAME) {
       const accountId = await this.userRolesService.findAccountIdForRole(
         subject.userId,
-        primaryRole,
-      );
+        primaryRole);
       if (accountId === null) {
         return { error: 'Forbidden: Requires privileges' };
       }

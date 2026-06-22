@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Request } from 'express';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import {
   DRIVE_API_JSON_STATUS_FORBIDDEN,
   DRIVE_API_JSON_STATUS_OK,
@@ -38,7 +38,6 @@ type DriveHandleInput = {
   req: Request;
   jsonField: unknown;
   bannerFile: Express.Multer.File | undefined;
-  browserIdHeader: string | undefined;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -137,20 +136,15 @@ function detectMimeType(buffer: Buffer): string {
 @Injectable()
 export class DriveService {
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
-    private readonly userRolesService: UserRolesService,
-  ) {}
+    private readonly sessionService: SessionService,
+    private readonly userRolesService: UserRolesService) {}
 
   async handleDrive(input: DriveHandleInput): Promise<DriveHandleResponseBody> {
     const payload = parseDriveCommandJson(input.jsonField);
     if (!payload) {
       throw new BadRequestException('json form field must be a valid JSON string');
     }
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      input.req,
-      input.browserIdHeader,
-      payload.auth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(input.req, payload.auth);
     const organizationId = resolveOrganizationId(payload);
     const isAllowed =
       subject !== null &&
@@ -171,8 +165,7 @@ export class DriveService {
 
   private async postObject(
     organizationId: number,
-    bannerFile: Express.Multer.File | undefined,
-  ): Promise<DriveHandleResponseBody> {
+    bannerFile: Express.Multer.File | undefined): Promise<DriveHandleResponseBody> {
     if (!bannerFile) {
       throw new BadRequestException('banner file is required for method post');
     }
@@ -226,8 +219,7 @@ export class DriveService {
    */
   async serveObject(
     organizationId: number,
-    driveRef: string,
-  ): Promise<{ buffer: Buffer; contentType: string }> {
+    driveRef: string): Promise<{ buffer: Buffer; contentType: string }> {
     if (!DriveService.isValidDriveRef(driveRef)) {
       throw new BadRequestException('Invalid driveRef format — expected UUID v4');
     }

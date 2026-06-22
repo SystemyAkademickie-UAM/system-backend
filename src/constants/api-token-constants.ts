@@ -12,7 +12,7 @@ export const API_TOKEN_HMAC_SECRET_MIN_LENGTH = 32;
 
 /**
  * Sliding idle window: a token expires this many seconds after the last authenticated request.
- * Refreshed on activity (see `AuthTokenSessionService`). Default: 24 minutes.
+ * Refreshed on activity (see `SessionService`). Default: 24 minutes.
  * Override with env `API_TOKEN_IDLE_TIMEOUT_SECONDS`.
  */
 export const API_TOKEN_IDLE_TIMEOUT_DEFAULT_SECONDS = 24 * 60;

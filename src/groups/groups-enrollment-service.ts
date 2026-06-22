@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { QueryFailedError, Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
 import {
   ENROLL_RESULT_CODE_INVALID,
@@ -64,7 +64,7 @@ export class GroupsEnrollmentService {
   private readonly logger = new Logger(GroupsEnrollmentService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     private readonly ranksService: RanksService,
     private readonly enrollmentCodesService: EnrollmentCodesService,
@@ -73,8 +73,7 @@ export class GroupsEnrollmentService {
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
     @InjectRepository(StudentStatsEntity)
-    private readonly studentStatsRepository: Repository<StudentStatsEntity>,
-  ) {}
+    private readonly studentStatsRepository: Repository<StudentStatsEntity>) {}
 
   /**
    * Core enrollment logic - use when you already have studentAccountId and groupId.
@@ -121,14 +120,9 @@ export class GroupsEnrollmentService {
   async enrollStudentInGroup(
     req: Request,
     publicGroupId: number,
-    body: EnrollGroupBodyDto,
-    browserIdHeader: string | undefined,
+    body: EnrollGroupBodyDto
   ): Promise<EnrollGroupResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }
@@ -159,14 +153,9 @@ export class GroupsEnrollmentService {
   async enrollStudentByCode(
     req: Request,
     publicGroupId: number,
-    query: JoinGroupQueryDto,
-    browserIdHeader: string | undefined,
+    query: JoinGroupQueryDto
   ): Promise<EnrollGroupResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      undefined,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, undefined);
     if (!subject) {
       return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }
@@ -186,8 +175,7 @@ export class GroupsEnrollmentService {
     const validation = await this.enrollmentCodesService.validateCodeForGroup(
       internalGroupId,
       query.code,
-      validatedAt,
-    );
+      validatedAt);
     if (!validation.ok) {
       return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_CODE_INVALID };
     }
@@ -199,8 +187,7 @@ export class GroupsEnrollmentService {
     if (isNewEnrollment) {
       const incremented = await this.enrollmentCodesService.tryIncrementUseCount(
         validation.code.id,
-        validatedAt,
-      );
+        validatedAt);
       if (!incremented) {
         return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_CODE_INVALID };
       }

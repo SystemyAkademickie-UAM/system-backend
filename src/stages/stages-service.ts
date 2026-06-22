@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import {
   STAGE_API_JSON_STATUS_BAD_REQUEST,
   STAGE_API_JSON_STATUS_FORBIDDEN,
@@ -42,19 +42,16 @@ export class StagesService {
   private readonly logger = new Logger(StagesService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(StageEntity)
     private readonly stageRepository: Repository<StageEntity>,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>,
-  ) {}
+    private readonly groupRepository: Repository<GroupEntity>) {}
 
   async handleStage(
     req: Request,
-    body: unknown,
-    browserIdHeader: string | undefined,
-  ): Promise<StageResponseBody> {
+    body: unknown): Promise<StageResponseBody> {
     const parsed = parseStageRequest(body);
     if (!parsed.ok) {
       return {
@@ -66,27 +63,21 @@ export class StagesService {
     const request = parsed.request;
     const method = request.method;
     if (method === 'post') {
-      return this.createStage(req, request, browserIdHeader);
+      return this.createStage(req, request);
     }
     if (method === 'modify') {
-      return this.modifyStage(req, request, browserIdHeader);
+      return this.modifyStage(req, request);
     }
     if (method === 'remove') {
-      return this.removeStage(req, request, browserIdHeader);
+      return this.removeStage(req, request);
     }
-    return this.retrieveStages(req, request, browserIdHeader);
+    return this.retrieveStages(req, request);
   }
 
   private async createStage(
     req: Request,
-    body: ParsedStageRequest,
-    browserIdHeader: string | undefined,
-  ): Promise<StageResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    body: ParsedStageRequest): Promise<StageResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'post', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
@@ -118,10 +109,8 @@ export class StagesService {
 
   private async modifyStage(
     req: Request,
-    body: ParsedStageRequest,
-    browserIdHeader: string | undefined,
-  ): Promise<StageResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
+    body: ParsedStageRequest): Promise<StageResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'modify', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
@@ -156,10 +145,8 @@ export class StagesService {
 
   private async removeStage(
     req: Request,
-    body: ParsedStageRequest,
-    browserIdHeader: string | undefined,
-  ): Promise<StageResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
+    body: ParsedStageRequest): Promise<StageResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'remove', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
@@ -184,10 +171,8 @@ export class StagesService {
 
   private async retrieveStages(
     req: Request,
-    body: ParsedStageRequest,
-    browserIdHeader: string | undefined,
-  ): Promise<StageResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
+    body: ParsedStageRequest): Promise<StageResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'retrieve', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }

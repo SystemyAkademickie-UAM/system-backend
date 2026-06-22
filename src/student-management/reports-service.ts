@@ -8,7 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
@@ -51,7 +51,7 @@ export class ReportsService {
   private readonly logger = new Logger(ReportsService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     private readonly dataSource: DataSource,
     @InjectRepository(StageEntity)
@@ -59,8 +59,7 @@ export class ReportsService {
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>,
-  ) {}
+    private readonly groupRepository: Repository<GroupEntity>) {}
 
   /**
    * Generates a CSV report for the entire group.
@@ -81,8 +80,7 @@ export class ReportsService {
   async generateStageReport(
     req: Request,
     groupId: number,
-    stageId: number,
-  ): Promise<string> {
+    stageId: number): Promise<string> {
     await this.assertLecturerOwner(req, groupId);
     await this.assertStageInGroup(groupId, stageId);
     const students = await this.fetchStudents(groupId);
@@ -98,8 +96,7 @@ export class ReportsService {
   async generateStudentReport(
     req: Request,
     groupId: number,
-    accountId: number,
-  ): Promise<string> {
+    accountId: number): Promise<string> {
     await this.assertLecturerOwner(req, groupId);
     await this.assertEnrollmentExists(groupId, accountId);
     const student = await this.fetchSingleStudent(groupId, accountId);
@@ -122,14 +119,12 @@ export class ReportsService {
        JOIN auth.users u    ON u.id = a.user_id
        WHERE e.group_id = $1
        ORDER BY u.surname, u.name`,
-      [groupId],
-    );
+      [groupId]);
   }
 
   private async fetchSingleStudent(
     groupId: number,
-    accountId: number,
-  ): Promise<StudentRow> {
+    accountId: number): Promise<StudentRow> {
     const rows = await this.dataSource.query<StudentRow[]>(
       `SELECT
          a.id        AS "accountId",
@@ -141,20 +136,17 @@ export class ReportsService {
        JOIN auth.users u    ON u.id = a.user_id
        WHERE e.group_id = $1 AND a.id = $2
        LIMIT 1`,
-      [groupId, accountId],
-    );
+      [groupId, accountId]);
     if (rows.length === 0) {
       throw new NotFoundException(
-        `Student with accountId ${accountId} is not enrolled in group ${groupId}`,
-      );
+        `Student with accountId ${accountId} is not enrolled in group ${groupId}`);
     }
     return rows[0];
   }
 
   private async fetchStageActivities(
     groupId: number,
-    stageId?: number,
-  ): Promise<StageActivityRow[]> {
+    stageId?: number): Promise<StageActivityRow[]> {
     const params: number[] = [groupId];
     let stageFilter = '';
     if (stageId !== undefined) {
@@ -171,14 +163,12 @@ export class ReportsService {
        JOIN education.activities a ON a.stage_id = s.id
        WHERE s.group_id = $1${stageFilter}
        ORDER BY s.id ASC, a.id ASC`,
-      params,
-    );
+      params);
   }
 
   private async fetchCompletions(
     groupId: number,
-    accountId?: number,
-  ): Promise<Set<string>> {
+    accountId?: number): Promise<Set<string>> {
     const params: number[] = [groupId];
     let accountFilter = '';
     if (accountId !== undefined) {
@@ -191,8 +181,7 @@ export class ReportsService {
       `SELECT account_id, activity_id
        FROM analytics.activity_backlog
        WHERE group_id = $1${accountFilter}`,
-      params,
-    );
+      params);
     const set = new Set<string>();
     for (const row of rows) {
       set.add(`${row.account_id}:${row.activity_id}`);
@@ -205,20 +194,17 @@ export class ReportsService {
   private buildMatrixCsv(
     students: StudentRow[],
     stageActivities: StageActivityRow[],
-    completions: Set<string>,
-  ): string {
+    completions: Set<string>): string {
     const header = [
       'Student',
       ...stageActivities.map(
-        (sa) => `${sa.stageName} > ${sa.activityName}`,
-      ),
+        (sa) => `${sa.stageName} > ${sa.activityName}`),
     ];
     const rows: string[][] = [];
     for (const student of students) {
       const studentLabel = this.formatStudentName(student);
       const cells = stageActivities.map((sa) =>
-        completions.has(`${student.accountId}:${sa.activityId}`) ? '1' : '0',
-      );
+        completions.has(`${student.accountId}:${sa.activityId}`) ? '1' : '0');
       rows.push([studentLabel, ...cells]);
     }
     return this.serializeCsv(header, rows);
@@ -227,15 +213,13 @@ export class ReportsService {
   private buildStudentCsv(
     student: StudentRow,
     stageActivities: StageActivityRow[],
-    completions: Set<string>,
-  ): string {
+    completions: Set<string>): string {
     const studentLabel = this.formatStudentName(student);
     const header = ['Student', 'Stage', 'Activity', 'Completed'];
     const rows: string[][] = [];
     for (const sa of stageActivities) {
       const isCompleted = completions.has(
-        `${student.accountId}:${sa.activityId}`,
-      )
+        `${student.accountId}:${sa.activityId}`)
         ? '1'
         : '0';
       rows.push([studentLabel, sa.stageName, sa.activityName, isCompleted]);
@@ -246,8 +230,7 @@ export class ReportsService {
   private serializeCsv(header: string[], rows: string[][]): string {
     const escapedHeader = header.map((h) => this.escapeCsvField(h));
     const escapedRows = rows.map((row) =>
-      row.map((cell) => this.escapeCsvField(cell)),
-    );
+      row.map((cell) => this.escapeCsvField(cell)));
     const lines = [
       escapedHeader.join(CSV_SEPARATOR),
       ...escapedRows.map((row) => row.join(CSV_SEPARATOR)),
@@ -283,24 +266,21 @@ export class ReportsService {
 
   private async assertLecturerOwner(
     req: Request,
-    groupId: number,
-  ): Promise<void> {
+    groupId: number): Promise<void> {
     const subject =
-      await this.authTokenSessionService.resolveSubjectSoftFromRequest(req);
+      await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }
     const isLecturer = await this.userRolesService.userHasRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (!isLecturer) {
       throw new ForbiddenException('Not authorized');
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       throw new ForbiddenException('Not authorized');
     }
@@ -314,29 +294,25 @@ export class ReportsService {
 
   private async assertStageInGroup(
     groupId: number,
-    stageId: number,
-  ): Promise<void> {
+    stageId: number): Promise<void> {
     const exists = await this.stageRepository.exist({
       where: { id: stageId, groupId },
     });
     if (!exists) {
       throw new NotFoundException(
-        `Stage ${stageId} not found in group ${groupId}`,
-      );
+        `Stage ${stageId} not found in group ${groupId}`);
     }
   }
 
   private async assertEnrollmentExists(
     groupId: number,
-    accountId: number,
-  ): Promise<void> {
+    accountId: number): Promise<void> {
     const exists = await this.enrollmentRepository.exist({
       where: { groupId, studentAccountId: accountId },
     });
     if (!exists) {
       throw new NotFoundException(
-        `Student with accountId ${accountId} is not enrolled in group ${groupId}`,
-      );
+        `Student with accountId ${accountId} is not enrolled in group ${groupId}`);
     }
   }
 }

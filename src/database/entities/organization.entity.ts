@@ -6,6 +6,9 @@ import {
   AUTH_ORGANIZATION_CONTACT_PHONE_MAX_LENGTH,
   AUTH_ORGANIZATION_NAME_MAX_LENGTH,
 } from '../../constants/database-entity-constants';
+import {
+  ORGANIZATION_LOGIN_METHOD_SAML,
+} from '../../constants/organization-constants';
 
 /**
  * Organization tenant (`auth.organizations`); referenced by `auth.accounts.organization_id`.
@@ -17,6 +20,15 @@ export class OrganizationEntity {
 
   @Column({ name: 'name', type: 'varchar', length: AUTH_ORGANIZATION_NAME_MAX_LENGTH })
   name: string;
+
+  @Column({
+    name: 'login_method',
+    type: 'varchar',
+    length: 16,
+    nullable: false,
+    default: ORGANIZATION_LOGIN_METHOD_SAML,
+  })
+  loginMethod: string;
 
   @Column({
     name: 'contact_email',

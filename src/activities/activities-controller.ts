@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
@@ -22,9 +22,7 @@ export class ActivitiesController {
   @ApiOperation({ summary: 'Handle activity operations based on the request body method field' })
   handleActivity(
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-    @Body() body: unknown,
-  ): Promise<ActivityResponseBody> {
-    return this.activitiesService.handleActivity(req, body, browserId);
+    @Body() body: unknown): Promise<ActivityResponseBody> {
+    return this.activitiesService.handleActivity(req, body);
   }
 }

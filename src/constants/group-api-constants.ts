@@ -25,8 +25,7 @@ export const GROUP_RESPONSE_GROUP_ID_OFFSET = 100000;
 export function toInternalGroupId(publicGroupId: number): number {
   if (publicGroupId < GROUP_RESPONSE_GROUP_ID_OFFSET) {
     throw new BadRequestException(
-      `Invalid group ID: ${publicGroupId}. Expected a public ID >= ${GROUP_RESPONSE_GROUP_ID_OFFSET}.`,
-    );
+      `Invalid group ID: ${publicGroupId}. Expected a public ID >= ${GROUP_RESPONSE_GROUP_ID_OFFSET}.`);
   }
   return publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET;
-}
+}

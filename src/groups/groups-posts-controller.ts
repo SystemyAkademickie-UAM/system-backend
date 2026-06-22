@@ -3,7 +3,6 @@ import {
   Controller,
   Delete,
   Get,
-  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -36,10 +35,8 @@ export class GroupsPostsController {
   createPost(
     @Param('id', ParseIntPipe) groupId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-    @Body() body: CreatePostDto,
-  ): Promise<CreatePostResponseBody> {
-    return this.groupsPostsService.createPost(req, groupId, body, browserId);
+    @Body() body: CreatePostDto): Promise<CreatePostResponseBody> {
+    return this.groupsPostsService.createPost(req, groupId, body);
   }
 
   @Get(':id/post')
@@ -47,10 +44,8 @@ export class GroupsPostsController {
   @ApiOperation({ summary: 'Get posts for the given course group' })
   getPosts(
     @Param('id', ParseIntPipe) groupId: number,
-    @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-  ): Promise<GetPostsResponseBody> {
-    return this.groupsPostsService.getPosts(req, groupId, browserId);
+    @Req() req: Request): Promise<GetPostsResponseBody> {
+    return this.groupsPostsService.getPosts(req, groupId);
   }
 
   /** Alias for plural /posts just in case frontend prefers plural */
@@ -59,10 +54,8 @@ export class GroupsPostsController {
   @ApiOperation({ summary: 'Get posts for the given course group (plural alias)' })
   getPostsAlias(
     @Param('id', ParseIntPipe) groupId: number,
-    @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-  ): Promise<GetPostsResponseBody> {
-    return this.groupsPostsService.getPosts(req, groupId, browserId);
+    @Req() req: Request): Promise<GetPostsResponseBody> {
+    return this.groupsPostsService.getPosts(req, groupId);
   }
 
   /**
@@ -76,10 +69,9 @@ export class GroupsPostsController {
     @Param('id', ParseIntPipe) groupId: number,
     @Param('postId', ParseIntPipe) postId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
     @Body() body: { auth?: string } = {},
   ): Promise<DeletePostResponseBody> {
-    return this.groupsPostsService.deletePost(req, groupId, postId, browserId, body?.auth);
+    return this.groupsPostsService.deletePost(req, groupId, postId, body?.auth);
   }
 
   /**
@@ -93,9 +85,7 @@ export class GroupsPostsController {
     @Param('id', ParseIntPipe) groupId: number,
     @Param('postId', ParseIntPipe) postId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-    @Body() body: UpdatePostDto,
-  ): Promise<UpdatePostResponseBody> {
-    return this.groupsPostsService.updatePost(req, groupId, postId, body, browserId);
+    @Body() body: UpdatePostDto): Promise<UpdatePostResponseBody> {
+    return this.groupsPostsService.updatePost(req, groupId, postId, body);
   }
 }
