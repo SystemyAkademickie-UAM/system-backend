@@ -95,6 +95,11 @@ Examples:
 
 ```bash
 npm run register:user -- user@example.com --org-id 11 --lecturer
+npm run register:user -- jan@example.com --org-id 11 --name Jan --surname Kowalski --complete-registration
 npm run unregister:user -- user@example.com
 npm run grant:user-role -- user@example.com --org-id 11 --administrator
 ```
+
+Optional profile flags for `register:user`: `--name`, `--surname`, `--nickname`, `--avatar-id`, `--language`, `--student-id`. With `--complete-registration`, the user skips the registration wizard (profile + EULA marked done).
+
+CLI scripts use the same `DATABASE_*` values as the API. When the API runs in Docker, point `DATABASE_HOST` at the published host port (see `.env.example`).

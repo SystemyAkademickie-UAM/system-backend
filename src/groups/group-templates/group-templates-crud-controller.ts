@@ -102,7 +102,7 @@ export class GroupTemplatesCrudController {
     @Body() dto: CloneGroupTemplateDto,
     @Req() req: Request,
   ) {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
     if (!subject) {
       throw new ForbiddenException('Missing or invalid session');
     }
