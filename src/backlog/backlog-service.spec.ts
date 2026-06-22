@@ -6,7 +6,7 @@ import { BacklogService } from './backlog-service';
 import { BacklogEntity } from '../database/entities/backlog.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
 
@@ -15,7 +15,7 @@ describe('BacklogService', () => {
   let backlogRepository: any;
   let groupRepository: any;
   let enrollmentRepository: any;
-  let authTokenSessionService: any;
+  let sessionService: any;
   let userRolesService: any;
 
   beforeEach(async () => {
@@ -30,8 +30,8 @@ describe('BacklogService', () => {
     enrollmentRepository = {
       exist: jest.fn(),
     };
-    authTokenSessionService = {
-      resolveSubjectStrongFromRequest: jest.fn(),
+    sessionService = {
+      resolveSubjectFromRequest: jest.fn(),
     };
     userRolesService = {
       findAccountIdForRole: jest.fn(),
@@ -54,8 +54,8 @@ describe('BacklogService', () => {
           useValue: enrollmentRepository,
         },
         {
-          provide: AuthTokenSessionService,
-          useValue: authTokenSessionService,
+          provide: SessionService,
+          useValue: sessionService,
         },
         {
           provide: UserRolesService,
@@ -154,10 +154,10 @@ describe('BacklogService', () => {
   describe('getStudentBacklog', () => {
     it('should return error if unauthorized', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(null);
 
       // Act
-      const result = await service.getStudentBacklog({} as Request, 1, 'browser-id', undefined, 50, 0);
+      const result = await service.getStudentBacklog({} as Request, 1, 50, 0);
 
       // Assert
       expect(result).toEqual({ error: 'Unauthorized' });
@@ -165,12 +165,12 @@ describe('BacklogService', () => {
 
     it('should return error if student account not found', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
       userRolesService.findAccountIdForRole.mockResolvedValue(null);
 
       // Act
-      const result = await service.getStudentBacklog({} as Request, 1, 'browser-id', undefined, 50, 0);
+      const result = await service.getStudentBacklog({} as Request, 1, 50, 0);
 
       // Assert
       expect(result).toEqual({ error: 'Forbidden: Student account not found' });
@@ -178,14 +178,14 @@ describe('BacklogService', () => {
 
     it('should return error if student is not enrolled', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       enrollmentRepository.exist.mockResolvedValue(false);
 
       // Act
       const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 5;
-      const result = await service.getStudentBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
+      const result = await service.getStudentBacklog({} as Request, publicGroupId, 50, 0);
 
       // Assert
       expect(result).toEqual({ error: 'Forbidden: You are not enrolled in this group' });
@@ -198,7 +198,7 @@ describe('BacklogService', () => {
       const studentAccountId = 10;
       const mockDate = new Date();
 
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
       userRolesService.findAccountIdForRole.mockResolvedValue(studentAccountId);
       enrollmentRepository.exist.mockResolvedValue(true);
@@ -209,7 +209,7 @@ describe('BacklogService', () => {
       backlogRepository.find.mockResolvedValue(mockEntries);
 
       // Act
-      const result = await service.getStudentBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
+      const result = await service.getStudentBacklog({} as Request, publicGroupId, 50, 0);
 
       // Assert
       expect(backlogRepository.find).toHaveBeenCalledWith({
@@ -227,11 +227,11 @@ describe('BacklogService', () => {
   describe('getGroupBacklog', () => {
     it('should return error if unauthorized', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(null);
 
       // Act
       const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 1;
-      const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
+      const result = await service.getGroupBacklog({} as Request, publicGroupId, 50, 0);
 
       // Assert
       expect(result).toEqual({ error: 'Unauthorized' });
@@ -239,12 +239,12 @@ describe('BacklogService', () => {
 
     it('should return error if user role does not have privileges', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
 
       // Act
       const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 1;
-      const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
+      const result = await service.getGroupBacklog({} as Request, publicGroupId, 50, 0);
 
       // Assert
       expect(result).toEqual({ error: 'Forbidden: Requires privileges' });
@@ -254,13 +254,13 @@ describe('BacklogService', () => {
       // Arrange
       const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 5;
 
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('lecturer');
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.exist.mockResolvedValue(false);
 
       // Act
-      const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
+      const result = await service.getGroupBacklog({} as Request, publicGroupId, 50, 0);
 
       // Assert
       expect(result).toEqual({ error: 'Forbidden: You are not the owner of this group' });
@@ -272,7 +272,7 @@ describe('BacklogService', () => {
       const internalGroupId = 5;
       const mockDate = new Date();
 
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('lecturer');
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.exist.mockResolvedValue(true);
@@ -283,7 +283,7 @@ describe('BacklogService', () => {
       backlogRepository.find.mockResolvedValue(mockEntries);
 
       // Act
-      const result = await service.getGroupBacklog({} as Request, publicGroupId, 'browser-id', undefined, 50, 0);
+      const result = await service.getGroupBacklog({} as Request, publicGroupId, 50, 0);
 
       // Assert
       expect(groupRepository.exist).toHaveBeenCalledWith({

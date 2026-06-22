@@ -19,10 +19,9 @@ describe('SamlRelayStateTokenService', () => {
   });
 
   it('creates and parses a relay state token', () => {
-    const browserId = '550e8400-e29b-41d4-a716-446655440000';
-    const token = service.createRelayStateToken(2, browserId);
+    const token = service.createRelayStateToken(2, null);
     const parsed = service.parseRelayStateToken(token);
-    expect(parsed).toEqual({ organizationId: 2, browserId });
+    expect(parsed).toEqual({ organizationId: 2, browserId: null });
   });
 
   it('returns null for invalid tokens', () => {

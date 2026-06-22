@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import type { Request } from 'express';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService, type SessionSubject } from '../auth/session/session.service';
 import { GROUP_API_JSON_STATUS_OK, GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { GroupEntity } from '../database/entities/group.entity';
@@ -34,17 +34,21 @@ type MockGroupRepository = {
 
 const mockRequest = {} as Request;
 
+function mockSubject(userId: number): SessionSubject {
+  return { userId, activeRole: null, sessionId: 1 };
+}
+
 describe('GroupsService', () => {
   let service: GroupsService;
-  let authTokenSessionService: jest.Mocked<AuthTokenSessionService>;
+  let sessionService: jest.Mocked<SessionService>;
   let userRolesService: jest.Mocked<UserRolesService>;
   let enrollmentCodesService: jest.Mocked<EnrollmentCodesService>;
   let mockQueryBuilder: MockQueryBuilder;
   let groupRepository: MockGroupRepository;
 
   beforeEach(async () => {
-    const mockAuthTokenSessionService = {
-      resolveSubjectStrongFromRequest: jest.fn(),
+    const mockSessionService = {
+      resolveSubjectFromRequest: jest.fn(),
     };
     const mockUserRolesService = {
       findAccountIdForRole: jest.fn(),
@@ -76,50 +80,47 @@ describe('GroupsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GroupsService,
-        { provide: AuthTokenSessionService, useValue: mockAuthTokenSessionService },
+        { provide: SessionService, useValue: mockSessionService },
         { provide: UserRolesService, useValue: mockUserRolesService },
         { provide: EnrollmentCodesService, useValue: mockEnrollmentCodesService },
         { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },
       ],
     }).compile();
     service = module.get<GroupsService>(GroupsService);
-    authTokenSessionService = module.get(AuthTokenSessionService);
+    sessionService = module.get(SessionService);
     userRolesService = module.get(UserRolesService);
     enrollmentCodesService = module.get(EnrollmentCodesService);
   });
 
   describe('getUserGroups', () => {
     it('should return empty array if no valid session subject is found', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
-      const result = await service.getUserGroups(mockRequest, 'browser-id', undefined);
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(null);
+      const result = await service.getUserGroups(mockRequest);
       expect(result).toEqual({ statusCode: GROUP_API_JSON_STATUS_OK, groups: [] });
-      expect(authTokenSessionService.resolveSubjectStrongFromRequest).toHaveBeenCalledWith(
-        mockRequest,
-        'browser-id',
-        undefined,
-      );
+      expect(sessionService.resolveSubjectFromRequest).toHaveBeenCalledWith(mockRequest);
     });
 
-    it('should pass optional auth query token to session resolution', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
-      await service.getUserGroups(mockRequest, 'browser-id', 'plain-token');
-      expect(authTokenSessionService.resolveSubjectStrongFromRequest).toHaveBeenCalledWith(
+    it('should pass optional auth body token to session resolution', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(null);
+      await expect(
+        service.updateShopStatus(mockRequest, 100001, { shopOpen: true, auth: 'plain-token' }),
+      ).rejects.toThrow('Missing or invalid session');
+      expect(sessionService.resolveSubjectFromRequest).toHaveBeenCalledWith(
         mockRequest,
-        'browser-id',
         'plain-token',
       );
     });
 
     it('should return empty array if user has neither student nor lecturer roles', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(null);
       mockQueryBuilder.getRawMany.mockResolvedValue([]);
-      const result = await service.getUserGroups(mockRequest, 'browser-id', undefined);
+      const result = await service.getUserGroups(mockRequest);
       expect(result).toEqual({ statusCode: GROUP_API_JSON_STATUS_OK, groups: [] });
     });
 
     it('should fetch and map enrolled groups into myGroups when user is student', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) => {
         if (role === STUDENT_ROLE_NAME) {
           return 10;
@@ -158,7 +159,7 @@ describe('GroupsService', () => {
           currency_icon: null,
         },
       ]);
-      const result = await service.getUserGroups(mockRequest, 'browser-id', undefined);
+      const result = await service.getUserGroups(mockRequest);
       expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('group.name', 'ASC');
       expect(result).toEqual({
         statusCode: GROUP_API_JSON_STATUS_OK,
@@ -184,7 +185,7 @@ describe('GroupsService', () => {
     });
 
     it('should split catalog into myGroups and otherGroups', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 2 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(2));
       userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) => {
         if (role === LECTURER_ROLE_NAME) {
           return 30;
@@ -229,7 +230,7 @@ describe('GroupsService', () => {
           lives_shop_enabled: false,
         },
       ]);
-      const result = await service.getGroupsCatalog(mockRequest, 'browser-id', undefined);
+      const result = await service.getGroupsCatalog(mockRequest);
       expect(result.myGroups).toHaveLength(1);
       expect(result.otherGroups).toHaveLength(1);
       expect(result.myGroups[0].groupName).toBe('Owned');
@@ -237,7 +238,7 @@ describe('GroupsService', () => {
     });
 
     it('should include enrollment join when user has student role', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 3 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(3));
       userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) => {
         if (role === LECTURER_ROLE_NAME) {
           return 40;
@@ -248,13 +249,13 @@ describe('GroupsService', () => {
         return null;
       });
       mockQueryBuilder.getRawMany.mockResolvedValue([]);
-      await service.getGroupsCatalog(mockRequest, 'browser-id', undefined);
+      await service.getGroupsCatalog(mockRequest);
       expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith('lecturerId', 40);
       expect(mockQueryBuilder.leftJoin).toHaveBeenCalledTimes(3);
     });
 
     it('should use empty string fallback if lecturer name is missing', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) => {
         if (role === LECTURER_ROLE_NAME) {
           return 20;
@@ -281,12 +282,12 @@ describe('GroupsService', () => {
           lives_shop_enabled: false,
         },
       ]);
-      const result = await service.getUserGroups(mockRequest, 'browser-id', undefined);
+      const result = await service.getUserGroups(mockRequest);
       expect(result.groups[0].lecturers).toBe('');
     });
 
     it('should return existing enrollment code for group owner', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.findOne.mockResolvedValue({
         id: 1,
@@ -298,7 +299,7 @@ describe('GroupsService', () => {
         code: 'ABC123',
       } as never);
 
-      const result = await service.getAccessCodeForGroup(mockRequest, 100001, 'browser-id', undefined);
+      const result = await service.getAccessCodeForGroup(mockRequest, 100001);
 
       expect(result.code).toBe('ABC123');
       expect(result.groupId).toBe(100001);
@@ -307,7 +308,7 @@ describe('GroupsService', () => {
 
   describe('updateShopStatus', () => {
     it('should update shopOpen flag when user is owner', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.findOne.mockResolvedValue({
         id: 1,
@@ -315,7 +316,7 @@ describe('GroupsService', () => {
       });
       groupRepository.update = jest.fn().mockResolvedValue({ affected: 1 });
 
-      const result = await service.updateShopStatus(mockRequest, 100001, { shopOpen: false }, 'browser-id');
+      const result = await service.updateShopStatus(mockRequest, 100001, { shopOpen: false });
 
       expect(groupRepository.update).toHaveBeenCalledWith({ id: 1 }, { shopOpen: false });
       expect(result).toEqual({
@@ -326,33 +327,33 @@ describe('GroupsService', () => {
     });
 
     it('should throw UnauthorizedException if subject not resolved', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
-      await expect(service.updateShopStatus(mockRequest, 100001, { shopOpen: true }, 'browser-id'))
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(null);
+      await expect(service.updateShopStatus(mockRequest, 100001, { shopOpen: true }))
         .rejects.toThrow('Missing or invalid session');
     });
 
     it('should throw BadRequestException for invalid group ID', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       
       // Pass an invalid group ID (below offset)
-      await expect(service.updateShopStatus(mockRequest, 999, { shopOpen: true }, 'browser-id'))
+      await expect(service.updateShopStatus(mockRequest, 999, { shopOpen: true }))
         .rejects.toThrow('Invalid group ID');
     });
 
     it('should throw ForbiddenException if group not found or not owner', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.updateShopStatus(mockRequest, 100001, { shopOpen: true }, 'browser-id'))
+      await expect(service.updateShopStatus(mockRequest, 100001, { shopOpen: true }))
         .rejects.toThrow('Not authorized to manage this group');
     });
   });
 
   describe('updateLivesConfig', () => {
     it('should update lives config when user is owner', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.findOne.mockResolvedValue({
         id: 1,
@@ -364,7 +365,6 @@ describe('GroupsService', () => {
         mockRequest,
         100001,
         { livesEnabled: true, lives: 5, livesLabel: 'Tarcze', livesShopEnabled: true },
-        'browser-id',
       );
 
       expect(groupRepository.update).toHaveBeenCalledWith(
@@ -379,47 +379,47 @@ describe('GroupsService', () => {
     });
 
     it('should return updated: false when no fields are provided', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.findOne.mockResolvedValue({
         id: 1,
         teacherAccountId: 10,
       });
 
-      const result = await service.updateLivesConfig(mockRequest, 100001, {}, 'browser-id');
+      const result = await service.updateLivesConfig(mockRequest, 100001, {});
 
       expect(result.updated).toBe(false);
     });
 
     it('should throw UnauthorizedException if subject not resolved', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(null);
       await expect(
-        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }, 'browser-id'),
+        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }),
       ).rejects.toThrow('Missing or invalid session');
     });
 
     it('should throw ForbiddenException if not lecturer', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(null);
       await expect(
-        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }, 'browser-id'),
+        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }),
       ).rejects.toThrow('Requires lecturer privileges');
     });
 
     it('should throw ForbiddenException if group not found or not owner', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.findOne.mockResolvedValue(null);
 
       await expect(
-        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }, 'browser-id'),
+        service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }),
       ).rejects.toThrow('Not authorized to manage this group');
     });
   });
 
   describe('getLivesConfig', () => {
     it('should return config when user is owner', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockImplementation(async (userId, role) => {
         if (role === LECTURER_ROLE_NAME) return 10;
         return null;
@@ -434,7 +434,7 @@ describe('GroupsService', () => {
         lives_shop_enabled: false,
       }]);
 
-      const result = await service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined);
+      const result = await service.getLivesConfig(mockRequest, 100001);
 
       expect(result).toEqual({
         livesEnabled: true,
@@ -446,7 +446,7 @@ describe('GroupsService', () => {
     });
 
     it('should return config when user is enrolled student', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockImplementation(async (userId, role) => {
         if (role === STUDENT_ROLE_NAME) return 20;
         return null;
@@ -461,26 +461,26 @@ describe('GroupsService', () => {
         lives_shop_enabled: false,
       }]);
 
-      const result = await service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined);
+      const result = await service.getLivesConfig(mockRequest, 100001);
 
       expect(result.livesEnabled).toBe(false);
     });
 
     it('should throw ForbiddenException for authenticated non-member', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(null);
       jest.spyOn(service as any, 'fetchAllGroupsWithMembershipFlags').mockResolvedValue([{
         is_owner: false,
         is_enrolled: false,
       }]);
 
-      await expect(service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined))
+      await expect(service.getLivesConfig(mockRequest, 100001))
         .rejects.toThrow('Access denied');
     });
 
     it('should throw UnauthorizedException if subject not resolved', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
-      await expect(service.getLivesConfig(mockRequest, 100001, 'browser-id', undefined))
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(null);
+      await expect(service.getLivesConfig(mockRequest, 100001))
         .rejects.toThrow('Missing or invalid session');
     });
   });
