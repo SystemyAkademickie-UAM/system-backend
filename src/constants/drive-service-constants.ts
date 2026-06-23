@@ -16,6 +16,9 @@ export const DRIVE_MAX_FILE_BYTES = Number.isFinite(parsedMaxBytes)
   ? parsedMaxBytes
   : DRIVE_MAX_FILE_BYTES_DEFAULT;
 
+/** Max bracket nesting in multipart field names (DoS mitigation; drive uses flat `json` / `banner`). */
+export const DRIVE_MULTIPART_FIELD_NESTING_DEPTH = 1;
+
 const parsedDefaultOrg = Number.parseInt(process.env.DRIVE_DEFAULT_ORGANIZATION_ID ?? '', 10);
 
 /** Fallback organization segment when the client omits `drive.organizationId`. */
