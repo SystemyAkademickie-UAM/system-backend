@@ -41,6 +41,9 @@ export class GroupEntity {
   @Column({ name: 'lives', type: 'integer', nullable: true, default: 3 })
   lives: number | null;
 
+  @Column({ name: 'starting_lives', type: 'integer', nullable: true, default: 3 })
+  startingLives: number | null;
+
   @Column({ name: 'lives_icon', type: 'varchar', length: EDUCATION_GROUP_VARCHAR_MAX_LENGTH, nullable: true })
   livesIcon: string | null;
 

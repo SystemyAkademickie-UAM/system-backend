@@ -55,6 +55,25 @@ export class GroupPayloadDto {
   @Min(0)
   lives?: number;
 
+  /** Stored as `starting_lives` (integer). */
+  @Transform(({ value }) => {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.trunc(value);
+    }
+    if (typeof value === 'string') {
+      const n = Number.parseInt(value.trim(), 10);
+      return Number.isFinite(n) ? n : undefined;
+    }
+    return undefined;
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  startingLives?: number;
+
   /** Stored as `lives_icon` (varchar ref). */
   @Transform(({ value }) => transformOptionalString(value))
   @IsOptional()

@@ -51,6 +51,7 @@ export class GroupTemplatesImportService {
         currency: groupPayload.currency,
         currencyEmoji: groupPayload.currencyEmoji,
         lives: groupPayload.lives,
+        startingLives: groupPayload.startingLives,
         livesIcon: groupPayload.livesIcon,
       });
       const savedGroup = await manager.save(GroupEntity, groupEntity);

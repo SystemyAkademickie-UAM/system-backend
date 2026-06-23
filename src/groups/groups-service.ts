@@ -50,6 +50,7 @@ export type UserGroupListItem = {
   shopOpen: boolean;
   livesEnabled: boolean;
   lives: number | null;
+  startingLives: number | null;
   livesLabel: string | null;
   livesIcon: string | null;
   livesShopEnabled: boolean;
@@ -58,6 +59,7 @@ export type UserGroupListItem = {
 export type LivesConfigResponseBody = {
   livesEnabled: boolean;
   livesMax: number | null;
+  startingLives: number | null;
   livesLabel: string | null;
   livesIcon: string | null;
   livesShopEnabled: boolean;
@@ -167,6 +169,7 @@ export class GroupsService {
         currency: nullableTrimmedString(groupPayload.currency),
         currencyEmoji: nullableTrimmedString(groupPayload.currencyEmoji),
         lives: groupPayload.lives ?? null,
+        startingLives: groupPayload.startingLives ?? null,
         livesIcon: nullableTrimmedString(groupPayload.livesIcon),
         imageRef: nullableTrimmedString(groupPayload.imageRef),
       });
@@ -258,6 +261,9 @@ export class GroupsService {
     }
     if (payload.lives !== undefined) {
       updates.lives = payload.lives;
+    }
+    if (payload.startingLives !== undefined) {
+      updates.startingLives = payload.startingLives;
     }
     if (payload.livesIcon !== undefined) {
       updates.livesIcon = nullableTrimmedString(payload.livesIcon);
@@ -379,6 +385,9 @@ export class GroupsService {
     if (body.lives !== undefined) {
       updates.lives = body.lives;
     }
+    if (body.startingLives !== undefined) {
+      updates.startingLives = body.startingLives;
+    }
     if (body.livesLabel !== undefined) {
       updates.livesLabel = nullableTrimmedString(body.livesLabel);
     }
@@ -459,6 +468,7 @@ export class GroupsService {
     return {
       livesEnabled: row.lives_enabled,
       livesMax: row.lives,
+      startingLives: row.starting_lives,
       livesLabel: row.lives_label,
       livesIcon: row.lives_icon,
       livesShopEnabled: row.lives_shop_enabled,
@@ -701,6 +711,7 @@ export class GroupsService {
     shop_open: boolean;
     lives_enabled: boolean;
     lives: number | null;
+    starting_lives: number | null;
     lives_label: string | null;
     lives_icon: string | null;
     lives_shop_enabled: boolean;
@@ -722,6 +733,7 @@ export class GroupsService {
       shopOpen: toBool(row.shop_open),
       livesEnabled: toBool(row.lives_enabled),
       lives: row.lives ?? null,
+      startingLives: row.starting_lives ?? null,
       livesLabel: row.lives_label ?? null,
       livesIcon: row.lives_icon ?? null,
       livesShopEnabled: toBool(row.lives_shop_enabled),
@@ -746,6 +758,7 @@ export class GroupsService {
       shop_open: boolean;
       lives_enabled: boolean;
       lives: number | null;
+      starting_lives: number | null;
       lives_label: string | null;
       lives_icon: string | null;
       lives_shop_enabled: boolean;
@@ -767,6 +780,7 @@ export class GroupsService {
         'group.shop_open AS shop_open',
         'group.lives_enabled AS lives_enabled',
         'group.lives AS lives',
+        'group.starting_lives AS starting_lives',
         'group.lives_label AS lives_label',
         'group.lives_icon AS lives_icon',
         'group.lives_shop_enabled AS lives_shop_enabled',
@@ -812,6 +826,7 @@ export class GroupsService {
       shop_open: toBool(row.shop_open),
       lives_enabled: toBool(row.lives_enabled),
       lives: row.lives ?? null,
+      starting_lives: row.starting_lives ?? null,
       lives_label: row.lives_label ?? null,
       lives_icon: row.lives_icon ?? null,
       lives_shop_enabled: toBool(row.lives_shop_enabled),
