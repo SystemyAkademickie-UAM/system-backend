@@ -10,7 +10,7 @@ import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { EarnedItemEntity } from '../database/entities/earned-item.entity';
 import { BacklogService } from '../backlog/backlog-service';
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 
@@ -25,12 +25,11 @@ export class ShopStudentService {
     @InjectRepository(EarnedItemEntity)
     private readonly earnedItemRepository: Repository<EarnedItemEntity>,
     private readonly backlogService: BacklogService,
-    private readonly authTokenSessionService: AuthTokenSessionService,
-    private readonly userRolesService: UserRolesService,
-  ) {}
+    private readonly sessionService: SessionService,
+    private readonly userRolesService: UserRolesService) {}
 
   private async getStudentAccountId(req: Request, authHeader?: string): Promise<number> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, authHeader);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       throw new ForbiddenException('Unauthorized');
     }
@@ -45,9 +44,8 @@ export class ShopStudentService {
     req: Request,
     internalGroupId: number,
     itemId: number,
-    authHeader?: string,
-  ): Promise<{ success: boolean; message?: string }> {
-    const studentAccountId = await this.getStudentAccountId(req, authHeader);
+    authHeader?: string): Promise<{ success: boolean; message?: string }> {
+    const studentAccountId = await this.getStudentAccountId(req);
 
     return this.dataSource.transaction(async (manager) => {
       // 1. Sprawdzenie czy sklep jest otwarty
@@ -155,9 +153,8 @@ export class ShopStudentService {
   async getInventory(
     req: Request,
     internalGroupId: number,
-    authHeader?: string,
-  ): Promise<any[]> {
-    const studentAccountId = await this.getStudentAccountId(req, authHeader);
+    authHeader?: string): Promise<any[]> {
+    const studentAccountId = await this.getStudentAccountId(req);
 
     const enrollment = await this.enrollmentRepository.findOne({
       where: { groupId: internalGroupId, studentAccountId },
@@ -181,9 +178,8 @@ export class ShopStudentService {
     req: Request,
     internalGroupId: number,
     itemId: number,
-    authHeader?: string,
-  ): Promise<{ success: boolean; message?: string }> {
-    const studentAccountId = await this.getStudentAccountId(req, authHeader);
+    authHeader?: string): Promise<{ success: boolean; message?: string }> {
+    const studentAccountId = await this.getStudentAccountId(req);
 
     return this.dataSource.transaction(async (manager) => {
       const enrollment = await manager.findOne(EnrollmentEntity, {

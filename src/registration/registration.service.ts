@@ -1,7 +1,8 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { AvatarEntity } from '../database/entities/avatar.entity';
 import { UserEntity } from '../database/entities/user.entity';
 import { AUTH_USER_NAME_FIELD_MAX_LENGTH } from '../constants/database-entity-constants';
 
@@ -12,6 +13,7 @@ export interface RegistrationStatusResponse {
   avatarId: number;
   registrationCompleted: boolean;
   eulaAccepted: boolean;
+  profileSubmitted: boolean;
 }
 
 export interface UpdateProfileResponse {
@@ -39,7 +41,8 @@ export class RegistrationService {
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-  ) {}
+    @InjectRepository(AvatarEntity)
+    private readonly avatarRepository: Repository<AvatarEntity>) {}
 
   async getRegistrationStatus(userId: number): Promise<RegistrationStatusResponse> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
@@ -53,24 +56,26 @@ export class RegistrationService {
       avatarId: user.avatarId,
       registrationCompleted: user.registrationCompleted,
       eulaAccepted: user.eulaAcceptedAt !== null,
+      profileSubmitted: user.profileSubmittedAt !== null,
     };
   }
 
   async updateProfile(
     userId: number,
     nickname: string,
-    avatarId: number,
-  ): Promise<UpdateProfileResponse> {
+    avatarId: number): Promise<UpdateProfileResponse> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException(`User with id ${userId} not found`);
     }
     const trimmedNickname = truncateField(nickname.trim(), AUTH_USER_NAME_FIELD_MAX_LENGTH);
     if (trimmedNickname.length === 0) {
-      throw new Error('Nickname cannot be empty');
+      throw new BadRequestException('Nickname cannot be empty');
     }
+    await this.assertAvatarExists(avatarId);
     user.nickname = trimmedNickname;
     user.avatarId = avatarId;
+    user.profileSubmittedAt = new Date();
     await this.userRepository.save(user);
     this.logger.log(`User ${userId} profile updated: nickname="${trimmedNickname}", avatarId=${avatarId}`);
     return {
@@ -85,6 +90,9 @@ export class RegistrationService {
     if (!user) {
       throw new NotFoundException(`User with id ${userId} not found`);
     }
+    if (user.profileSubmittedAt === null || user.nickname.trim().length === 0) {
+      throw new BadRequestException('Complete your profile before accepting the EULA');
+    }
     const now = new Date();
     user.eulaAcceptedAt = now;
     user.registrationCompleted = true;
@@ -94,5 +102,12 @@ export class RegistrationService {
       success: true,
       eulaAcceptedAt: now.toISOString(),
     };
+  }
+
+  private async assertAvatarExists(avatarId: number): Promise<void> {
+    const avatar = await this.avatarRepository.findOne({ where: { id: avatarId } });
+    if (avatar === null) {
+      throw new BadRequestException(`Avatar ${avatarId} does not exist`);
+    }
   }
 }

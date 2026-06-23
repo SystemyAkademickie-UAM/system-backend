@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import {
   GROUP_API_JSON_STATUS_OK,
   GROUP_RESPONSE_GROUP_ID_OFFSET,
@@ -48,11 +48,10 @@ export class GroupsCurrencyService {
   private readonly logger = new Logger(GroupsCurrencyService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>,
-  ) {}
+    private readonly groupRepository: Repository<GroupEntity>) {}
 
   /**
    * Returns the current currency settings for a group owned by the lecturer.
@@ -60,21 +59,14 @@ export class GroupsCurrencyService {
   async getCurrencySettings(
     req: Request,
     publicGroupId: number,
-    browserIdHeader: string | undefined,
-    queryAuth: string | undefined,
   ): Promise<GetCurrencyResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      queryAuth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return this.buildGetCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return this.buildGetCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
     }
@@ -104,21 +96,15 @@ export class GroupsCurrencyService {
   async updateCurrencySettings(
     req: Request,
     publicGroupId: number,
-    body: UpdateCurrencyDto,
-    browserIdHeader: string | undefined,
+    body: UpdateCurrencyDto
   ): Promise<UpdateCurrencyResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
     }

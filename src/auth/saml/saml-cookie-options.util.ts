@@ -75,8 +75,7 @@ export function buildSamlSessionCookieOptions(req: Request, maxAgeMs?: number): 
 /** Options for `clearCookie` — must match how the cookie was originally set. */
 export function buildClearSamlCookieOptions(
   req: Request,
-  sameSite: 'lax' | 'none',
-): Pick<CookieOptions, 'path' | 'secure' | 'sameSite'> {
+  sameSite: 'lax' | 'none'): Pick<CookieOptions, 'path' | 'secure' | 'sameSite'> {
   const secure = isHttpsRequest(req);
   return {
     path: '/',

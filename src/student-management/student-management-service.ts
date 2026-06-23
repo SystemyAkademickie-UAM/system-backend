@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
@@ -37,7 +37,7 @@ export class StudentManagementService {
   private readonly logger = new Logger(StudentManagementService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     private readonly dataSource: DataSource,
     @InjectRepository(EnrollmentEntity)
@@ -46,8 +46,7 @@ export class StudentManagementService {
     private readonly studentStatsRepository: Repository<StudentStatsEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
-    private readonly ranksService: RanksService,
-  ) {}
+    private readonly ranksService: RanksService) {}
 
   /**
    * GET /groups/:groupId/students
@@ -77,8 +76,7 @@ export class StudentManagementService {
        LEFT JOIN gamification.student_stats ss ON ss.enrollment_id = e.id
        WHERE e.group_id = $1
        ORDER BY u.surname, u.name`,
-      [groupId],
-    );
+      [groupId]);
 
     return rows;
   }
@@ -106,8 +104,7 @@ export class StudentManagementService {
 
         if (!enrollment) {
           this.logger.warn(
-            `Bulk-update skipped: enrollment ${item.enrollmentId} not found in group ${groupId}`,
-          );
+            `Bulk-update skipped: enrollment ${item.enrollmentId} not found in group ${groupId}`);
           continue;
         }
 
@@ -172,8 +169,7 @@ export class StudentManagementService {
 
     if (!enrollment) {
       throw new NotFoundException(
-        `Student with accountId ${accountId} is not enrolled in group ${groupId}`,
-      );
+        `Student with accountId ${accountId} is not enrolled in group ${groupId}`);
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -183,20 +179,16 @@ export class StudentManagementService {
     try {
       await queryRunner.query(
         `DELETE FROM gamification.earned_badges WHERE enrollment_id = $1`,
-        [enrollment.id],
-      );
+        [enrollment.id]);
       await queryRunner.query(
         `DELETE FROM gamification.student_stats WHERE enrollment_id = $1`,
-        [enrollment.id],
-      );
+        [enrollment.id]);
       await queryRunner.query(
         `DELETE FROM analytics.activity_backlog WHERE group_id = $1 AND account_id = $2`,
-        [groupId, accountId],
-      );
+        [groupId, accountId]);
       await queryRunner.query(
         `DELETE FROM gamification.enrollments WHERE id = $1`,
-        [enrollment.id],
-      );
+        [enrollment.id]);
 
       await queryRunner.commitTransaction();
       this.logger.log(`Student (account=${accountId}) removed from group ${groupId}`);
@@ -213,7 +205,7 @@ export class StudentManagementService {
   // ── Shared auth & validation helpers ────────────────────────────────
 
   private async assertLecturer(req: Request): Promise<void> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }

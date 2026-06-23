@@ -8,8 +8,7 @@ import { BannerEntity } from '../database/entities/banner.entity';
 export class BannersService {
   constructor(
     @InjectRepository(BannerEntity)
-    private readonly bannersRepository: Repository<BannerEntity>,
-  ) {}
+    private readonly bannersRepository: Repository<BannerEntity>) {}
 
   /**
    * Retrieves all predefined banners from the database, ordered by ID ascending.

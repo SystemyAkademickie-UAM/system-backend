@@ -4,7 +4,6 @@ import {
     Param,
     ParseIntPipe,
     Req,
-    Headers,
     UnauthorizedException,
     ForbiddenException,
     Query,
@@ -25,10 +24,8 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
     async getStudentBacklog(
           @Param('groupId', ParseIntPipe) groupId: number,
           @Req() req: Request,
-          @Headers('x-browser-id') browserId: string | undefined,
           @Query('take') take?: string,
-          @Query('skip') skip?: string,
-        ) {
+          @Query('skip') skip?: string) {
           let takeNum = 50;
           if (take) {
                   const parsed = parseInt(take, 10);
@@ -41,7 +38,7 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
                   skipNum = isNaN(parsed) ? 0 : Math.max(0, parsed);
           }
 
-      const result = await this.backlogService.getStudentBacklog(req, groupId, browserId, undefined, takeNum, skipNum);
+      const result = await this.backlogService.getStudentBacklog(req, groupId, takeNum, skipNum);
           if ('error' in result) {
                   if (result.error.startsWith('Forbidden:')) {
                             throw new ForbiddenException(result.error);
@@ -59,10 +56,8 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
     async getGroupBacklog(
           @Param('groupId', ParseIntPipe) groupId: number,
           @Req() req: Request,
-          @Headers('x-browser-id') browserId: string | undefined,
           @Query('take') take?: string,
-          @Query('skip') skip?: string,
-        ) {
+          @Query('skip') skip?: string) {
           let takeNum = 50;
           if (take) {
                   const parsed = parseInt(take, 10);
@@ -75,7 +70,7 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
                   skipNum = isNaN(parsed) ? 0 : Math.max(0, parsed);
           }
 
-      const result = await this.backlogService.getGroupBacklog(req, groupId, browserId, undefined, takeNum, skipNum);
+      const result = await this.backlogService.getGroupBacklog(req, groupId, takeNum, skipNum);
           if ('error' in result) {
                   if (result.error.startsWith('Forbidden:')) {
                             throw new ForbiddenException(result.error);

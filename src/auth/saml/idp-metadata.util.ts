@@ -24,8 +24,7 @@ function firstMatch(xml: string, pattern: RegExp): string | null {
 function extractSigningCertificatePem(xml: string): string {
   const signingBlock = firstMatch(
     xml,
-    /<(?:[\w:]+:)?KeyDescriptor[^>]*use="signing"[^>]*>([\s\S]*?)<\/(?:[\w:]+:)?KeyDescriptor>/i,
-  );
+    /<(?:[\w:]+:)?KeyDescriptor[^>]*use="signing"[^>]*>([\s\S]*?)<\/(?:[\w:]+:)?KeyDescriptor>/i);
   const searchIn = signingBlock ?? xml;
   const body = firstMatch(searchIn, /<(?:[\w:]+:)?X509Certificate>([^<]+)<\/(?:[\w:]+:)?X509Certificate>/i);
   if (body === null) {
@@ -38,11 +37,9 @@ function extractSigningCertificatePem(xml: string): string {
 function extractSsoLoginUrl(xml: string): string {
   const url = firstMatch(
     xml,
-    /<(?:[\w:]+:)?SingleSignOnService[^>]*Binding="[^"]*HTTP-Redirect[^"]*"[^>]*Location="([^"]+)"/i,
-  ) ?? firstMatch(
+    /<(?:[\w:]+:)?SingleSignOnService[^>]*Binding="[^"]*HTTP-Redirect[^"]*"[^>]*Location="([^"]+)"/i) ?? firstMatch(
     xml,
-    /<(?:[\w:]+:)?SingleSignOnService[^>]*Location="([^"]+)"[^>]*Binding="[^"]*HTTP-Redirect/i,
-  ) ?? firstMatch(xml, /<(?:[\w:]+:)?SingleSignOnService[^>]*Location="([^"]+)"/i);
+    /<(?:[\w:]+:)?SingleSignOnService[^>]*Location="([^"]+)"[^>]*Binding="[^"]*HTTP-Redirect/i) ?? firstMatch(xml, /<(?:[\w:]+:)?SingleSignOnService[^>]*Location="([^"]+)"/i);
   if (url === null) {
     throw new Error('No SingleSignOnService Location found in IdP metadata');
   }
@@ -53,12 +50,10 @@ function extractSloLogoutUrl(xml: string): string | null {
   return (
     firstMatch(
       xml,
-      /<(?:[\w:]+:)?SingleLogoutService[^>]*Binding="[^"]*HTTP-Redirect[^"]*"[^>]*Location="([^"]+)"/i,
-    ) ??
+      /<(?:[\w:]+:)?SingleLogoutService[^>]*Binding="[^"]*HTTP-Redirect[^"]*"[^>]*Location="([^"]+)"/i) ??
     firstMatch(
       xml,
-      /<(?:[\w:]+:)?SingleLogoutService[^>]*Location="([^"]+)"[^>]*Binding="[^"]*HTTP-Redirect/i,
-    ) ??
+      /<(?:[\w:]+:)?SingleLogoutService[^>]*Location="([^"]+)"[^>]*Binding="[^"]*HTTP-Redirect/i) ??
     firstMatch(xml, /<(?:[\w:]+:)?SingleLogoutService[^>]*Location="([^"]+)"/i)
   );
 }

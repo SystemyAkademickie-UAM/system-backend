@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { QueryFailedError } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { EnrollmentCodeEntity } from '../database/entities/enrollment-code.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
@@ -19,7 +19,7 @@ describe('EnrollmentCodesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EnrollmentCodesService,
-        { provide: AuthTokenSessionService, useValue: {} },
+        { provide: SessionService, useValue: {} },
         { provide: UserRolesService, useValue: {} },
         { provide: getRepositoryToken(EnrollmentCodeEntity), useValue: {} },
         { provide: getRepositoryToken(GroupEntity), useValue: {} },
@@ -98,7 +98,7 @@ describe('EnrollmentCodesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EnrollmentCodesService,
-        { provide: AuthTokenSessionService, useValue: {} },
+        { provide: SessionService, useValue: {} },
         { provide: UserRolesService, useValue: {} },
         {
           provide: getRepositoryToken(EnrollmentCodeEntity),
@@ -133,8 +133,8 @@ describe('EnrollmentCodesService', () => {
       providers: [
         EnrollmentCodesService,
         {
-          provide: AuthTokenSessionService,
-          useValue: { resolveSubjectSoftFromRequest: jest.fn().mockResolvedValue({ userId: 1 }) },
+          provide: SessionService,
+          useValue: { resolveSubjectFromRequest: jest.fn().mockResolvedValue({ userId: 1 }) },
         },
         {
           provide: UserRolesService,

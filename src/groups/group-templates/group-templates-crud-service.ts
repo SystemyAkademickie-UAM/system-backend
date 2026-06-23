@@ -25,15 +25,13 @@ export interface GroupTemplateListItem {
 export class GroupTemplatesCrudService {
   constructor(
     @InjectRepository(GroupTemplateEntity)
-    private readonly templatesRepository: Repository<GroupTemplateEntity>,
-  ) {}
+    private readonly templatesRepository: Repository<GroupTemplateEntity>) {}
 
   async getTemplates(
     lecturerAccountId: number,
     scope: 'my' | 'public',
     limit: number,
-    offset: number,
-  ): Promise<PaginatedGroupTemplates> {
+    offset: number): Promise<PaginatedGroupTemplates> {
     const query = this.templatesRepository.createQueryBuilder('t')
       .select([
         't.id',
@@ -76,8 +74,7 @@ export class GroupTemplatesCrudService {
 
   async getTemplateDetails(
     templateId: number,
-    lecturerAccountId: number,
-  ): Promise<GroupTemplateEntity> {
+    lecturerAccountId: number): Promise<GroupTemplateEntity> {
     const template = await this.templatesRepository.findOne({ where: { id: templateId } });
     if (!template) {
       throw new NotFoundException(`Group template ${templateId} not found`);
@@ -93,8 +90,7 @@ export class GroupTemplatesCrudService {
   async updateTemplate(
     templateId: number,
     lecturerAccountId: number,
-    updates: { name?: string; description?: string; isPublic?: boolean },
-  ): Promise<GroupTemplateEntity> {
+    updates: { name?: string; description?: string; isPublic?: boolean }): Promise<GroupTemplateEntity> {
     const template = await this.templatesRepository.findOne({ where: { id: templateId } });
     if (!template) {
       throw new NotFoundException(`Group template ${templateId} not found`);
@@ -128,8 +124,7 @@ export class GroupTemplatesCrudService {
   async cloneTemplate(
     templateId: number,
     lecturerAccountId: number,
-    newName: string,
-  ): Promise<GroupTemplateEntity> {
+    newName: string): Promise<GroupTemplateEntity> {
     const template = await this.templatesRepository.findOne({ where: { id: templateId } });
     if (!template) {
       throw new NotFoundException(`Group template ${templateId} not found`);

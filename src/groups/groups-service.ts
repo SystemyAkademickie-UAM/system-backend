@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { QueryFailedError, Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import {
   GROUP_API_JSON_STATUS_OK,
   GROUP_RESPONSE_GROUP_ID_OFFSET,
@@ -117,12 +117,11 @@ export class GroupsService {
   private readonly logger = new Logger(GroupsService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     private readonly enrollmentCodesService: EnrollmentCodesService,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>,
-  ) { }
+    private readonly groupRepository: Repository<GroupEntity>) { }
 
   async assertLecturerOwnsGroupAndGetAccountId(userId: number, internalGroupId: number): Promise<number> {
     const lecturerAccountId = await this.assertLecturerAndGetAccountId(userId);
@@ -145,14 +144,8 @@ export class GroupsService {
 
   async createGroup(
     req: Request,
-    body: CreateGroupBodyDto,
-    browserIdHeader: string | undefined,
-  ): Promise<CreateGroupResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    body: CreateGroupBodyDto): Promise<CreateGroupResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID };
     }
@@ -195,14 +188,8 @@ export class GroupsService {
   async updateGroup(
     req: Request,
     publicGroupId: number,
-    body: UpdateGroupBodyDto,
-    browserIdHeader: string | undefined,
-  ): Promise<UpdateGroupResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    body: UpdateGroupBodyDto): Promise<UpdateGroupResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
@@ -212,8 +199,7 @@ export class GroupsService {
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
@@ -311,21 +297,14 @@ export class GroupsService {
   async updateShopStatus(
     req: Request,
     publicGroupId: number,
-    body: UpdateShopStatusDto,
-    browserIdHeader: string | undefined,
-  ): Promise<UpdateGroupResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    body: UpdateShopStatusDto): Promise<UpdateGroupResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       throw new UnauthorizedException('Missing or invalid session');
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       throw new ForbiddenException('Requires lecturer privileges');
     }
@@ -367,21 +346,14 @@ export class GroupsService {
   async updateLivesConfig(
     req: Request,
     publicGroupId: number,
-    body: UpdateLivesConfigDto,
-    browserIdHeader: string | undefined,
-  ): Promise<UpdateGroupResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    body: UpdateLivesConfigDto): Promise<UpdateGroupResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       throw new UnauthorizedException('Missing or invalid session');
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       throw new ForbiddenException('Requires lecturer privileges');
     }
@@ -449,14 +421,8 @@ export class GroupsService {
   async getLivesConfig(
     req: Request,
     publicGroupId: number,
-    browserIdHeader: string | undefined,
-    queryAuth: string | undefined,
   ): Promise<LivesConfigResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      queryAuth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       throw new UnauthorizedException('Missing or invalid session');
     }
@@ -470,18 +436,15 @@ export class GroupsService {
 
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     const studentAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      STUDENT_ROLE_NAME,
-    );
+      STUDENT_ROLE_NAME);
 
     const rows = await this.fetchAllGroupsWithMembershipFlags(
       lecturerAccountId,
       studentAccountId,
-      internalGroupId,
-    );
+      internalGroupId);
     const row = rows[0];
     if (!row) {
       throw new BadRequestException('Group not found');
@@ -519,21 +482,14 @@ export class GroupsService {
   async getAccessCodeForGroup(
     req: Request,
     publicGroupId: number,
-    browserIdHeader: string | undefined,
-    queryAuth: string | undefined,
   ): Promise<GenerateCodeResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      queryAuth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
@@ -563,21 +519,14 @@ export class GroupsService {
 
   async generateCodeForGroup(
     req: Request,
-    body: GenerateCodeBodyDto,
-    browserIdHeader: string | undefined,
-  ): Promise<GenerateCodeResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    body: GenerateCodeBodyDto): Promise<GenerateCodeResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
@@ -631,12 +580,8 @@ export class GroupsService {
     this.logger.error(`Group entry code generation failed: ${String(err)}`);
   }
 
-  async getUserGroups(
-    req: Request,
-    browserIdHeader: string | undefined,
-    queryAuth: string | undefined,
-  ): Promise<GetUserGroupsResponseBody> {
-    const catalog = await this.getGroupsCatalog(req, browserIdHeader, queryAuth);
+  async getUserGroups(req: Request): Promise<GetUserGroupsResponseBody> {
+    const catalog = await this.getGroupsCatalog(req);
     return {
       statusCode: catalog.statusCode,
       groups: catalog.myGroups,
@@ -646,31 +591,20 @@ export class GroupsService {
   /**
    * Returns all groups split into membership buckets for the authenticated user.
    */
-  async getGroupsCatalog(
-    req: Request,
-    browserIdHeader: string | undefined,
-    queryAuth: string | undefined,
-  ): Promise<GetGroupsCatalogResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      queryAuth,
-    );
+  async getGroupsCatalog(req: Request): Promise<GetGroupsCatalogResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return { statusCode: GROUP_API_JSON_STATUS_OK, myGroups: [], otherGroups: [] };
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     const studentAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      STUDENT_ROLE_NAME,
-    );
+      STUDENT_ROLE_NAME);
     const allGroups = await this.fetchAllGroupsWithMembershipFlags(
       lecturerAccountId,
-      studentAccountId,
-    );
+      studentAccountId);
     const myGroups: UserGroupListItem[] = [];
     const otherGroups: UserGroupListItem[] = [];
     for (const row of allGroups) {
@@ -690,8 +624,6 @@ export class GroupsService {
   async getGroupPreview(
     req: Request,
     publicGroupId: number,
-    browserIdHeader: string | undefined,
-    queryAuth: string | undefined,
   ): Promise<GroupPreviewResponseBody> {
     const empty: GroupPreviewResponseBody = {
       statusCode: GROUP_API_JSON_STATUS_OK,
@@ -700,11 +632,7 @@ export class GroupsService {
       isOwner: false,
       isEnrolled: false,
     };
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      queryAuth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return empty;
     }
@@ -716,17 +644,14 @@ export class GroupsService {
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     const studentAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      STUDENT_ROLE_NAME,
-    );
+      STUDENT_ROLE_NAME);
     const rows = await this.fetchAllGroupsWithMembershipFlags(
       lecturerAccountId,
       studentAccountId,
-      internalGroupId,
-    );
+      internalGroupId);
     const row = rows[0];
     if (!row) {
       return empty;
@@ -745,8 +670,7 @@ export class GroupsService {
   private formatLecturerDisplay(
     nickname: string | null | undefined,
     name: string | null | undefined,
-    surname: string | null | undefined,
-  ): string {
+    surname: string | null | undefined): string {
     const nick = nickname ? String(nickname).trim() : '';
     const legal = [name, surname]
       .filter(Boolean)
@@ -784,8 +708,7 @@ export class GroupsService {
     const lecturers = this.formatLecturerDisplay(
       row.teacher_nickname,
       row.teacher_name,
-      row.teacher_surname,
-    );
+      row.teacher_surname);
     const toBool = (v: unknown) => v === true || v === ('t' as unknown) || v === (1 as unknown);
     return {
       id: row.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
@@ -808,8 +731,7 @@ export class GroupsService {
   private async fetchAllGroupsWithMembershipFlags(
     lecturerAccountId: number | null,
     studentAccountId: number | null,
-    internalGroupId?: number,
-  ): Promise<
+    internalGroupId?: number): Promise<
     Array<{
       id: number;
       name: string;
@@ -857,8 +779,7 @@ export class GroupsService {
         EnrollmentEntity,
         'enrollment',
         'enrollment.group_id = group.id AND enrollment.student_account_id = :studentId',
-        { studentId: studentAccountId },
-      );
+        { studentId: studentAccountId });
       qb.addSelect('CASE WHEN enrollment.id IS NOT NULL THEN true ELSE false END', 'is_enrolled');
     } else {
       qb.addSelect('false', 'is_enrolled');
@@ -866,8 +787,7 @@ export class GroupsService {
     if (lecturerAccountId !== null) {
       qb.addSelect(
         'CASE WHEN group.teacher_account_id = :lecturerId THEN true ELSE false END',
-        'is_owner',
-      );
+        'is_owner');
       qb.setParameter('lecturerId', lecturerAccountId);
     } else {
       qb.addSelect('false', 'is_owner');

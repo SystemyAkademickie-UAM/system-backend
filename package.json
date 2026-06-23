@@ -1,6 +1,6 @@
 {
   "name": "system-backend",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "NestJS API for Systemy Akademickie UAM",
   "private": true,
   "license": "UNLICENSED",
@@ -34,7 +34,12 @@
     "typeorm:migration:revert:dist": "node ./node_modules/typeorm/cli.js migration:revert -d ./dist/database/data-source.js",
     "idp:up": "docker compose -f idp/docker-compose.yml up -d --wait",
     "idp:down": "docker compose -f idp/docker-compose.yml down",
-    "register:org": "node ./scripts/register-org.mjs"
+    "register:org": "node ./scripts/node-cli.mjs ./scripts/register-org.mjs",
+    "register:user": "node ./scripts/node-cli.mjs ./scripts/register-user.mjs",
+    "grant:user-role": "node ./scripts/node-cli.mjs ./scripts/grant-user-role.mjs",
+    "revoke:user-role": "node ./scripts/node-cli.mjs ./scripts/revoke-user-role.mjs",
+    "unregister:user": "node ./scripts/node-cli.mjs ./scripts/unregister-user.mjs",
+    "unregister:org": "node ./scripts/node-cli.mjs ./scripts/unregister-org.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -52,6 +57,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
     "helmet": "^8.2.0",
+    "nodemailer": "^9.0.1",
     "passport": "^0.7.0",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
@@ -67,6 +73,7 @@
     "@types/jest": "^29.5.14",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.10.7",
+    "@types/nodemailer": "^8.0.1",
     "@types/passport": "^1.0.17",
     "@types/supertest": "^6.0.2",
     "jest": "^29.7.0",
@@ -77,6 +84,11 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3"
+  },
+  "overrides": {
+    "multer": "2.2.0",
+    "form-data": "4.0.6",
+    "js-yaml": "5.0.0"
   },
   "jest": {
     "moduleFileExtensions": [

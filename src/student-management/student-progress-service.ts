@@ -9,7 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, In, QueryRunner, Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { ActivityBacklogEntity } from '../database/entities/activity-backlog.entity';
 import { ActivityEntity } from '../database/entities/activity.entity';
@@ -56,7 +56,7 @@ export class StudentProgressService {
   private readonly logger = new Logger(StudentProgressService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     private readonly ranksService: RanksService,
     private readonly dataSource: DataSource,
@@ -69,15 +69,13 @@ export class StudentProgressService {
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>,
-  ) {}
+    private readonly groupRepository: Repository<GroupEntity>) {}
 
   /** GET /groups/:groupId/students/:accountId/progress */
   async getStudentProgress(
     req: Request,
     groupId: number,
-    accountId: number,
-  ): Promise<{ stages: ProgressStageItem[] }> {
+    accountId: number): Promise<{ stages: ProgressStageItem[] }> {
     await this.assertLecturer(req);
     await this.assertGroupExists(groupId);
     await this.assertEnrollmentExists(groupId, accountId);
@@ -124,8 +122,7 @@ export class StudentProgressService {
   async getActivityCompletions(
     req: Request,
     groupId: number,
-    activityId: number,
-  ): Promise<ActivityCompletionsResponse> {
+    activityId: number): Promise<ActivityCompletionsResponse> {
     await this.assertLecturer(req);
     await this.assertGroupExists(groupId);
     await this.findActivityInGroupOrFail(groupId, activityId);
@@ -147,8 +144,7 @@ export class StudentProgressService {
     req: Request,
     groupId: number,
     activityId: number,
-    dto: SetActivityCompletionsDto,
-  ): Promise<SetActivityCompletionsResponse> {
+    dto: SetActivityCompletionsDto): Promise<SetActivityCompletionsResponse> {
     await this.assertLecturer(req);
     await this.assertGroupExists(groupId);
     const activity = await this.findActivityInGroupOrFail(groupId, activityId);
@@ -166,8 +162,7 @@ export class StudentProgressService {
       const currentAccountIds = new Set(
         currentRows
           .map((row) => row.accountId)
-          .filter((accountId): accountId is number => accountId !== null),
-      );
+          .filter((accountId): accountId is number => accountId !== null));
       const targetSet = new Set(targetAccountIds);
       const toGrant = targetAccountIds.filter((id) => !currentAccountIds.has(id));
       const toRevoke = [...currentAccountIds].filter((id) => !targetSet.has(id));
@@ -179,8 +174,7 @@ export class StudentProgressService {
           groupId,
           accountId,
           activityId,
-          rewardAmount,
-        );
+          rewardAmount);
         granted += 1;
       }
       for (const accountId of toRevoke) {
@@ -189,14 +183,12 @@ export class StudentProgressService {
           groupId,
           accountId,
           activityId,
-          rewardAmount,
-        );
+          rewardAmount);
         revoked += 1;
       }
       await queryRunner.commitTransaction();
       this.logger.log(
-        `Activity ${activityId} completions synced in group ${groupId}: granted=${granted}, revoked=${revoked}`,
-      );
+        `Activity ${activityId} completions synced in group ${groupId}: granted=${granted}, revoked=${revoked}`);
       return {
         activityId,
         granted,
@@ -206,8 +198,7 @@ export class StudentProgressService {
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       this.logger.error(
-        `Set activity completions failed (activity=${activityId}, group=${groupId}): ${String(err)}`,
-      );
+        `Set activity completions failed (activity=${activityId}, group=${groupId}): ${String(err)}`);
       throw err;
     } finally {
       await queryRunner.release();
@@ -219,8 +210,7 @@ export class StudentProgressService {
     req: Request,
     groupId: number,
     accountId: number,
-    activityId: number,
-  ): Promise<{ isCompleted: boolean }> {
+    activityId: number): Promise<{ isCompleted: boolean }> {
     await this.assertLecturer(req);
     await this.assertGroupExists(groupId);
     const enrollment = await this.findEnrollmentOrFail(groupId, accountId);
@@ -240,8 +230,7 @@ export class StudentProgressService {
           groupId,
           accountId,
           activityId,
-          rewardAmount,
-        );
+          rewardAmount);
         isCompleted = false;
         this.logger.log(`Activity ${activityId} uncompleted for account ${accountId} in group ${groupId}`);
       } else {
@@ -250,8 +239,7 @@ export class StudentProgressService {
           groupId,
           accountId,
           activityId,
-          rewardAmount,
-        );
+          rewardAmount);
         isCompleted = true;
         this.logger.log(`Activity ${activityId} completed for account ${accountId} in group ${groupId}`);
       }
@@ -260,8 +248,7 @@ export class StudentProgressService {
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       this.logger.error(
-        `Toggle activity failed (activity=${activityId}, enrollment=${enrollment.id}): ${String(err)}`,
-      );
+        `Toggle activity failed (activity=${activityId}, enrollment=${enrollment.id}): ${String(err)}`);
       throw err;
     } finally {
       await queryRunner.release();
@@ -273,8 +260,7 @@ export class StudentProgressService {
     groupId: number,
     accountId: number,
     activityId: number,
-    rewardAmount: number,
-  ): Promise<void> {
+    rewardAmount: number): Promise<void> {
     const enrollment = await this.findEnrollmentOrFail(groupId, accountId, queryRunner);
     const entry = queryRunner.manager.create(ActivityBacklogEntity, {
       groupId,
@@ -288,8 +274,7 @@ export class StudentProgressService {
       this.ranksService,
       enrollment.id,
       groupId,
-      rewardAmount,
-    );
+      rewardAmount);
   }
 
   private async revokeActivityCompletion(
@@ -297,8 +282,7 @@ export class StudentProgressService {
     groupId: number,
     accountId: number,
     activityId: number,
-    rewardAmount: number,
-  ): Promise<void> {
+    rewardAmount: number): Promise<void> {
     const enrollment = await this.findEnrollmentOrFail(groupId, accountId, queryRunner);
     const existing = await queryRunner.manager.findOne(ActivityBacklogEntity, {
       where: { groupId, accountId, activityId },
@@ -312,8 +296,7 @@ export class StudentProgressService {
       this.ranksService,
       enrollment.id,
       groupId,
-      -rewardAmount,
-    );
+      -rewardAmount);
   }
 
   private async findActivityInGroupOrFail(groupId: number, activityId: number): Promise<ActivityEntity> {
@@ -325,8 +308,7 @@ export class StudentProgressService {
       .getOne();
     if (!activity) {
       throw new NotFoundException(
-        `Activity ${activityId} not found in group ${groupId}`,
-      );
+        `Activity ${activityId} not found in group ${groupId}`);
     }
     return activity;
   }
@@ -343,16 +325,14 @@ export class StudentProgressService {
     const missing = accountIds.filter((id) => !enrolledIds.has(id));
     if (missing.length > 0) {
       throw new BadRequestException(
-        `Account IDs not enrolled in group ${groupId}: ${missing.join(', ')}`,
-      );
+        `Account IDs not enrolled in group ${groupId}: ${missing.join(', ')}`);
     }
   }
 
   private async findEnrollmentOrFail(
     groupId: number,
     accountId: number,
-    queryRunner?: QueryRunner,
-  ): Promise<EnrollmentEntity> {
+    queryRunner?: QueryRunner): Promise<EnrollmentEntity> {
     const enrollment = queryRunner
       ? await queryRunner.manager.findOne(EnrollmentEntity, {
           where: { groupId, studentAccountId: accountId },
@@ -362,8 +342,7 @@ export class StudentProgressService {
         });
     if (!enrollment) {
       throw new NotFoundException(
-        `Student with accountId ${accountId} is not enrolled in group ${groupId}`,
-      );
+        `Student with accountId ${accountId} is not enrolled in group ${groupId}`);
     }
     return enrollment;
   }
@@ -380,7 +359,7 @@ export class StudentProgressService {
   }
 
   private async assertLecturer(req: Request): Promise<void> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }
