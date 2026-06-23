@@ -383,7 +383,7 @@ Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATA
 | `group.name` | string | Group display name (`edukacja.grupy.nazwa`). |
 | `group.description` | string (optional) | Maps to `edukacja.grupy.opis`. |
 | `group.currency` | string (optional) | Maps to `edukacja.grupy.waluta`. |
-| `group.currencyIcon` | string (optional; numeric JSON is accepted—coerced to string) | Maps to `edukacja.grupy.ikona_waluty`. |
+| `group.currencyEmoji` | string (optional) | ASCII emoji for the group currency (e.g. "🥕"). |
 | `group.life` | integer (optional, ≥ 0) | Maps to `edukacja.grupy.zycie`; numeric strings are parsed where sent as strings. |
 | `group.lifeIcon` | string (optional; numeric JSON accepted—coerced) | Maps to `edukacja.grupy.ikona_zycia`. |
 | `group.bannerRef` | string (optional) | Maps to `edukacja.grupy.obrazek_ref`. |
@@ -410,7 +410,7 @@ Host: 127.0.0.1:8080
 Content-Type: application/json
 X-Browser-ID: <BrowserUUID>
 
-{"auth":"<token>","group":{"name":"...","description":"...","currency":"Coin","currencyIcon":"21","life":3,"lifeIcon":"13","bannerRef":"<uuid>","entryCode":"<optional>"}}
+{"auth":"<token>","group":{"name":"...","description":"...","currency":"Coin","currencyEmoji":"🪙","life":3,"lifeIcon":"13","bannerRef":"<uuid>","entryCode":"<optional>"}}
 ```
 
 ```json
@@ -739,7 +739,7 @@ Retrieves student statistics (lives, currency, icons) scoped to a specific group
 | `groupId` | integer | Public group ID requested. |
 | `lives` | integer | Remaining lives in this group (`gamification.enrollments`). |
 | `currency` | string | Currency balance in this group (`gamification.enrollments`). |
-| `currencyIcon` | string | Group's currency icon (`education.groups`). |
+| `currencyEmoji` | string | Group's currency emoji (`education.groups`). |
 | `livesIcon` | string | Group's life icon (`education.groups`). |
 | `shopOpen` | boolean | Indicates whether the group's shop is currently open. |
 
@@ -758,7 +758,7 @@ Cookie: maq_auth=<token>
   "groupId": 100137,
   "lives": 3,
   "currency": "100",
-  "currencyIcon": "coin",
+  "currencyEmoji": "🪙",
   "livesIcon": "heart",
   "shopOpen": true
 }

@@ -25,7 +25,8 @@ export class GroupTemplatesImportService {
     templateId: number,
     lecturerAccountId: number,
     newGroupName: string,
-    newSubjectName?: string): Promise<GroupEntity> {
+    newSubjectName?: string,
+  ): Promise<GroupEntity> {
     return this.dataSource.transaction(async (manager) => {
       // 1. Fetch template
       const template = await manager.findOne(GroupTemplateEntity, { where: { id: templateId } });
@@ -48,7 +49,7 @@ export class GroupTemplatesImportService {
         imageRef: groupPayload.imageRef,
         description: groupPayload.description,
         currency: groupPayload.currency,
-        currencyIcon: groupPayload.currencyIcon,
+        currencyEmoji: groupPayload.currencyEmoji,
         lives: groupPayload.lives,
         livesIcon: groupPayload.livesIcon,
       });
@@ -132,7 +133,8 @@ export class GroupTemplatesImportService {
               await manager.query(
                 `INSERT INTO gamification.shop_listing_rank_prices (shop_listing_id, rank_id, price)
                  VALUES ($1, $2, $3)`,
-                [savedListing.id, mappedRankId, rp.price]);
+                [savedListing.id, mappedRankId, rp.price],
+              );
             }
           }
 
@@ -143,7 +145,8 @@ export class GroupTemplatesImportService {
               await manager.query(
                 `INSERT INTO gamification.shop_listing_badge_promotions (shop_listing_id, badge_id, promotion_type, value)
                  VALUES ($1, $2, $3, $4)`,
-                [savedListing.id, mappedBadgeId, bp.promotionType, bp.value]);
+                [savedListing.id, mappedBadgeId, bp.promotionType, bp.value],
+              );
             }
           }
         }

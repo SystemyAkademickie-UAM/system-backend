@@ -32,7 +32,8 @@ export class GroupTemplatesExportService {
     creatorAccountId: number,
     templateName: string,
     description: string | undefined,
-    isPublic: boolean = false): Promise<GroupTemplateEntity> {
+    isPublic: boolean = false,
+  ): Promise<GroupTemplateEntity> {
     return this.dataSource.transaction(async (manager) => {
       // ── Group ──────────────────────────────────────────────
       const group = await manager.findOne(GroupEntity, { where: { id: groupId } });
@@ -67,7 +68,8 @@ export class GroupTemplatesExportService {
           `SELECT shop_listing_id, rank_id, price
            FROM gamification.shop_listing_rank_prices
            WHERE shop_listing_id = ANY($1)`,
-          [listingIds]);
+          [listingIds],
+        );
       }
 
       // ── Shop Listing Badge Promotions (raw query — no entity)
@@ -82,7 +84,8 @@ export class GroupTemplatesExportService {
           `SELECT shop_listing_id, badge_id, promotion_type, value
            FROM gamification.shop_listing_badge_promotions
            WHERE shop_listing_id = ANY($1)`,
-          [listingIds]);
+          [listingIds],
+        );
       }
 
       // ── Posts ───────────────────────────────────────────────
@@ -144,7 +147,7 @@ export class GroupTemplatesExportService {
           imageRef: group.imageRef,
           description: group.description,
           currency: group.currency,
-          currencyIcon: group.currencyIcon,
+          currencyEmoji: group.currencyEmoji,
           lives: group.lives,
           livesIcon: group.livesIcon,
         },

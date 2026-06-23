@@ -41,7 +41,7 @@ export type StudentProfileResponseBody = {
   totalEarned: number;
   badgesCount: number;
   groupCurrency: string | null;
-  groupCurrencyIcon: number | null;
+  groupCurrencyEmoji: string | null;
   lives: string | null;
   livesIcon: number | null;
   shopOpen: boolean;
@@ -62,7 +62,7 @@ type StudentProfileRow = {
   rankId: number | null;
   rankName: string | null;
   groupCurrency: string | null;
-  groupCurrencyIcon: number | null;
+  groupCurrencyEmoji: string | null;
   lives: string | null;
   livesIcon: number | null;
   shopOpen: boolean;
@@ -130,7 +130,7 @@ export class StudentProfileService {
          ss.rank_id                   AS "rankId",
          r.name                       AS "rankName",
          g.currency                   AS "groupCurrency",
-         g.currency_icon              AS "groupCurrencyIcon",
+         g.currency_emoji             AS "groupCurrencyEmoji",
          g.lives                      AS "lives",
          g.lives_icon                 AS "livesIcon",
          g.shop_open                  AS "shopOpen"
@@ -212,7 +212,7 @@ export class StudentProfileService {
       totalEarned: row.totalEarned ?? 0,
       badgesCount: earnedBadges.length,
       groupCurrency: row.groupCurrency,
-      groupCurrencyIcon: row.groupCurrencyIcon,
+      groupCurrencyEmoji: row.groupCurrencyEmoji,
       lives: row.lives,
       livesIcon: row.livesIcon,
       shopOpen: row.shopOpen === true || row.shopOpen === ('t' as unknown) || row.shopOpen === (1 as unknown),

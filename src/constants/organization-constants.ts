@@ -3,7 +3,7 @@
 /** Fixed internal tenant: MAQ superadmin bootstrap only — not a client institution. */
 export const PRIVATE_ORGANIZATION_ID = 1;
 
-/** Display name for {@link PRIVATE_ORGANIZATION_ID} seeded by migration 015. */
+/** Display name for {@link PRIVATE_ORGANIZATION_ID} seeded by migration 016. */
 export const PRIVATE_ORGANIZATION_NAME = 'MyAcademyQuest Internal';
 
 /** Organization uses institutional SAML / PIONIER picker (`auth.organizations.login_method`). */

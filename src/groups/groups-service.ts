@@ -46,7 +46,7 @@ export type UserGroupListItem = {
   lecturers: string;
   description: string | null;
   currency: string | null;
-  currencyIcon: string | null;
+  currencyEmoji: string | null;
   shopOpen: boolean;
   livesEnabled: boolean;
   lives: number | null;
@@ -165,7 +165,7 @@ export class GroupsService {
         subjectName: nullableTrimmedString(groupPayload.subjectName),
         description: nullableTrimmedString(groupPayload.description),
         currency: nullableTrimmedString(groupPayload.currency),
-        currencyIcon: nullableTrimmedString(groupPayload.currencyIcon),
+        currencyEmoji: nullableTrimmedString(groupPayload.currencyEmoji),
         lives: groupPayload.lives ?? null,
         livesIcon: nullableTrimmedString(groupPayload.livesIcon),
         imageRef: nullableTrimmedString(groupPayload.imageRef),
@@ -253,8 +253,8 @@ export class GroupsService {
     if (payload.currency !== undefined) {
       updates.currency = nullableTrimmedString(payload.currency);
     }
-    if (payload.currencyIcon !== undefined) {
-      updates.currencyIcon = nullableTrimmedString(payload.currencyIcon);
+    if (payload.currencyEmoji !== undefined) {
+      updates.currencyEmoji = nullableTrimmedString(payload.currencyEmoji);
     }
     if (payload.lives !== undefined) {
       updates.lives = payload.lives;
@@ -694,7 +694,7 @@ export class GroupsService {
     image_ref: string | null;
     description: string | null;
     currency: string | null;
-    currency_icon: string | null;
+    currency_emoji: string | null;
     teacher_nickname: string | null;
     teacher_name: string | null;
     teacher_surname: string | null;
@@ -718,7 +718,7 @@ export class GroupsService {
       lecturers: lecturers || '',
       description: row.description ?? null,
       currency: row.currency ?? null,
-      currencyIcon: row.currency_icon ?? null,
+      currencyEmoji: row.currency_emoji ?? null,
       shopOpen: toBool(row.shop_open),
       livesEnabled: toBool(row.lives_enabled),
       lives: row.lives ?? null,
@@ -739,7 +739,7 @@ export class GroupsService {
       image_ref: string | null;
       description: string | null;
       currency: string | null;
-      currency_icon: string | null;
+      currency_emoji: string | null;
       teacher_nickname: string | null;
       teacher_name: string | null;
       teacher_surname: string | null;
@@ -763,7 +763,7 @@ export class GroupsService {
         'group.image_ref AS image_ref',
         'group.description AS description',
         'group.currency AS currency',
-        'group.currency_icon AS currency_icon',
+        'group.currency_emoji AS currency_emoji',
         'group.shop_open AS shop_open',
         'group.lives_enabled AS lives_enabled',
         'group.lives AS lives',
@@ -805,7 +805,7 @@ export class GroupsService {
       image_ref: row.image_ref ?? null,
       description: row.description ?? null,
       currency: row.currency ?? null,
-      currency_icon: row.currency_icon ?? null,
+      currency_emoji: row.currency_emoji ?? null,
       teacher_nickname: row.teacher_nickname ?? null,
       teacher_name: row.teacher_name ?? null,
       teacher_surname: row.teacher_surname ?? null,

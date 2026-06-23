@@ -34,8 +34,9 @@ export class GroupEntity {
   @Column({ name: 'currency', type: 'varchar', length: EDUCATION_GROUP_VARCHAR_MAX_LENGTH, nullable: true })
   currency: string | null;
 
-  @Column({ name: 'currency_icon', type: 'varchar', length: EDUCATION_GROUP_VARCHAR_MAX_LENGTH, nullable: true })
-  currencyIcon: string | null;
+  /** ASCII emoji representing the group currency (e.g. "🥕"). */
+  @Column({ name: 'currency_emoji', type: 'varchar', length: EDUCATION_GROUP_VARCHAR_MAX_LENGTH, nullable: true })
+  currencyEmoji: string | null;
 
   @Column({ name: 'lives', type: 'integer', nullable: true, default: 3 })
   lives: number | null;
