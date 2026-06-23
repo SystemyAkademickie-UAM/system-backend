@@ -219,7 +219,7 @@ describe('BacklogService', () => {
         skip: 0,
       });
       expect(result).toEqual([
-        { id: 1, type: 'SHOP_PURCHASE', date: mockDate.toISOString(), value: 'item_1', accountId: studentAccountId },
+        { id: 1, type: 'SHOP_PURCHASE', date: mockDate.toISOString(), value: 'item_1', accountId: studentAccountId, isRead: false },
       ]);
     });
   });
@@ -290,7 +290,7 @@ describe('BacklogService', () => {
         where: { id: internalGroupId, teacherAccountId: 10 },
       });
       expect(result).toEqual([
-        { id: 1, type: 'SHOP_PURCHASE', date: mockDate.toISOString(), value: 'item_1', accountId: 10 },
+        { id: 1, type: 'SHOP_PURCHASE', date: mockDate.toISOString(), value: 'item_1', accountId: 10, isRead: false },
       ]);
     });
   });

@@ -17,6 +17,7 @@ describe('BacklogController', () => {
           useValue: {
             getStudentBacklog: jest.fn(),
             getGroupBacklog: jest.fn(),
+            markAsRead: jest.fn(),
           },
         },
       ],
@@ -34,7 +35,10 @@ describe('BacklogController', () => {
     it('should return backlog items when successful', async () => {
       // Arrange
       const mockReq = {} as Request;
-      const expectedItems = [{ id: 1, type: 'SHOP_PURCHASE', date: '2026-06-07', value: '10', accountId: 1 }];
+      const expectedItems = [
+        { id: 1, type: 'TEST', date: '2026-01-01', value: '1', accountId: 1, isRead: false },
+        { id: 2, type: 'TEST2', date: '2026-01-02', value: '2', accountId: 1, isRead: true },
+      ];
       service.getStudentBacklog.mockResolvedValue(expectedItems);
 
       // Act
@@ -72,7 +76,7 @@ describe('BacklogController', () => {
     it('should return group backlog items when successful', async () => {
       // Arrange
       const mockReq = {} as Request;
-      const expectedItems = [{ id: 1, type: 'SHOP_PURCHASE', date: '2026-06-07', value: '10', accountId: 1 }];
+      const expectedItems = [{ id: 1, type: 'SHOP_PURCHASE', date: '2026-06-07', value: '10', accountId: 1, isRead: false }];
       service.getGroupBacklog.mockResolvedValue(expectedItems);
 
       // Act

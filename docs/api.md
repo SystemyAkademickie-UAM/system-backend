@@ -797,9 +797,28 @@ Retrieves the recent backlog history for the currently logged-in student in a gi
     "type": "SHOP_PURCHASE",
     "date": "2026-06-08T10:00:00.000Z",
     "value": "health_potion",
-    "accountId": 42
+    "accountId": 42,
+    "isRead": false
   }
 ]
+```
+
+### Mark Backlog Item as Read (Student / Lecturer)
+
+**Endpoint:** `PATCH /api/groups/:groupId/backlog/:backlogId/read`
+
+Marks a specific backlog item as read. Students can only mark their own items in groups they are enrolled in. Lecturers can mark any item in their groups.
+
+**Headers:**
+| Header | Description |
+| ------ | ----------- |
+| `X-Browser-ID` | Browser binding ID for the strong session. |
+
+**Response:** `200 OK` with JSON:
+```json
+{
+  "updated": true
+}
 ```
 
 ### Get Group Backlog (Lecturer / Admin)

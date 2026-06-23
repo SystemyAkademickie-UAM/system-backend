@@ -28,4 +28,7 @@ export class BacklogEntity {
   /** Detailed value or JSON string regarding the event */
   @Column({ name: 'value', type: 'text', nullable: true })
   value: string | null;
+
+  @Column({ name: 'is_read', type: 'boolean', default: false })
+  isRead: boolean;
 }

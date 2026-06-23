@@ -22,6 +22,7 @@ export interface BacklogItemResponse {
   date: string;
   value: string | null;
   accountId: number;
+  isRead: boolean;
 }
 
 export type BacklogEventType = 
@@ -124,6 +125,7 @@ export class BacklogService {
       date: entry.date?.toISOString() ?? new Date().toISOString(),
       value: entry.value,
       accountId: entry.accountId ?? 0,
+      isRead: entry.isRead ?? false,
     }));
   }
 
@@ -190,6 +192,63 @@ export class BacklogService {
       date: entry.date?.toISOString() ?? new Date().toISOString(),
       value: entry.value,
       accountId: entry.accountId ?? 0,
+      isRead: entry.isRead ?? false,
     }));
+  }
+
+  async markAsRead(
+    req: Request,
+    publicGroupId: number,
+    backlogId: number,
+    browserIdHeader: string | undefined,
+    authHeader: string | undefined,
+  ): Promise<{ updated: boolean } | { error: string }> {
+    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
+      req,
+      browserIdHeader,
+      authHeader,
+    );
+    if (!subject) return { error: 'Unauthorized' };
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+
+    const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
+    if (!primaryRole) return { error: 'Forbidden: No role found' };
+    
+    const accountId = await this.userRolesService.findAccountIdForRole(subject.userId, primaryRole);
+    if (!accountId) return { error: 'Forbidden: Account not found' };
+
+    if (primaryRole === STUDENT_ROLE_NAME) {
+      const isEnrolled = await this.enrollmentRepository.exist({
+        where: { groupId: internalGroupId, studentAccountId: accountId },
+      });
+      if (!isEnrolled) return { error: 'Forbidden: Not enrolled' };
+      
+      const result = await this.backlogRepository.update(
+        { id: backlogId, groupId: internalGroupId, accountId },
+        { isRead: true },
+      );
+      return { updated: result.affected ? result.affected > 0 : false };
+    }
+
+    if (primaryRole === LECTURER_ROLE_NAME || primaryRole === ADMINISTRATOR_ROLE_NAME) {
+      const isOwner = await this.groupRepository.exist({
+        where: { id: internalGroupId, teacherAccountId: accountId },
+      });
+      if (!isOwner) return { error: 'Forbidden: Not group owner' };
+
+      const result = await this.backlogRepository.update(
+        { id: backlogId, groupId: internalGroupId },
+        { isRead: true },
+      );
+      return { updated: result.affected ? result.affected > 0 : false };
+    }
+
+    return { error: 'Forbidden: Role not authorized' };
   }
 }
