@@ -21,11 +21,11 @@ export class UpdateCurrencyDto {
   @IsString()
   currency?: string;
 
-  /** New icon/emoji for the group currency (e.g. "🥕"). */
+  /** ASCII emoji for the group currency (e.g. "🥕"). */
   @Transform(({ value }) => transformOptionalString(value))
   @IsOptional()
   @IsString()
-  currencyIcon?: string;
+  currencyEmoji?: string;
 
   /** Optional auth token when not using `maq_auth` cookie. */
   @IsOptional()

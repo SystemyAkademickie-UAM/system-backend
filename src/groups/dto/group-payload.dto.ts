@@ -30,11 +30,11 @@ export class GroupPayloadDto {
   @IsString()
   currency?: string;
 
-  /** Stored as `currency_icon` (varchar ref); numeric JSON values from legacy clients are coerced to strings. */
+  /** ASCII emoji for the group currency (e.g. "🥕"). */
   @Transform(({ value }) => transformOptionalString(value))
   @IsOptional()
   @IsString()
-  currencyIcon?: string;
+  currencyEmoji?: string;
 
   /** Stored as `lives` (integer). */
   @Transform(({ value }) => {
