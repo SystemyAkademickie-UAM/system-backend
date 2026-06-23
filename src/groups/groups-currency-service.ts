@@ -20,14 +20,14 @@ export type GetCurrencyResponseBody = {
   statusCode: number;
   groupId: number;
   currency: string | null;
-  currencyIcon: string | null;
+  currencyEmoji: string | null;
 };
 
 export type UpdateCurrencyResponseBody = {
   statusCode: number;
   groupId: number;
   currency: string | null;
-  currencyIcon: string | null;
+  currencyEmoji: string | null;
   updated: boolean;
 };
 
@@ -94,7 +94,7 @@ export class GroupsCurrencyService {
       statusCode: GROUP_API_JSON_STATUS_OK,
       groupId: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
       currency: group.currency,
-      currencyIcon: group.currencyIcon,
+      currencyEmoji: group.currencyEmoji,
     };
   }
 
@@ -138,15 +138,15 @@ export class GroupsCurrencyService {
     if (body.currency !== undefined) {
       updates.currency = nullableTrimmedString(body.currency);
     }
-    if (body.currencyIcon !== undefined) {
-      updates.currencyIcon = nullableTrimmedString(body.currencyIcon);
+    if (body.currencyEmoji !== undefined) {
+      updates.currencyEmoji = nullableTrimmedString(body.currencyEmoji);
     }
     if (Object.keys(updates).length === 0) {
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
         groupId: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
         currency: group.currency,
-        currencyIcon: group.currencyIcon,
+        currencyEmoji: group.currencyEmoji,
         updated: false,
       };
     }
@@ -156,7 +156,7 @@ export class GroupsCurrencyService {
         statusCode: GROUP_API_JSON_STATUS_OK,
         groupId: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
         currency: updates.currency !== undefined ? updates.currency : group.currency,
-        currencyIcon: updates.currencyIcon !== undefined ? updates.currencyIcon : group.currencyIcon,
+        currencyEmoji: updates.currencyEmoji !== undefined ? updates.currencyEmoji : group.currencyEmoji,
         updated: true,
       };
     } catch (err: unknown) {
@@ -170,7 +170,7 @@ export class GroupsCurrencyService {
       statusCode: GROUP_API_JSON_STATUS_OK,
       groupId,
       currency: null,
-      currencyIcon: null,
+      currencyEmoji: null,
     };
   }
 
@@ -179,7 +179,7 @@ export class GroupsCurrencyService {
       statusCode: GROUP_API_JSON_STATUS_OK,
       groupId,
       currency: null,
-      currencyIcon: null,
+      currencyEmoji: null,
       updated: false,
     };
   }

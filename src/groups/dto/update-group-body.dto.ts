@@ -33,10 +33,11 @@ export class UpdateGroupPayloadDto {
   @IsString()
   currency?: string;
 
+  /** ASCII emoji for the group currency (e.g. "🥕"). */
   @Transform(({ value }) => transformOptionalString(value))
   @IsOptional()
   @IsString()
-  currencyIcon?: string;
+  currencyEmoji?: string;
 
   @Transform(({ value }) => {
     if (value === undefined || value === null) {

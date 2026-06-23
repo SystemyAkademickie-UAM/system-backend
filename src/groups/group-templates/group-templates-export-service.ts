@@ -147,7 +147,7 @@ export class GroupTemplatesExportService {
           imageRef: group.imageRef,
           description: group.description,
           currency: group.currency,
-          currencyIcon: group.currencyIcon,
+          currencyEmoji: group.currencyEmoji,
           lives: group.lives,
           livesIcon: group.livesIcon,
         },
