@@ -14,7 +14,7 @@ import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
-import { DRIVE_DEFAULT_ORGANIZATION_ID, DRIVE_MAX_FILE_BYTES, DRIVE_MULTIPART_FIELD_NESTING_DEPTH } from '../constants/drive-service-constants';
+import { DRIVE_DEFAULT_ORGANIZATION_ID, DRIVE_MAX_FILE_BYTES } from '../constants/drive-service-constants';
 import { DriveHandleResponseBody, DriveService } from './drive-service';
 
 type MulterBannerFiles = {
@@ -63,12 +63,7 @@ export class DriveController {
   @Post()
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'banner', maxCount: 1 }], {
-      limits: {
-        fileSize: DRIVE_MAX_FILE_BYTES,
-        fieldNestingDepth: DRIVE_MULTIPART_FIELD_NESTING_DEPTH,
-      },
-    }))
+    FileFieldsInterceptor([{ name: 'banner', maxCount: 1 }], { limits: { fileSize: DRIVE_MAX_FILE_BYTES } }))
   @ApiOperation({ summary: 'Upload a banner via multipart drive request' })
   handleDrive(@Req() req: Request): Promise<DriveHandleResponseBody> {
     const files = req.files as MulterBannerFiles | undefined;
