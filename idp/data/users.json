@@ -1,52 +1,88 @@
 {
     "users": [
         {
-            "username": "student",
-            "password": "student",
-            "uid": "student",
+            "username": "student1",
+            "password": "student1",
+            "uid": "student1",
             "eduPersonAffiliation": [
                 "student",
                 "member"
             ],
-            "eduPersonPrincipalName": "student@localhost.invalid",
-            "mail": "student@localhost.invalid",
-            "displayName": "Local Dev Student"
+            "eduPersonPrincipalName": "student1@localhost.invalid",
+            "mail": "student1@localhost.invalid",
+            "displayName": "Student One"
         },
         {
-            "username": "lecturer",
-            "password": "lecturer",
-            "uid": "lecturer",
+            "username": "student2",
+            "password": "student2",
+            "uid": "student2",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student2@localhost.invalid",
+            "mail": "student2@localhost.invalid",
+            "displayName": "Student Two"
+        },
+        {
+            "username": "student3",
+            "password": "student3",
+            "uid": "student3",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student3@localhost.invalid",
+            "mail": "student3@localhost.invalid",
+            "displayName": "Student Three"
+        },
+        {
+            "username": "lecturer1",
+            "password": "lecturer1",
+            "uid": "lecturer1",
             "eduPersonAffiliation": [
                 "faculty",
                 "member"
             ],
-            "eduPersonPrincipalName": "lecturer@localhost.invalid",
-            "mail": "lecturer@localhost.invalid",
-            "displayName": "Local Dev Lecturer"
+            "eduPersonPrincipalName": "lecturer1@localhost.invalid",
+            "mail": "lecturer1@localhost.invalid",
+            "displayName": "Lecturer One"
         },
         {
-            "username": "admin",
-            "password": "admin",
-            "uid": "admin",
+            "username": "lecturer2",
+            "password": "lecturer2",
+            "uid": "lecturer2",
+            "eduPersonAffiliation": [
+                "faculty",
+                "member"
+            ],
+            "eduPersonPrincipalName": "lecturer2@localhost.invalid",
+            "mail": "lecturer2@localhost.invalid",
+            "displayName": "Lecturer Two"
+        },
+        {
+            "username": "lecturer3",
+            "password": "lecturer3",
+            "uid": "lecturer3",
+            "eduPersonAffiliation": [
+                "faculty",
+                "member"
+            ],
+            "eduPersonPrincipalName": "lecturer3@localhost.invalid",
+            "mail": "lecturer3@localhost.invalid",
+            "displayName": "Lecturer Three"
+        },
+        {
+            "username": "administrator",
+            "password": "administrator",
+            "uid": "administrator",
             "eduPersonAffiliation": [
                 "staff",
                 "member"
             ],
             "eduPersonPrincipalName": "administrator@localhost.invalid",
             "mail": "administrator@localhost.invalid",
-            "displayName": "Administrator"
-        },
-        {
-            "username": "super",
-            "password": "super",
-            "uid": "super",
-            "eduPersonAffiliation": [
-                "staff",
-                "member"
-            ],
-            "eduPersonPrincipalName": "superadmin@localhost.invalid",
-            "mail": "superadmin@localhost.invalid",
-            "displayName": "super"
+            "displayName": "University Administrator"
         }
     ]
 }
