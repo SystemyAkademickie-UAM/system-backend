@@ -161,6 +161,13 @@ export class GroupsService {
       if (nameTrimmed === '') {
         return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID };
       }
+      const finalLives = groupPayload.lives ?? null;
+      const finalStartingLives = groupPayload.startingLives ?? groupPayload.lives ?? 3;
+
+      if (finalLives !== null && finalStartingLives !== null && finalStartingLives > finalLives) {
+        throw new BadRequestException('startingLives must not exceed lives (max cap)');
+      }
+
       const entity = this.groupRepository.create({
         teacherAccountId: lecturerAccountId,
         name: nameTrimmed,
@@ -168,8 +175,8 @@ export class GroupsService {
         description: nullableTrimmedString(groupPayload.description),
         currency: nullableTrimmedString(groupPayload.currency),
         currencyEmoji: nullableTrimmedString(groupPayload.currencyEmoji),
-        lives: groupPayload.lives ?? null,
-        startingLives: groupPayload.startingLives ?? null,
+        lives: finalLives,
+        startingLives: finalStartingLives,
         livesIcon: nullableTrimmedString(groupPayload.livesIcon),
         imageRef: nullableTrimmedString(groupPayload.imageRef),
       });
@@ -179,6 +186,9 @@ export class GroupsService {
         group: saved.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
       };
     } catch (err: unknown) {
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
       this.logGroupCreationFailure(err);
       return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID };
     }
@@ -270,6 +280,14 @@ export class GroupsService {
     }
     if (payload.imageRef !== undefined) {
       updates.imageRef = nullableTrimmedString(payload.imageRef);
+    }
+
+    if (updates.startingLives !== undefined || updates.lives !== undefined) {
+      const finalStartingLives = updates.startingLives !== undefined ? updates.startingLives : existing.startingLives;
+      const finalLives = updates.lives !== undefined ? updates.lives : existing.lives;
+      if (finalLives !== null && finalStartingLives !== null && finalStartingLives > finalLives) {
+        throw new BadRequestException('startingLives must not exceed lives (max cap)');
+      }
     }
 
     if (Object.keys(updates).length === 0) {

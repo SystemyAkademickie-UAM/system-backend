@@ -73,7 +73,7 @@ export class UpdateGroupPayloadDto {
   })
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(0)
   startingLives?: number;
 
   @Transform(({ value }) => transformOptionalString(value))

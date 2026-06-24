@@ -525,4 +525,31 @@ describe('GroupsService', () => {
         .rejects.toThrow('Missing or invalid session');
     });
   });
+
+  describe('createGroup', () => {
+    it('should throw BadRequestException when startingLives exceeds lives cap', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      
+      await expect(
+        service.createGroup(mockRequest, {
+          group: { name: 'Test Group', lives: 3, startingLives: 5 }
+        })
+      ).rejects.toThrow('startingLives must not exceed lives (max cap)');
+    });
+  });
+
+  describe('updateGroup', () => {
+    it('should throw BadRequestException when startingLives exceeds lives cap', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({ id: 1, teacherAccountId: 10, lives: 3, startingLives: null });
+
+      await expect(
+        service.updateGroup(mockRequest, 100001, {
+          group: { startingLives: 5 }
+        })
+      ).rejects.toThrow('startingLives must not exceed lives (max cap)');
+    });
+  });
 });

@@ -27,7 +27,7 @@ export class UpdateLivesConfigDto {
   })
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(0)
   lives?: number;
 
   /** Starting number of lives a student has. */
@@ -46,7 +46,7 @@ export class UpdateLivesConfigDto {
   })
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(0)
   startingLives?: number;
 
   /** Custom display name for lives (e.g. "Tarcze", "Serca"). */

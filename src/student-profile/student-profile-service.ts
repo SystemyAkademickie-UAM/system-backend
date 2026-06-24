@@ -42,7 +42,7 @@ export type StudentProfileResponseBody = {
   badgesCount: number;
   groupCurrency: string | null;
   groupCurrencyEmoji: string | null;
-  lives: string | null;
+  lives: number | null;
   livesIcon: number | null;
   shopOpen: boolean;
   earnedBadges: StudentProfileBadgeItem[];
@@ -63,7 +63,7 @@ type StudentProfileRow = {
   rankName: string | null;
   groupCurrency: string | null;
   groupCurrencyEmoji: string | null;
-  lives: string | null;
+  lives: number | null;
   livesIcon: number | null;
   shopOpen: boolean;
 };
@@ -131,7 +131,7 @@ export class StudentProfileService {
          r.name                       AS "rankName",
          g.currency                   AS "groupCurrency",
          g.currency_emoji             AS "groupCurrencyEmoji",
-         g.lives                      AS "lives",
+         ss.lives                     AS "lives",
          g.lives_icon                 AS "livesIcon",
          g.shop_open                  AS "shopOpen"
        FROM gamification.enrollments e

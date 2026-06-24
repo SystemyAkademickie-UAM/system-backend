@@ -82,8 +82,11 @@ export class GroupsEnrollmentService {
    * @param groupId - The internal group ID (not public ID with offset)
    */
   async enrollStudentById(studentAccountId: number, groupId: number): Promise<EnrollResult> {
-    const groupExists = await this.groupRepository.exist({ where: { id: groupId } });
-    if (!groupExists) {
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+      select: ['id', 'startingLives'],
+    });
+    if (!group) {
       return { enrollmentId: ENROLL_RESULT_GROUP_NOT_FOUND, groupId };
     }
     const existing = await this.enrollmentRepository.findOne({
@@ -103,6 +106,7 @@ export class GroupsEnrollmentService {
         currency: 0,
         totalEarned: 0,
         rankId: initialRankId,
+        lives: group.startingLives ?? 3,
       });
       await this.studentStatsRepository.save(stats);
 

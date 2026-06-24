@@ -384,9 +384,9 @@ Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATA
 | `group.description` | string (optional) | Maps to `edukacja.grupy.opis`. |
 | `group.currency` | string (optional) | Maps to `edukacja.grupy.waluta`. |
 | `group.currencyEmoji` | string (optional) | ASCII emoji for the group currency (e.g. "🥕"). |
-| `group.life` | integer (optional, ≥ 0) | Maps to `edukacja.grupy.zycie`; numeric strings are parsed where sent as strings. |
-| `group.startingLives` | integer (optional, ≥ 1) | Maps to `edukacja.grupy.starting_lives`; configured starting lives value (stored for reference, not yet auto-applied at enrollment). |
-| `group.lifeIcon` | string (optional; numeric JSON accepted—coerced) | Maps to `edukacja.grupy.ikona_zycia`. |
+| `group.lives` | integer (optional, ≥ 0) | Maps to `edukacja.grupy.zycie`; numeric strings are parsed where sent as strings. |
+| `group.startingLives` | integer (optional, ≥ 0) | Maps to `edukacja.grupy.starting_lives`; configured starting lives value applied at enrollment. |
+| `group.livesIcon` | string (optional; numeric JSON accepted—coerced) | Maps to `edukacja.grupy.ikona_zycia`. |
 | `group.bannerRef` | string (optional) | Maps to `edukacja.grupy.obrazek_ref`. |
 | `group.entryCode` | string (optional) | Maps to `edukacja.grupy.kod_wstepu`. |
 
@@ -411,7 +411,7 @@ Host: 127.0.0.1:8080
 Content-Type: application/json
 X-Browser-ID: <BrowserUUID>
 
-{"auth":"<token>","group":{"name":"...","description":"...","currency":"Coin","currencyEmoji":"🪙","life":3,"startingLives":3,"lifeIcon":"13","bannerRef":"<uuid>","entryCode":"<optional>"}}
+{"auth":"<token>","group":{"name":"...","description":"...","currency":"Coin","currencyEmoji":"🥕","lives":3,"startingLives":3,"livesIcon":"13","bannerRef":"<uuid>","entryCode":"<optional>"}}
 ```
 
 ```json
@@ -492,8 +492,8 @@ X-Browser-ID: <BrowserUUID>
 | ----- | ---- | ----------- |
 | `auth` | string (optional) | Plaintext bearer. |
 | `livesEnabled` | boolean (optional) | Enable or disable the lives system. |
-| `lives` | integer (optional, ≥ 1) | Maximum number of lives. |
-| `startingLives` | integer (optional, ≥ 1) | Configured starting number of lives for new students (stored; must not exceed `lives`). |
+| `lives` | integer (optional, ≥ 0) | Maximum number of lives. |
+| `startingLives` | integer (optional, ≥ 0) | Configured starting number of lives for new students (stored; must not exceed `lives`). |
 | `livesLabel` | string (optional) | Custom display name for lives. |
 | `livesIcon` | string (optional) | Icon reference for lives. |
 | `livesShopEnabled` | boolean (optional) | Whether "extra life" appears in shop. |
