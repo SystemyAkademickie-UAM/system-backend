@@ -13,7 +13,7 @@ DROP COLUMN IF EXISTS starting_lives;
 /**
  * Adds \`starting_lives\` to \`education.groups\` to configure how many lives a student starts with.
  */
-export class AddStartingLives1719172800016 implements MigrationInterface {
+export class AddStartingLives1719172800017 implements MigrationInterface {
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(UP_SQL);
   }

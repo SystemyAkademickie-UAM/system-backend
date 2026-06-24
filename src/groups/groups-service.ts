@@ -406,6 +406,12 @@ export class GroupsService {
       };
     }
 
+    const effectiveLives = updates.lives !== undefined ? updates.lives : existing.lives;
+    const effectiveStarting = updates.startingLives !== undefined ? updates.startingLives : existing.startingLives;
+    if (effectiveLives !== null && effectiveStarting !== null && effectiveStarting > effectiveLives) {
+      throw new BadRequestException('startingLives must not exceed lives (max cap)');
+    }
+
     try {
       await this.groupRepository.update({ id: internalGroupId }, updates);
       return {

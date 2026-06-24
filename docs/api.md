@@ -385,7 +385,7 @@ Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATA
 | `group.currency` | string (optional) | Maps to `edukacja.grupy.waluta`. |
 | `group.currencyEmoji` | string (optional) | ASCII emoji for the group currency (e.g. "🥕"). |
 | `group.life` | integer (optional, ≥ 0) | Maps to `edukacja.grupy.zycie`; numeric strings are parsed where sent as strings. |
-| `group.startingLives` | integer (optional, ≥ 0) | Maps to `edukacja.grupy.starting_lives`; initial number of lives upon enrollment. |
+| `group.startingLives` | integer (optional, ≥ 1) | Maps to `edukacja.grupy.starting_lives`; configured starting lives value (stored for reference, not yet auto-applied at enrollment). |
 | `group.lifeIcon` | string (optional; numeric JSON accepted—coerced) | Maps to `edukacja.grupy.ikona_zycia`. |
 | `group.bannerRef` | string (optional) | Maps to `edukacja.grupy.obrazek_ref`. |
 | `group.entryCode` | string (optional) | Maps to `edukacja.grupy.kod_wstepu`. |
