@@ -1,10 +1,11 @@
-import { IsInt, IsString } from 'class-validator';
+import { IsIn, IsInt } from 'class-validator';
+import { PromotionType } from '../../database/entities/badge.entity';
 
 export class ShopListingPromotionDto {
   @IsInt()
   id: number;
 
-  @IsString()
+  @IsIn([PromotionType.PERCENT, PromotionType.FIXED])
   promotionType: string;
 
   @IsInt()

@@ -114,27 +114,23 @@ export class ShopItemsService {
       let rankPromotions: ShopListingRankPromotionEntity[] = [];
       
       if (dto.badgePromotions && dto.badgePromotions.length > 0) {
-        for (const bp of dto.badgePromotions) {
-          const promo = this.shopListingBadgePromotionRepository.create({
-            shopListingId: savedListing.id,
-            badgeId: bp.id,
-            promotionType: bp.promotionType,
-            value: bp.value
-          });
-          badgePromotions.push(await queryRunner.manager.save(promo));
-        }
+        const promosToSave = dto.badgePromotions.map(bp => this.shopListingBadgePromotionRepository.create({
+          shopListingId: savedListing.id,
+          badgeId: bp.id,
+          promotionType: bp.promotionType,
+          value: bp.value
+        }));
+        badgePromotions = await queryRunner.manager.save(ShopListingBadgePromotionEntity, promosToSave);
       }
       
       if (dto.rankPromotions && dto.rankPromotions.length > 0) {
-        for (const rp of dto.rankPromotions) {
-          const promo = this.shopListingRankPromotionRepository.create({
-            shopListingId: savedListing.id,
-            rankId: rp.id,
-            promotionType: rp.promotionType,
-            value: rp.value
-          });
-          rankPromotions.push(await queryRunner.manager.save(promo));
-        }
+        const promosToSave = dto.rankPromotions.map(rp => this.shopListingRankPromotionRepository.create({
+          shopListingId: savedListing.id,
+          rankId: rp.id,
+          promotionType: rp.promotionType,
+          value: rp.value
+        }));
+        rankPromotions = await queryRunner.manager.save(ShopListingRankPromotionEntity, promosToSave);
       }
 
       await queryRunner.commitTransaction();
@@ -245,30 +241,26 @@ export class ShopItemsService {
       if (listing) {
         if (dto.badgePromotions !== undefined) {
            await queryRunner.manager.delete(ShopListingBadgePromotionEntity, { shopListingId: listing.id });
-           for (const bp of dto.badgePromotions) {
-              const promo = this.shopListingBadgePromotionRepository.create({
-                shopListingId: listing.id,
-                badgeId: bp.id,
-                promotionType: bp.promotionType,
-                value: bp.value
-              });
-              badgePromotions.push(await queryRunner.manager.save(promo));
-           }
+           const promosToSave = dto.badgePromotions.map(bp => this.shopListingBadgePromotionRepository.create({
+             shopListingId: listing.id,
+             badgeId: bp.id,
+             promotionType: bp.promotionType,
+             value: bp.value
+           }));
+           badgePromotions = await queryRunner.manager.save(ShopListingBadgePromotionEntity, promosToSave);
         } else {
            badgePromotions = await this.shopListingBadgePromotionRepository.find({ where: { shopListingId: listing.id } });
         }
         
         if (dto.rankPromotions !== undefined) {
            await queryRunner.manager.delete(ShopListingRankPromotionEntity, { shopListingId: listing.id });
-           for (const rp of dto.rankPromotions) {
-              const promo = this.shopListingRankPromotionRepository.create({
-                shopListingId: listing.id,
-                rankId: rp.id,
-                promotionType: rp.promotionType,
-                value: rp.value
-              });
-              rankPromotions.push(await queryRunner.manager.save(promo));
-           }
+           const promosToSave = dto.rankPromotions.map(rp => this.shopListingRankPromotionRepository.create({
+             shopListingId: listing.id,
+             rankId: rp.id,
+             promotionType: rp.promotionType,
+             value: rp.value
+           }));
+           rankPromotions = await queryRunner.manager.save(ShopListingRankPromotionEntity, promosToSave);
         } else {
            rankPromotions = await this.shopListingRankPromotionRepository.find({ where: { shopListingId: listing.id } });
         }
