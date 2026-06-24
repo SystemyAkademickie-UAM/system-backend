@@ -67,6 +67,8 @@ export class GroupTemplatesImportService {
           storyDescription: oldBadge.storyDescription,
           rewardAmount: oldBadge.rewardAmount,
           rarity: oldBadge.rarity,
+          globalDiscountType: oldBadge.globalDiscountType ?? null,
+          globalDiscountValue: oldBadge.globalDiscountValue ?? 0,
         });
         const savedBadge = await manager.save(BadgeEntity, badgeEntity);
         badgeIdMap.set(oldBadge.id, savedBadge.id);
@@ -81,9 +83,9 @@ export class GroupTemplatesImportService {
           requiredPoints: oldRank.requiredPoints,
           icon: oldRank.icon,
           storyDescription: oldRank.storyDescription,
-          storeDiscount: oldRank.storeDiscount,
           uniqueStoreItems: oldRank.uniqueStoreItems, // raw strings, no ID mapping needed usually
-          discount: oldRank.discount ?? 0,
+          globalDiscountType: oldRank.globalDiscountType ?? null,
+          globalDiscountValue: oldRank.globalDiscountValue ?? 0,
         });
         const savedRank = await manager.save(RankEntity, rankEntity);
         rankIdMap.set(oldRank.id, savedRank.id);
@@ -126,14 +128,14 @@ export class GroupTemplatesImportService {
           });
           const savedListing = await manager.save(ShopListingEntity, listingEntity);
 
-          // 6a. Rank Prices
-          for (const rp of oldItem.listing.rankPrices || []) {
+          // 6a. Rank Promotions
+          for (const rp of oldItem.listing.rankPromotions || []) {
             const mappedRankId = rankIdMap.get(rp.rankId);
             if (mappedRankId) {
               await manager.query(
-                `INSERT INTO gamification.shop_listing_rank_prices (shop_listing_id, rank_id, price)
-                 VALUES ($1, $2, $3)`,
-                [savedListing.id, mappedRankId, rp.price],
+                `INSERT INTO gamification.shop_listing_rank_promotions (shop_listing_id, rank_id, promotion_type, value)
+                 VALUES ($1, $2, $3, $4)`,
+                [savedListing.id, mappedRankId, rp.promotionType, rp.value],
               );
             }
           }

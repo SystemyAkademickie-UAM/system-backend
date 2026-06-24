@@ -30,12 +30,12 @@ export class RankEntity {
   @Column({ name: 'story_description', type: 'text', nullable: true })
   storyDescription: string | null;
 
-  @Column({ name: 'store_discount', type: 'integer', nullable: true, default: 0 })
-  storeDiscount: number | null;
-
   @Column({ name: 'unique_store_items', type: 'text', array: true, nullable: true })
   uniqueStoreItems: string[] | null;
 
-  @Column({ name: 'discount', type: 'decimal', precision: 5, scale: 2, nullable: true, default: 0 })
-  discount: number;
+  @Column({ name: 'global_discount_type', type: 'varchar', length: 20, nullable: true })
+  globalDiscountType: string | null;
+
+  @Column({ name: 'global_discount_value', type: 'integer', nullable: true, default: 0 })
+  globalDiscountValue: number | null;
 }

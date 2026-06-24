@@ -66,9 +66,8 @@ export class RanksService {
     if (dto.icon !== undefined) rank.icon = dto.icon;
     if (dto.requiredPoints !== undefined) rank.requiredPoints = dto.requiredPoints;
     if (dto.storyDescription !== undefined) rank.storyDescription = dto.storyDescription;
-    if (dto.storeDiscount !== undefined) rank.storeDiscount = dto.storeDiscount;
-    if (dto.uniqueStoreItems !== undefined) rank.uniqueStoreItems = dto.uniqueStoreItems;
-    if (dto.discount !== undefined) rank.discount = dto.discount;
+    if (dto.globalDiscountType !== undefined) rank.globalDiscountType = dto.globalDiscountType;
+    if (dto.globalDiscountValue !== undefined) rank.globalDiscountValue = dto.globalDiscountValue;
 
     const saved = await this.rankRepository.save(rank);
     await this.recalculateRanksForGroup(groupId);
@@ -146,9 +145,9 @@ export class RanksService {
       icon: dto.icon,
       requiredPoints: dto.requiredPoints,
       storyDescription: dto.storyDescription ?? null,
-      storeDiscount: dto.storeDiscount ?? 0,
       uniqueStoreItems: dto.uniqueStoreItems ?? null,
-      discount: dto.discount ?? 0,
+      globalDiscountType: dto.globalDiscountType ?? null,
+      globalDiscountValue: dto.globalDiscountValue ?? 0,
     });
 
     const saved = await this.rankRepository.save(entity);

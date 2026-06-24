@@ -40,4 +40,13 @@ export class UpdateBadgeDto {
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
+
+  @IsOptional()
+  @IsString()
+  globalDiscountType?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  globalDiscountValue?: number;
 }

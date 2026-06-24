@@ -35,4 +35,13 @@ export class CreateBadgeDto {
   @IsOptional()
   @IsEnum(BadgeRarity)
   rarity?: BadgeRarity;
+
+  @IsOptional()
+  @IsString()
+  globalDiscountType?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  globalDiscountValue?: number;
 }

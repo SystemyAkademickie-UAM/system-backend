@@ -18,6 +18,15 @@ import { DefaultItemTemplateEntity } from '../database/entities/default-item-tem
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateShopItemDto } from './dto/create-shop-item.dto';
 import { UpdateShopItemDto } from './dto/update-shop-item.dto';
+
+import { ShopListingBadgePromotionEntity } from '../database/entities/shop-listing-badge-promotion.entity';
+import { ShopListingRankPromotionEntity } from '../database/entities/shop-listing-rank-promotion.entity';
+import { BadgeEntity } from '../database/entities/badge.entity';
+import { RankEntity } from '../database/entities/rank.entity';
+import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
+import { StudentStatsEntity } from '../database/entities/student-stats.entity';
+import { DiscountCalculator } from './discount-calculator';
+
 import { CreateShopItemFromTemplateDto } from './dto/create-shop-item-from-template.dto';
 
 @Injectable()
@@ -31,6 +40,18 @@ export class ShopItemsService {
     private readonly itemRepository: Repository<ItemEntity>,
     @InjectRepository(ShopListingEntity)
     private readonly shopListingRepository: Repository<ShopListingEntity>,
+    @InjectRepository(ShopListingBadgePromotionEntity)
+    private readonly shopListingBadgePromotionRepository: Repository<ShopListingBadgePromotionEntity>,
+    @InjectRepository(ShopListingRankPromotionEntity)
+    private readonly shopListingRankPromotionRepository: Repository<ShopListingRankPromotionEntity>,
+    @InjectRepository(BadgeEntity)
+    private readonly badgeRepository: Repository<BadgeEntity>,
+    @InjectRepository(EarnedBadgeEntity)
+    private readonly earnedBadgeRepository: Repository<EarnedBadgeEntity>,
+    @InjectRepository(RankEntity)
+    private readonly rankRepository: Repository<RankEntity>,
+    @InjectRepository(StudentStatsEntity)
+    private readonly studentStatsRepository: Repository<StudentStatsEntity>,
     @InjectRepository(DefaultItemTemplateEntity)
     private readonly templateRepository: Repository<DefaultItemTemplateEntity>,
     @InjectRepository(GroupEntity)
@@ -89,12 +110,43 @@ export class ShopItemsService {
 
       const savedListing = await queryRunner.manager.save(listing);
 
+      let badgePromotions: ShopListingBadgePromotionEntity[] = [];
+      let rankPromotions: ShopListingRankPromotionEntity[] = [];
+      
+      if (dto.badgePromotions && dto.badgePromotions.length > 0) {
+        for (const bp of dto.badgePromotions) {
+          const promo = this.shopListingBadgePromotionRepository.create({
+            shopListingId: savedListing.id,
+            badgeId: bp.id,
+            promotionType: bp.promotionType,
+            value: bp.value
+          });
+          badgePromotions.push(await queryRunner.manager.save(promo));
+        }
+      }
+      
+      if (dto.rankPromotions && dto.rankPromotions.length > 0) {
+        for (const rp of dto.rankPromotions) {
+          const promo = this.shopListingRankPromotionRepository.create({
+            shopListingId: savedListing.id,
+            rankId: rp.id,
+            promotionType: rp.promotionType,
+            value: rp.value
+          });
+          rankPromotions.push(await queryRunner.manager.save(promo));
+        }
+      }
+
       await queryRunner.commitTransaction();
       this.logger.log(`Shop item "${savedItem.name}" (id=${savedItem.id}) created for group ${groupId}`);
 
       return {
         ...savedItem,
-        listing: savedListing,
+        listing: {
+          ...savedListing,
+          badgePromotions,
+          rankPromotions
+        },
       };
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -136,6 +188,7 @@ export class ShopItemsService {
 
       const savedListing = await queryRunner.manager.save(listing);
 
+      
       await queryRunner.commitTransaction();
       this.logger.log(`Shop item from template (id=${savedItem.id}) created for group ${groupId}`);
 
@@ -177,6 +230,9 @@ export class ShopItemsService {
 
       const savedItem = await queryRunner.manager.save(item);
 
+      let badgePromotions: ShopListingBadgePromotionEntity[] = [];
+      let rankPromotions: ShopListingRankPromotionEntity[] = [];
+      
       let savedListing = listing;
       if (listing && (dto.basePrice !== undefined || dto.stockQuantity !== undefined || dto.perStudentLimit !== undefined)) {
         if (dto.basePrice !== undefined) listing.basePrice = dto.basePrice;
@@ -184,13 +240,49 @@ export class ShopItemsService {
         if (dto.perStudentLimit !== undefined) listing.perStudentLimit = dto.perStudentLimit;
         savedListing = await queryRunner.manager.save(listing);
       }
+      
+      if (listing) {
+        if (dto.badgePromotions !== undefined) {
+           await queryRunner.manager.delete(ShopListingBadgePromotionEntity, { shopListingId: listing.id });
+           for (const bp of dto.badgePromotions) {
+              const promo = this.shopListingBadgePromotionRepository.create({
+                shopListingId: listing.id,
+                badgeId: bp.id,
+                promotionType: bp.promotionType,
+                value: bp.value
+              });
+              badgePromotions.push(await queryRunner.manager.save(promo));
+           }
+        } else {
+           badgePromotions = await this.shopListingBadgePromotionRepository.find({ where: { shopListingId: listing.id } });
+        }
+        
+        if (dto.rankPromotions !== undefined) {
+           await queryRunner.manager.delete(ShopListingRankPromotionEntity, { shopListingId: listing.id });
+           for (const rp of dto.rankPromotions) {
+              const promo = this.shopListingRankPromotionRepository.create({
+                shopListingId: listing.id,
+                rankId: rp.id,
+                promotionType: rp.promotionType,
+                value: rp.value
+              });
+              rankPromotions.push(await queryRunner.manager.save(promo));
+           }
+        } else {
+           rankPromotions = await this.shopListingRankPromotionRepository.find({ where: { shopListingId: listing.id } });
+        }
+      }
 
       await queryRunner.commitTransaction();
       this.logger.log(`Shop item (id=${itemId}) updated in group ${groupId}`);
 
       return {
         ...savedItem,
-        listing: savedListing,
+        listing: savedListing ? {
+           ...savedListing,
+           badgePromotions,
+           rankPromotions
+        } : null,
       };
     } catch (err) {
       await queryRunner.rollbackTransaction();

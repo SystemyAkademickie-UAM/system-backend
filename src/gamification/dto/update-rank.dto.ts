@@ -27,21 +27,17 @@ export class UpdateRankDto {
   @IsString()
   storyDescription?: string;
 
-  /** Flat currency discount in the store (integer). */
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  storeDiscount?: number;
-
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   uniqueStoreItems?: string[];
 
-  /** Percentage discount (decimal %, 0-100) in the store. Differs from flat `storeDiscount`. */
   @IsOptional()
-  @IsNumber()
+  @IsString()
+  globalDiscountType?: string;
+
+  @IsOptional()
+  @IsInt()
   @Min(0)
-  @Max(100)
-  discount?: number;
+  globalDiscountValue?: number;
 }
