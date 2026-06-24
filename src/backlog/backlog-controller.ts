@@ -91,7 +91,7 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
     @Param('backlogId', ParseIntPipe) backlogId: number,
     @Req() req: Request,
   ) {
-    const result = await this.backlogService.markAsRead(req, groupId, backlogId, undefined, undefined);
+    const result = await this.backlogService.markAsRead(req, groupId, backlogId);
     if ('error' in result) {
       if (result.error.startsWith('Forbidden:')) {
         throw new ForbiddenException(result.error);

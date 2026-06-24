@@ -303,10 +303,10 @@ describe('BacklogService', () => {
 
     it('should return error if unauthorized', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(null);
 
       // Act
-      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
       expect(result).toEqual({ error: 'Unauthorized' });
@@ -314,11 +314,11 @@ describe('BacklogService', () => {
 
     it('should return error if no role found', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue(null);
 
       // Act
-      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
       expect(result).toEqual({ error: 'Forbidden: No role found' });
@@ -326,12 +326,12 @@ describe('BacklogService', () => {
 
     it('should allow SUPER to mark any backlog item without ownership check', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('super');
       backlogRepository.update.mockResolvedValue({ affected: 1 });
 
       // Act
-      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
       expect(userRolesService.findAccountIdForRole).not.toHaveBeenCalled();
@@ -345,12 +345,12 @@ describe('BacklogService', () => {
 
     it('should return updated: false for SUPER when no row matched', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('super');
       backlogRepository.update.mockResolvedValue({ affected: 0 });
 
       // Act
-      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
       expect(result).toEqual({ updated: false });
@@ -359,14 +359,14 @@ describe('BacklogService', () => {
     it('should allow enrolled student to mark their own item as read', async () => {
       // Arrange
       const studentAccountId = 10;
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
       userRolesService.findAccountIdForRole.mockResolvedValue(studentAccountId);
       enrollmentRepository.exist.mockResolvedValue(true);
       backlogRepository.update.mockResolvedValue({ affected: 1 });
 
       // Act
-      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
       expect(enrollmentRepository.exist).toHaveBeenCalledWith({
@@ -381,13 +381,13 @@ describe('BacklogService', () => {
 
     it('should return Forbidden for student not enrolled in group', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       enrollmentRepository.exist.mockResolvedValue(false);
 
       // Act
-      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
       expect(result).toEqual({ error: 'Forbidden: Not enrolled' });
@@ -396,14 +396,14 @@ describe('BacklogService', () => {
     it('should allow lecturer who owns the group to mark any item as read', async () => {
       // Arrange
       const lecturerAccountId = 20;
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('lecturer');
       userRolesService.findAccountIdForRole.mockResolvedValue(lecturerAccountId);
       groupRepository.exist.mockResolvedValue(true);
       backlogRepository.update.mockResolvedValue({ affected: 1 });
 
       // Act
-      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
       expect(groupRepository.exist).toHaveBeenCalledWith({
@@ -418,13 +418,13 @@ describe('BacklogService', () => {
 
     it('should return Forbidden for lecturer who does not own the group', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('lecturer');
       userRolesService.findAccountIdForRole.mockResolvedValue(20);
       groupRepository.exist.mockResolvedValue(false);
 
       // Act
-      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
       expect(result).toEqual({ error: 'Forbidden: Not group owner' });
@@ -432,12 +432,12 @@ describe('BacklogService', () => {
 
     it('should return Forbidden for unknown role', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
       userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('unknown_role');
       userRolesService.findAccountIdForRole.mockResolvedValue(99);
 
       // Act
-      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
       expect(result).toEqual({ error: 'Forbidden: Role not authorized' });

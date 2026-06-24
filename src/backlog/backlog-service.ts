@@ -200,14 +200,8 @@ export class BacklogService {
     req: Request,
     publicGroupId: number,
     backlogId: number,
-    browserIdHeader: string | undefined,
-    authHeader: string | undefined,
   ): Promise<{ updated: boolean } | { error: string }> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      authHeader,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) return { error: 'Unauthorized' };
 
     let internalGroupId: number;

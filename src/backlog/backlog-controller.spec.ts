@@ -121,7 +121,7 @@ describe('BacklogController', () => {
 
       // Assert
       expect(result).toEqual({ updated: true });
-      expect(service.markAsRead).toHaveBeenCalledWith(mockReq, 100001, 42, undefined, undefined);
+      expect(service.markAsRead).toHaveBeenCalledWith(mockReq, 100001, 42);
     });
 
     it('should return updated: false when no backlog row matched', async () => {
