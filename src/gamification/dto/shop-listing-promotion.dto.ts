@@ -1,4 +1,4 @@
-import { IsIn, IsInt } from 'class-validator';
+import { IsIn, IsInt, Max, Min } from 'class-validator';
 import { PromotionType } from '../../database/entities/badge.entity';
 
 export class ShopListingPromotionDto {
@@ -9,5 +9,6 @@ export class ShopListingPromotionDto {
   promotionType: string;
 
   @IsInt()
+  @Min(0)
   value: number;
 }

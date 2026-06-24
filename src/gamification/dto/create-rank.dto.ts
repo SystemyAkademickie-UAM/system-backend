@@ -1,4 +1,5 @@
-import { IsArray, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min, Max } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min, Max } from 'class-validator';
+import { PromotionType } from '../../database/entities/badge.entity';
 
 /**
  * DTO for creating a rank within a course group.
@@ -32,7 +33,7 @@ export class CreateRankDto {
   uniqueStoreItems?: string[];
 
   @IsOptional()
-  @IsString()
+  @IsIn([PromotionType.PERCENT, PromotionType.FIXED])
   globalDiscountType?: string;
 
   @IsOptional()

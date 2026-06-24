@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -6,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 
 import { SessionService, type SessionSubject } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
@@ -72,17 +73,86 @@ export class ShopItemsService {
       where: items.map((i) => ({ itemId: i.id })),
     });
 
+    let earnedBadges: BadgeEntity[] = [];
+    let eligibleRanks: RankEntity[] = [];
+    let allRanks: RankEntity[] = [];
+    let studentTotalEarned = 0;
+
+    if (!isLecturer) {
+      const subject = await this.resolveSubject(req, queryAuth);
+      const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
+      if (studentAccountId) {
+        const enrollment = await this.enrollmentRepository.findOne({ where: { groupId, studentAccountId } });
+        if (enrollment) {
+          const stats = await this.studentStatsRepository.findOne({ where: { enrollmentId: enrollment.id } });
+          studentTotalEarned = stats?.totalEarned ?? 0;
+          const earnedBadgeRows = await this.earnedBadgeRepository.find({ where: { enrollmentId: enrollment.id } });
+          if (earnedBadgeRows.length > 0) {
+            earnedBadges = await this.badgeRepository.findBy({ id: In(earnedBadgeRows.map(e => e.badgeId)) });
+          }
+        }
+      }
+      allRanks = await this.rankRepository.find({ where: { groupId } });
+      eligibleRanks = allRanks.filter(r => r.requiredPoints <= studentTotalEarned);
+    }
+
+    let allBadgePromos: ShopListingBadgePromotionEntity[] = [];
+    let allRankPromos: ShopListingRankPromotionEntity[] = [];
+    if (!isLecturer && listings.length > 0) {
+      allBadgePromos = await this.shopListingBadgePromotionRepository.find({ where: { shopListingId: In(listings.map(l => l.id)) } });
+      allRankPromos = await this.shopListingRankPromotionRepository.find({ where: { shopListingId: In(listings.map(l => l.id)) } });
+    }
+
     return items.map((item) => {
       const listing = listings.find((l) => l.itemId === item.id);
+      if (!listing) {
+        return { ...item, listing: null };
+      }
+
+      if (isLecturer) {
+        return { ...item, listing };
+      }
+
+      const badgePromotions = allBadgePromos.filter(p => p.shopListingId === listing.id);
+      const rankPromotions = allRankPromos.filter(p => p.shopListingId === listing.id);
+
+      const discountedPrice = DiscountCalculator.calculateDiscountedPrice(
+        listing.basePrice,
+        earnedBadges,
+        eligibleRanks,
+        badgePromotions,
+        rankPromotions
+      );
+      const isLocked = DiscountCalculator.isItemLocked(item.id, allRanks, studentTotalEarned);
+
       return {
         ...item,
-        listing: listing ?? null,
+        listing: {
+          ...listing,
+          discountedPrice,
+          isLocked
+        }
       };
     });
   }
 
   async createItem(req: Request, groupId: number, dto: CreateShopItemDto) {
     await this.assertLecturerOwnsGroup(req, groupId, dto.auth);
+
+    if (dto.badgePromotions && dto.badgePromotions.length > 0) {
+      const badgeIds = dto.badgePromotions.map(bp => bp.id);
+      const validBadgesCount = await this.badgeRepository.count({ where: { id: In(badgeIds), groupId } });
+      if (validBadgesCount !== badgeIds.length) {
+        throw new BadRequestException('One or more badge promotions reference a badge that does not belong to this group');
+      }
+    }
+    if (dto.rankPromotions && dto.rankPromotions.length > 0) {
+      const rankIds = dto.rankPromotions.map(rp => rp.id);
+      const validRanksCount = await this.rankRepository.count({ where: { id: In(rankIds), groupId } });
+      if (validRanksCount !== rankIds.length) {
+        throw new BadRequestException('One or more rank promotions reference a rank that does not belong to this group');
+      }
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -209,6 +279,21 @@ export class ShopItemsService {
       throw new NotFoundException(`Item with id ${itemId} not found in group ${groupId}`);
     }
     const listing = await this.shopListingRepository.findOne({ where: { itemId: item.id } });
+
+    if (dto.badgePromotions && dto.badgePromotions.length > 0) {
+      const badgeIds = dto.badgePromotions.map(bp => bp.id);
+      const validBadgesCount = await this.badgeRepository.count({ where: { id: In(badgeIds), groupId } });
+      if (validBadgesCount !== badgeIds.length) {
+        throw new BadRequestException('One or more badge promotions reference a badge that does not belong to this group');
+      }
+    }
+    if (dto.rankPromotions && dto.rankPromotions.length > 0) {
+      const rankIds = dto.rankPromotions.map(rp => rp.id);
+      const validRanksCount = await this.rankRepository.count({ where: { id: In(rankIds), groupId } });
+      if (validRanksCount !== rankIds.length) {
+        throw new BadRequestException('One or more rank promotions reference a rank that does not belong to this group');
+      }
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

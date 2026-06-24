@@ -1,5 +1,5 @@
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
-import { BadgeRarity } from '../../database/entities/badge.entity';
+import { IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { BadgeRarity, PromotionType } from '../../database/entities/badge.entity';
 
 /**
  * DTO for creating a badge within a course group.
@@ -37,7 +37,7 @@ export class CreateBadgeDto {
   rarity?: BadgeRarity;
 
   @IsOptional()
-  @IsString()
+  @IsIn([PromotionType.PERCENT, PromotionType.FIXED])
   globalDiscountType?: string;
 
   @IsOptional()

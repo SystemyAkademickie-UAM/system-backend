@@ -22,6 +22,9 @@ export class DiscountCalculator {
       else if (type === 'fixed') totalBadgeFixed += (val || 0);
     }
 
+    // Cap badge percent discounts at 100% to prevent over-discount
+    totalBadgePercent = Math.min(totalBadgePercent, 100);
+
     let maxRankDiscountVal = 0;
     let bestRankPercent = 0;
     let bestRankFixed = 0;
@@ -43,7 +46,7 @@ export class DiscountCalculator {
       }
     }
 
-    const totalPercent = totalBadgePercent + bestRankPercent;
+    const totalPercent = Math.min(totalBadgePercent + bestRankPercent, 100);
     const totalFixed = totalBadgeFixed + bestRankFixed;
 
     const discountedPrice = Math.floor(basePrice * (1 - totalPercent / 100)) - totalFixed;
