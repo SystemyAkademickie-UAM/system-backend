@@ -1,5 +1,8 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleNameMapper": {
+    "^pg$": "<rootDir>/../node_modules/pg/lib/index.js"
+  },
   "rootDir": "..",
   "testEnvironment": "node",
   "setupFiles": ["<rootDir>/test/jest-setup.ts"],
