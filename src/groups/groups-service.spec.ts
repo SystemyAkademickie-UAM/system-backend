@@ -423,7 +423,7 @@ describe('GroupsService', () => {
 
     it('should persist startingLives when provided', async () => {
       // Arrange
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.findOne.mockResolvedValue({ id: 1, teacherAccountId: 10, lives: 5, startingLives: null });
       groupRepository.update = jest.fn().mockResolvedValue({ affected: 1 });
@@ -432,8 +432,7 @@ describe('GroupsService', () => {
       const result = await service.updateLivesConfig(
         mockRequest,
         100001,
-        { startingLives: 3 },
-        'browser-id',
+        { startingLives: 3 }
       );
 
       // Assert
@@ -446,12 +445,12 @@ describe('GroupsService', () => {
     });
 
     it('should throw BadRequestException when startingLives exceeds lives cap', async () => {
-      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.findOne.mockResolvedValue({ id: 1, teacherAccountId: 10, lives: 3, startingLives: null });
 
       await expect(
-        service.updateLivesConfig(mockRequest, 100001, { startingLives: 5 }, 'browser-id'),
+        service.updateLivesConfig(mockRequest, 100001, { startingLives: 5 })
       ).rejects.toThrow('startingLives must not exceed lives (max cap)');
     });
   });
