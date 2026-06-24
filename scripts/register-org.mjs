@@ -20,6 +20,7 @@ import {
   ORGANIZATION_LOGIN_METHOD_EMAIL,
   ORGANIZATION_LOGIN_METHOD_SAML,
   ORGANIZATIONS_ID_SEQUENCE,
+  PRIVATE_ORGANIZATION_ID,
 } from '../src/constants/organization-constants.ts';
 
 function parseArgs(argv) {
@@ -288,6 +289,12 @@ async function registerSamlOrganization(client, organizationName, metadataUrl, p
     console.log(`Created SAML organization id=${organizationId}`);
   } else {
     organizationId = existing.rows[0].id;
+    if (organizationId === PRIVATE_ORGANIZATION_ID) {
+      throw new Error(
+        `Organization id ${PRIVATE_ORGANIZATION_ID} is the internal MAQ tenant and cannot be used for SAML. ` +
+          'Restore org 1 (email/internal) and run register:org --production with a new metadata URL.',
+      );
+    }
     await client.query(
       `UPDATE auth.organizations
        SET name = $2, entity_id = $3, metadata_url = $4, sso_login_url = $5, sso_logout_url = $6,

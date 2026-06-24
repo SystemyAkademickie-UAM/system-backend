@@ -77,7 +77,7 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/admin/manageable-organizations` — org picker for account management UI (super or org administrator)
 - `GET /api/admin/organizations/:organizationId/accounts` — list accounts in an organization (super or org administrator)
 - `DELETE /api/admin/organizations/:organizationId/accounts/:accountId` — org administrator or super: remove organization account (see [docs/api.md](./docs/api.md))
-- Local IdP: [docs/saml-local-idp.md](./docs/saml-local-idp.md) (`npm run idp:up`, test users `student` / `lecturer`)
+- Local IdP: [docs/saml-local-idp.md](./docs/saml-local-idp.md) (`npm run provision:dev-university` or `npm run idp:up`, 7 test users)
 
 Details in [docs/api.md](./docs/api.md).
 
