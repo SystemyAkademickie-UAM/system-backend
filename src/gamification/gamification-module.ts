@@ -14,6 +14,7 @@ import { DefaultItemTemplateEntity } from '../database/entities/default-item-tem
 import { EarnedItemEntity } from '../database/entities/earned-item.entity';
 import { ShopListingBadgePromotionEntity } from '../database/entities/shop-listing-badge-promotion.entity';
 import { ShopListingRankPromotionEntity } from '../database/entities/shop-listing-rank-promotion.entity';
+import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserRolesModule } from '../user-roles/user-roles-module';
 import { BadgesService } from './badges-service';
 import { ItemCategoriesService } from './item-categories-service';
@@ -45,6 +46,7 @@ import { ShopTemplatesController } from './shop-templates-controller';
       EarnedItemEntity,
       ShopListingBadgePromotionEntity,
       ShopListingRankPromotionEntity,
+      StudentStatsEntity,
     ]),
     AuthTokenSessionModule,
     UserRolesModule,
