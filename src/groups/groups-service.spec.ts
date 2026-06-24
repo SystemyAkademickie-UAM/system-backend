@@ -420,6 +420,30 @@ describe('GroupsService', () => {
         service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }),
       ).rejects.toThrow('Not authorized to manage this group');
     });
+
+    it('should persist startingLives when provided', async () => {
+      // Arrange
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({ id: 1, teacherAccountId: 10 });
+      groupRepository.update = jest.fn().mockResolvedValue({ affected: 1 });
+
+      // Act
+      const result = await service.updateLivesConfig(
+        mockRequest,
+        100001,
+        { startingLives: 3 },
+        'browser-id',
+      );
+
+      // Assert
+      expect(groupRepository.update).toHaveBeenCalledWith({ id: 1 }, { startingLives: 3 });
+      expect(result).toEqual({
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: 100001,
+        updated: true,
+      });
+    });
   });
 
   describe('getLivesConfig', () => {

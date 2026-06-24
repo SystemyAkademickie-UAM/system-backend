@@ -57,6 +57,7 @@ export class UpdateGroupPayloadDto {
   @Min(0)
   lives?: number;
 
+  /** Starting number of lives for new enrollments (must be ≥ 1). */
   @Transform(({ value }) => {
     if (value === undefined || value === null) {
       return value;
@@ -72,7 +73,7 @@ export class UpdateGroupPayloadDto {
   })
   @IsOptional()
   @IsInt()
-  @Min(0)
+  @Min(1)
   startingLives?: number;
 
   @Transform(({ value }) => transformOptionalString(value))
