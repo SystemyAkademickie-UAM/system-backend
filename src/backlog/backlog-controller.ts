@@ -90,9 +90,8 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
     @Param('groupId', ParseIntPipe) groupId: number,
     @Param('backlogId', ParseIntPipe) backlogId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
   ) {
-    const result = await this.backlogService.markAsRead(req, groupId, backlogId, browserId, undefined);
+    const result = await this.backlogService.markAsRead(req, groupId, backlogId, undefined, undefined);
     if ('error' in result) {
       if (result.error.startsWith('Forbidden:')) {
         throw new ForbiddenException(result.error);

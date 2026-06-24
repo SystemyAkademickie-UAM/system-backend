@@ -8,8 +8,8 @@ const DOWN_SQL = `
 ALTER TABLE analytics.backlog DROP COLUMN IF EXISTS is_read;
 `.trim();
 
-export class AddIsReadToBacklog0000000000017 implements MigrationInterface {
-  name = 'AddIsReadToBacklog0000000000017';
+export class AddIsReadToBacklog0000000000018 implements MigrationInterface {
+  name = 'AddIsReadToBacklog0000000000018';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(UP_SQL);
