@@ -9,7 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { QueryFailedError, Repository } from 'typeorm';
 
-import { AuthTokenSessionService, type AuthTokenSubject } from '../auth/api-token/auth-token-session-service';
+import { SessionService, type SessionSubject } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
@@ -28,21 +28,19 @@ export class ItemCategoriesService {
   private readonly logger = new Logger(ItemCategoriesService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(ItemCategoryEntity)
     private readonly itemCategoryRepository: Repository<ItemCategoryEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
     @InjectRepository(EnrollmentEntity)
-    private readonly enrollmentRepository: Repository<EnrollmentEntity>,
-  ) {}
+    private readonly enrollmentRepository: Repository<EnrollmentEntity>) {}
 
   async getCategoriesForGroup(
     req: Request,
     groupId: number,
-    queryAuth?: string,
-  ): Promise<ItemCategoryEntity[]> {
+    queryAuth?: string): Promise<ItemCategoryEntity[]> {
     await this.assertCanReadGroupShop(req, groupId, queryAuth);
     return this.itemCategoryRepository.find({
       where: { groupId },
@@ -53,8 +51,7 @@ export class ItemCategoriesService {
   async createCategory(
     req: Request,
     groupId: number,
-    dto: CreateItemCategoryDto,
-  ): Promise<ItemCategoryEntity> {
+    dto: CreateItemCategoryDto): Promise<ItemCategoryEntity> {
     await this.assertLecturerOwnsGroup(req, groupId, dto.auth);
     const entity = this.itemCategoryRepository.create({
       groupId,
@@ -76,8 +73,7 @@ export class ItemCategoriesService {
     req: Request,
     groupId: number,
     categoryId: number,
-    dto: UpdateItemCategoryDto,
-  ): Promise<ItemCategoryEntity> {
+    dto: UpdateItemCategoryDto): Promise<ItemCategoryEntity> {
     await this.assertLecturerOwnsGroup(req, groupId, dto.auth);
     const category = await this.itemCategoryRepository.findOne({ where: { id: categoryId, groupId } });
     if (!category) {
@@ -108,8 +104,7 @@ export class ItemCategoriesService {
     req: Request,
     groupId: number,
     categoryId: number,
-    bodyAuth?: string,
-  ): Promise<{ deleted: boolean }> {
+    bodyAuth?: string): Promise<{ deleted: boolean }> {
     await this.assertLecturerOwnsGroup(req, groupId, bodyAuth);
     const category = await this.itemCategoryRepository.findOne({ where: { id: categoryId, groupId } });
     if (!category) {
@@ -120,8 +115,8 @@ export class ItemCategoriesService {
     return { deleted: true };
   }
 
-  private async resolveSubject(req: Request, queryAuth?: string): Promise<AuthTokenSubject> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, queryAuth);
+  private async resolveSubject(req: Request, queryAuth?: string): Promise<SessionSubject> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, queryAuth);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }
@@ -143,8 +138,7 @@ export class ItemCategoriesService {
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       throw new ForbiddenException('Not authorized');
     }
@@ -169,15 +163,13 @@ export class ItemCategoriesService {
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId !== null && group.teacherAccountId === lecturerAccountId) {
       return;
     }
     const studentAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      STUDENT_ROLE_NAME,
-    );
+      STUDENT_ROLE_NAME);
     if (studentAccountId === null) {
       throw new ForbiddenException('Not authorized');
     }

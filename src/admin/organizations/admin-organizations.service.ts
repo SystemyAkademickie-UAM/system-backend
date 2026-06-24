@@ -18,6 +18,10 @@ import { AdminAccessService } from '../admin-access.service';
 import { IdpCertificateEntity } from '../../database/entities/idp-certificate.entity';
 import { OrganizationEntity } from '../../database/entities/organization.entity';
 import {
+  ORGANIZATION_LOGIN_METHOD_EMAIL,
+  ORGANIZATION_LOGIN_METHOD_SAML,
+} from '../../constants/organization-constants';
+import {
   CreateOrganizationDto,
   UpdateOrganizationDto,
   UploadOrganizationCertificateDto,
@@ -50,8 +54,7 @@ export class AdminOrganizationsService {
     @InjectRepository(OrganizationEntity)
     private readonly organizationRepository: Repository<OrganizationEntity>,
     @InjectRepository(IdpCertificateEntity)
-    private readonly certificateRepository: Repository<IdpCertificateEntity>,
-  ) {}
+    private readonly certificateRepository: Repository<IdpCertificateEntity>) {}
 
   async listOrganizations(req: Request, queryAuth?: string): Promise<OrganizationListItem[]> {
     await this.assertSuperAdmin(req, queryAuth);
@@ -74,8 +77,10 @@ export class AdminOrganizationsService {
 
   async createOrganization(req: Request, dto: CreateOrganizationDto): Promise<OrganizationDetail> {
     await this.assertSuperAdmin(req, dto.auth);
+    const loginMethod = this.resolveLoginMethodForCreate(dto);
     const entity = this.organizationRepository.create({
       name: dto.name.trim(),
+      loginMethod,
       contactEmail: dto.contactEmail?.trim() ?? null,
       contactPhone: dto.contactPhone?.trim() ?? null,
       entityId: dto.entityId?.trim() ?? null,
@@ -99,8 +104,7 @@ export class AdminOrganizationsService {
   async updateOrganization(
     req: Request,
     organizationId: number,
-    dto: UpdateOrganizationDto,
-  ): Promise<OrganizationDetail> {
+    dto: UpdateOrganizationDto): Promise<OrganizationDetail> {
     await this.assertSuperAdmin(req, dto.auth);
     const row = await this.organizationRepository.findOne({ where: { id: organizationId } });
     if (row === null) {
@@ -156,8 +160,7 @@ export class AdminOrganizationsService {
   async syncFromMetadata(
     req: Request,
     organizationId: number,
-    queryAuth?: string,
-  ): Promise<OrganizationDetail> {
+    queryAuth?: string): Promise<OrganizationDetail> {
     await this.assertSuperAdmin(req, queryAuth);
     const row = await this.organizationRepository.findOne({ where: { id: organizationId } });
     if (row === null) {
@@ -175,8 +178,7 @@ export class AdminOrganizationsService {
   async addCertificate(
     req: Request,
     organizationId: number,
-    dto: UploadOrganizationCertificateDto,
-  ): Promise<OrganizationDetail> {
+    dto: UploadOrganizationCertificateDto): Promise<OrganizationDetail> {
     await this.assertSuperAdmin(req, dto.auth);
     await this.addCertificateInternal(organizationId, dto.certificatePem);
     const row = await this.organizationRepository.findOneOrFail({ where: { id: organizationId } });
@@ -187,8 +189,7 @@ export class AdminOrganizationsService {
     req: Request,
     organizationId: number,
     certificateId: number,
-    queryAuth?: string,
-  ): Promise<void> {
+    queryAuth?: string): Promise<void> {
     await this.assertSuperAdmin(req, queryAuth);
     const certificate = await this.certificateRepository.findOne({
       where: { id: certificateId, organizationId },
@@ -222,6 +223,7 @@ export class AdminOrganizationsService {
     organization.ssoLoginUrl = parsed.ssoLoginUrl;
     organization.ssoLogoutUrl = parsed.ssoLogoutUrl;
     organization.metadataUrl = metadataUrl;
+    organization.loginMethod = ORGANIZATION_LOGIN_METHOD_SAML;
     await this.organizationRepository.save(organization);
     await this.addCertificateInternal(organizationId, parsed.signingCertificatePem);
     this.logger.log(`Synced IdP metadata for org=${organizationId} from ${metadataUrl}`);
@@ -277,6 +279,19 @@ export class AdminOrganizationsService {
       ssoLogoutUrl: row.ssoLogoutUrl,
       certificateId: row.certificateId,
     };
+  }
+
+  private resolveLoginMethodForCreate(dto: CreateOrganizationDto): string {
+    if (dto.loginMethod !== undefined) {
+      return dto.loginMethod;
+    }
+    const metadataUrl = dto.metadataUrl?.trim() ?? '';
+    const certificatePem = dto.certificatePem?.trim() ?? '';
+    const ssoLoginUrl = dto.ssoLoginUrl?.trim() ?? '';
+    if (metadataUrl !== '' || certificatePem !== '' || ssoLoginUrl !== '') {
+      return ORGANIZATION_LOGIN_METHOD_SAML;
+    }
+    return ORGANIZATION_LOGIN_METHOD_EMAIL;
   }
 
   private async assertSuperAdmin(req: Request, queryAuth?: string): Promise<void> {

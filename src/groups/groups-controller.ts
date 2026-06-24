@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Headers, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Req, Get, Query } from '@nestjs/common';
+import { Body, Controller, Delete, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Req, Get, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
@@ -25,10 +25,11 @@ import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { JoinGroupQueryDto } from './dto/join-group-query.dto';
 import { UpdateEnrollmentCodeDto } from './dto/update-enrollment-code.dto';
 import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
+import { UpdateLivesConfigDto } from './dto/update-lives-config.dto';
 import { UpdateShopStatusDto } from './dto/update-shop-status.dto';
 import { EnrollmentCodesService } from './enrollment-codes-service';
 import { EnrollGroupResponseBody, GroupsEnrollmentService } from './groups-enrollment-service';
-import { CreateGroupResponseBody, GenerateCodeResponseBody, GetGroupsCatalogResponseBody, GetUserGroupsResponseBody, GroupPreviewResponseBody, GroupsService, UpdateGroupResponseBody } from './groups-service';
+import { CreateGroupResponseBody, GenerateCodeResponseBody, GetGroupsCatalogResponseBody, GetUserGroupsResponseBody, GroupPreviewResponseBody, GroupsService, LivesConfigResponseBody, UpdateGroupResponseBody } from './groups-service';
 
 /**
  * Course group creation API for lecturers.
@@ -44,8 +45,7 @@ export class GroupsController {
     private readonly shopItemsService: ShopItemsService,
     private readonly shopStudentService: ShopStudentService,
     private readonly ranksService: RanksService,
-    private readonly enrollmentCodesService: EnrollmentCodesService,
-  ) {}
+    private readonly enrollmentCodesService: EnrollmentCodesService) {}
 
   /**
    * Returns groups for the authenticated user (student enrollments and lecturer-owned groups).
@@ -54,11 +54,8 @@ export class GroupsController {
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get groups for the authenticated user (student enrollments and lecturer-owned groups)' })
-  getUserGroups(
-    @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-  ): Promise<GetUserGroupsResponseBody> {
-    return this.groupsService.getUserGroups(req, browserId, undefined);
+  getUserGroups(@Req() req: Request): Promise<GetUserGroupsResponseBody> {
+    return this.groupsService.getUserGroups(req);
   }
 
   /**
@@ -68,11 +65,8 @@ export class GroupsController {
   @Get('catalog')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get groups catalog split into my groups and other groups' })
-  getGroupsCatalog(
-    @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-  ): Promise<GetGroupsCatalogResponseBody> {
-    return this.groupsService.getGroupsCatalog(req, browserId, undefined);
+  getGroupsCatalog(@Req() req: Request): Promise<GetGroupsCatalogResponseBody> {
+    return this.groupsService.getGroupsCatalog(req);
   }
 
   /**
@@ -85,9 +79,8 @@ export class GroupsController {
   getGroupPreview(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
   ): Promise<GroupPreviewResponseBody> {
-    return this.groupsService.getGroupPreview(req, publicGroupId, browserId, undefined);
+    return this.groupsService.getGroupPreview(req, publicGroupId);
   }
 
   /**
@@ -99,10 +92,8 @@ export class GroupsController {
   @ApiOperation({ summary: 'Create a new course group' })
   createGroup(
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-    @Body() body: CreateGroupBodyDto,
-  ): Promise<CreateGroupResponseBody> {
-    return this.groupsService.createGroup(req, body, browserId);
+    @Body() body: CreateGroupBodyDto): Promise<CreateGroupResponseBody> {
+    return this.groupsService.createGroup(req, body);
   }
 
   /**
@@ -115,10 +106,8 @@ export class GroupsController {
   updateGroup(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-    @Body() body: UpdateGroupBodyDto,
-  ): Promise<UpdateGroupResponseBody> {
-    return this.groupsService.updateGroup(req, publicGroupId, body, browserId);
+    @Body() body: UpdateGroupBodyDto): Promise<UpdateGroupResponseBody> {
+    return this.groupsService.updateGroup(req, publicGroupId, body);
   }
 
   /**
@@ -131,10 +120,36 @@ export class GroupsController {
   updateShopStatus(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-    @Body() body: UpdateShopStatusDto,
-  ) {
-    return this.groupsService.updateShopStatus(req, publicGroupId, body, browserId);
+    @Body() body: UpdateShopStatusDto) {
+    return this.groupsService.updateShopStatus(req, publicGroupId, body);
+  }
+
+  /**
+   * Returns the lives system configuration for the group.
+   * GET /groups/:groupId/lives-config
+   */
+  @Get(':groupId/lives-config')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get the lives system configuration for the group' })
+  getLivesConfig(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+  ): Promise<LivesConfigResponseBody> {
+    return this.groupsService.getLivesConfig(req, publicGroupId);
+  }
+
+  /**
+   * Updates the lives system configuration for the group.
+   * PATCH /groups/:groupId/lives-config
+   */
+  @Patch(':groupId/lives-config')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update the lives system configuration for the group' })
+  updateLivesConfig(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Body() body: UpdateLivesConfigDto): Promise<UpdateGroupResponseBody> {
+    return this.groupsService.updateLivesConfig(req, publicGroupId, body);
   }
 
   /**
@@ -147,10 +162,8 @@ export class GroupsController {
   enrollInGroup(
     @Param('id', ParseIntPipe) groupId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-    @Body() body: EnrollGroupBodyDto,
-  ): Promise<EnrollGroupResponseBody> {
-    return this.groupsEnrollmentService.enrollStudentInGroup(req, groupId, body, browserId);
+    @Body() body: EnrollGroupBodyDto): Promise<EnrollGroupResponseBody> {
+    return this.groupsEnrollmentService.enrollStudentInGroup(req, groupId, body);
   }
 
   /**
@@ -163,9 +176,8 @@ export class GroupsController {
   getAccessCode(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
   ): Promise<GenerateCodeResponseBody> {
-    return this.groupsService.getAccessCodeForGroup(req, publicGroupId, browserId, undefined);
+    return this.groupsService.getAccessCodeForGroup(req, publicGroupId);
   }
 
   /**
@@ -177,10 +189,8 @@ export class GroupsController {
   @ApiOperation({ summary: 'Generate a new enrollment code for a group' })
   generateCode(
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-    @Body() body: GenerateCodeBodyDto,
-  ): Promise<GenerateCodeResponseBody> {
-    return this.groupsService.generateCodeForGroup(req, body, browserId);
+    @Body() body: GenerateCodeBodyDto): Promise<GenerateCodeResponseBody> {
+    return this.groupsService.generateCodeForGroup(req, body);
   }
 
   /**
@@ -192,10 +202,8 @@ export class GroupsController {
   joinGroup(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-    @Query() query: JoinGroupQueryDto,
-  ): Promise<EnrollGroupResponseBody> {
-    return this.groupsEnrollmentService.enrollStudentByCode(req, publicGroupId, query, browserId);
+    @Query() query: JoinGroupQueryDto): Promise<EnrollGroupResponseBody> {
+    return this.groupsEnrollmentService.enrollStudentByCode(req, publicGroupId, query);
   }
 
   /**
@@ -206,8 +214,7 @@ export class GroupsController {
   @ApiOperation({ summary: 'List enrollment codes for a lecturer-owned group' })
   listEnrollmentCodes(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
-    @Req() req: Request,
-  ) {
+    @Req() req: Request) {
     return this.enrollmentCodesService.listCodesForGroup(req, toInternalGroupId(publicGroupId));
   }
 
@@ -220,8 +227,7 @@ export class GroupsController {
   getEnrollmentCode(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('codeId', ParseIntPipe) codeId: number,
-    @Req() req: Request,
-  ) {
+    @Req() req: Request) {
     return this.enrollmentCodesService.getCodeForGroup(req, toInternalGroupId(publicGroupId), codeId);
   }
 
@@ -234,8 +240,7 @@ export class GroupsController {
   createEnrollmentCode(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Body() dto: CreateEnrollmentCodeDto,
-  ) {
+    @Body() dto: CreateEnrollmentCodeDto) {
     return this.enrollmentCodesService.createCode(req, toInternalGroupId(publicGroupId), dto);
   }
 
@@ -249,8 +254,7 @@ export class GroupsController {
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('codeId', ParseIntPipe) codeId: number,
     @Req() req: Request,
-    @Body() dto: UpdateEnrollmentCodeDto,
-  ) {
+    @Body() dto: UpdateEnrollmentCodeDto) {
     return this.enrollmentCodesService.updateCode(req, toInternalGroupId(publicGroupId), codeId, dto);
   }
 
@@ -263,8 +267,7 @@ export class GroupsController {
   async deleteEnrollmentCode(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('codeId', ParseIntPipe) codeId: number,
-    @Req() req: Request,
-  ): Promise<void> {
+    @Req() req: Request): Promise<void> {
     await this.enrollmentCodesService.deleteCode(req, toInternalGroupId(publicGroupId), codeId);
   }
 
@@ -281,8 +284,7 @@ export class GroupsController {
   @ApiOperation({ summary: 'Get all badges for the given course group' })
   getBadges(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
-    @Req() req: Request,
-  ) {
+    @Req() req: Request) {
     return this.badgesService.getBadgesForGroup(req, toInternalGroupId(publicGroupId));
   }
 
@@ -297,8 +299,7 @@ export class GroupsController {
   createBadge(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Body() dto: CreateBadgeDto,
-  ) {
+    @Body() dto: CreateBadgeDto) {
     return this.badgesService.createBadge(req, toInternalGroupId(publicGroupId), dto);
   }
 
@@ -313,8 +314,7 @@ export class GroupsController {
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('badgeId', ParseIntPipe) badgeId: number,
     @Req() req: Request,
-    @Body() dto: UpdateBadgeDto,
-  ) {
+    @Body() dto: UpdateBadgeDto) {
     return this.badgesService.updateBadge(req, toInternalGroupId(publicGroupId), badgeId, dto);
   }
 
@@ -329,8 +329,7 @@ export class GroupsController {
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('badgeId', ParseIntPipe) badgeId: number,
     @Req() req: Request,
-    @Body() body: { auth?: string },
-  ) {
+    @Body() body: { auth?: string }) {
     return this.badgesService.deleteBadge(req, toInternalGroupId(publicGroupId), badgeId, body?.auth);
   }
 
@@ -347,8 +346,7 @@ export class GroupsController {
   @ApiOperation({ summary: 'Get all shop item categories for the given course group' })
   getItemCategories(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
-    @Req() req: Request,
-  ) {
+    @Req() req: Request) {
     return this.itemCategoriesService.getCategoriesForGroup(req, toInternalGroupId(publicGroupId));
   }
 
@@ -362,8 +360,7 @@ export class GroupsController {
   createItemCategory(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Body() dto: CreateItemCategoryDto,
-  ) {
+    @Body() dto: CreateItemCategoryDto) {
     return this.itemCategoriesService.createCategory(req, toInternalGroupId(publicGroupId), dto);
   }
 
@@ -378,14 +375,12 @@ export class GroupsController {
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('categoryId', ParseIntPipe) categoryId: number,
     @Req() req: Request,
-    @Body() dto: UpdateItemCategoryDto,
-  ) {
+    @Body() dto: UpdateItemCategoryDto) {
     return this.itemCategoriesService.updateCategory(
       req,
       toInternalGroupId(publicGroupId),
       categoryId,
-      dto,
-    );
+      dto);
   }
 
   /**
@@ -399,14 +394,12 @@ export class GroupsController {
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('categoryId', ParseIntPipe) categoryId: number,
     @Req() req: Request,
-    @Body() body: { auth?: string },
-  ) {
+    @Body() body: { auth?: string }) {
     return this.itemCategoriesService.deleteCategory(
       req,
       toInternalGroupId(publicGroupId),
       categoryId,
-      body?.auth,
-    );
+      body?.auth);
   }
 
   // ========================================
@@ -418,8 +411,7 @@ export class GroupsController {
   @ApiOperation({ summary: 'Get all shop items for the given course group' })
   getShopItems(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
-    @Req() req: Request,
-  ) {
+    @Req() req: Request) {
     return this.shopItemsService.getItemsForGroup(req, toInternalGroupId(publicGroupId));
   }
 
@@ -429,8 +421,7 @@ export class GroupsController {
   createShopItem(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Body() dto: CreateShopItemDto,
-  ) {
+    @Body() dto: CreateShopItemDto) {
     return this.shopItemsService.createItem(req, toInternalGroupId(publicGroupId), dto);
   }
 
@@ -440,8 +431,7 @@ export class GroupsController {
   createShopItemFromTemplate(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Body() dto: CreateShopItemFromTemplateDto,
-  ) {
+    @Body() dto: CreateShopItemFromTemplateDto) {
     return this.shopItemsService.createItemFromTemplate(req, toInternalGroupId(publicGroupId), dto);
   }
 
@@ -452,8 +442,7 @@ export class GroupsController {
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('itemId', ParseIntPipe) itemId: number,
     @Req() req: Request,
-    @Body() dto: UpdateShopItemDto,
-  ) {
+    @Body() dto: UpdateShopItemDto) {
     return this.shopItemsService.updateItem(req, toInternalGroupId(publicGroupId), itemId, dto);
   }
 
@@ -464,8 +453,7 @@ export class GroupsController {
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('itemId', ParseIntPipe) itemId: number,
     @Req() req: Request,
-    @Body() body: { auth?: string },
-  ) {
+    @Body() body: { auth?: string }) {
     return this.shopItemsService.deleteItem(req, toInternalGroupId(publicGroupId), itemId, body?.auth);
   }
 
@@ -480,8 +468,7 @@ export class GroupsController {
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('itemId', ParseIntPipe) itemId: number,
     @Req() req: Request,
-    @Body() body: { auth?: string },
-  ) {
+    @Body() body: { auth?: string }) {
     return this.shopStudentService.buyItem(req, toInternalGroupId(publicGroupId), itemId, body?.auth);
   }
 
@@ -490,8 +477,7 @@ export class GroupsController {
   @ApiOperation({ summary: 'Get the student inventory for the given course group' })
   getStudentInventory(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
-    @Req() req: Request,
-  ) {
+    @Req() req: Request) {
     return this.shopStudentService.getInventory(req, toInternalGroupId(publicGroupId));
   }
 
@@ -502,8 +488,7 @@ export class GroupsController {
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('itemId', ParseIntPipe) itemId: number,
     @Req() req: Request,
-    @Body() body: { auth?: string },
-  ) {
+    @Body() body: { auth?: string }) {
     return this.shopStudentService.useItem(req, toInternalGroupId(publicGroupId), itemId, body?.auth);
   }
 
@@ -520,8 +505,7 @@ export class GroupsController {
   @ApiOperation({ summary: 'Get all ranks for the given course group' })
   getRanks(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
-    @Req() req: Request,
-  ) {
+    @Req() req: Request) {
     return this.ranksService.getRanksForGroup(req, toInternalGroupId(publicGroupId));
   }
 
@@ -536,8 +520,7 @@ export class GroupsController {
   createRank(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Body() dto: CreateRankDto,
-  ) {
+    @Body() dto: CreateRankDto) {
     return this.ranksService.createRank(req, toInternalGroupId(publicGroupId), dto);
   }
 
@@ -552,8 +535,7 @@ export class GroupsController {
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('rankId', ParseIntPipe) rankId: number,
     @Req() req: Request,
-    @Body() dto: UpdateRankDto,
-  ) {
+    @Body() dto: UpdateRankDto) {
     return this.ranksService.updateRank(req, toInternalGroupId(publicGroupId), rankId, dto);
   }
 
@@ -568,8 +550,7 @@ export class GroupsController {
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('rankId', ParseIntPipe) rankId: number,
     @Req() req: Request,
-    @Body() body: { auth?: string },
-  ) {
+    @Body() body: { auth?: string }) {
     return this.ranksService.deleteRank(req, toInternalGroupId(publicGroupId), rankId, body?.auth);
   }
 }

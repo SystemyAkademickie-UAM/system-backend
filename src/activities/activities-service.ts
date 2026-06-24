@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import {
   ACTIVITY_API_JSON_STATUS_BAD_REQUEST,
   ACTIVITY_API_JSON_STATUS_FORBIDDEN,
@@ -41,7 +41,7 @@ export class ActivitiesService {
   private readonly logger = new Logger(ActivitiesService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(ActivityEntity)
     private readonly activityRepository: Repository<ActivityEntity>,
@@ -50,14 +50,9 @@ export class ActivitiesService {
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
     @InjectRepository(ActivityBacklogEntity)
-    private readonly activityBacklogRepository: Repository<ActivityBacklogEntity>,
-  ) {}
+    private readonly activityBacklogRepository: Repository<ActivityBacklogEntity>) {}
 
-  async handleActivity(
-    req: Request,
-    body: unknown,
-    browserIdHeader: string | undefined,
-  ): Promise<ActivityResponseBody> {
+  async handleActivity(req: Request, body: unknown): Promise<ActivityResponseBody> {
     const parsed = parseActivityRequest(body);
     if (!parsed.ok) {
       return {
@@ -69,27 +64,21 @@ export class ActivitiesService {
     const request = parsed.request;
     const method = request.method;
     if (method === 'post') {
-      return this.createActivity(req, request, browserIdHeader);
+      return this.createActivity(req, request);
     }
     if (method === 'modify') {
-      return this.modifyActivity(req, request, browserIdHeader);
+      return this.modifyActivity(req, request);
     }
     if (method === 'remove') {
-      return this.removeActivity(req, request, browserIdHeader);
+      return this.removeActivity(req, request);
     }
-    return this.retrieveActivities(req, request, browserIdHeader);
+    return this.retrieveActivities(req, request);
   }
 
   private async createActivity(
     req: Request,
-    body: ParsedActivityRequest,
-    browserIdHeader: string | undefined,
-  ): Promise<ActivityResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    body: ParsedActivityRequest): Promise<ActivityResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'post', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
@@ -122,10 +111,8 @@ export class ActivitiesService {
 
   private async modifyActivity(
     req: Request,
-    body: ParsedActivityRequest,
-    browserIdHeader: string | undefined,
-  ): Promise<ActivityResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
+    body: ParsedActivityRequest): Promise<ActivityResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
@@ -166,10 +153,8 @@ export class ActivitiesService {
 
   private async removeActivity(
     req: Request,
-    body: ParsedActivityRequest,
-    browserIdHeader: string | undefined,
-  ): Promise<ActivityResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
+    body: ParsedActivityRequest): Promise<ActivityResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return {
         statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN,
@@ -210,8 +195,7 @@ export class ActivitiesService {
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return {
         statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN,
@@ -250,13 +234,12 @@ export class ActivitiesService {
 
   private async retrieveActivities(
     req: Request,
-    body: ParsedActivityRequest,
-    browserIdHeader: string | undefined,
-  ): Promise<ActivityResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, body.auth);
+    body: ParsedActivityRequest): Promise<ActivityResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'retrieve', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
     }
+    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     try {
       let activities: ActivityEntity[];
       if (body.stageId) {
@@ -267,6 +250,17 @@ export class ActivitiesService {
       } else {
         activities = await this.activityRepository.find({ order: { id: 'ASC' } });
       }
+
+      if (!isLecturer && activities.length > 0) {
+        const stageIds = [...new Set(activities.map(a => a.stageId))];
+        const stages = await this.stageRepository.find({
+          where: { id: In(stageIds) },
+        });
+        
+        const visibleStageIds = new Set(stages.filter(s => s.visibilityStatus !== 0).map(s => s.id));
+        activities = activities.filter(a => visibleStageIds.has(a.stageId));
+      }
+
       return {
         statusCode: ACTIVITY_API_JSON_STATUS_OK,
         method: 'retrieve',

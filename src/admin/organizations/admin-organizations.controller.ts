@@ -21,7 +21,7 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 
-import { MAQ_AUTH_COOKIE_NAME } from '../../constants/api-token-constants';
+import { MAQ_SESSION_COOKIE_NAME } from '../../constants/session-constants';
 
 import {
   CreateOrganizationDto,
@@ -31,7 +31,7 @@ import {
 import { AdminOrganizationsService } from './admin-organizations.service';
 
 @ApiTags('Admin organizations')
-@ApiCookieAuth(MAQ_AUTH_COOKIE_NAME)
+@ApiCookieAuth(MAQ_SESSION_COOKIE_NAME)
 @Controller('admin/organizations')
 export class AdminOrganizationsController {
   constructor(private readonly adminOrganizationsService: AdminOrganizationsService) {}
@@ -56,8 +56,7 @@ export class AdminOrganizationsController {
   @Get(':id')
   getOrganization(
     @Req() req: Request,
-    @Param('id', ParseIntPipe) organizationId: number,
-  ) {
+    @Param('id', ParseIntPipe) organizationId: number) {
     return this.adminOrganizationsService.getOrganization(req, organizationId);
   }
 
@@ -65,8 +64,7 @@ export class AdminOrganizationsController {
   updateOrganization(
     @Req() req: Request,
     @Param('id', ParseIntPipe) organizationId: number,
-    @Body() dto: UpdateOrganizationDto,
-  ) {
+    @Body() dto: UpdateOrganizationDto) {
     return this.adminOrganizationsService.updateOrganization(req, organizationId, dto);
   }
 
@@ -74,16 +72,14 @@ export class AdminOrganizationsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteOrganization(
     @Req() req: Request,
-    @Param('id', ParseIntPipe) organizationId: number,
-  ): Promise<void> {
+    @Param('id', ParseIntPipe) organizationId: number): Promise<void> {
     await this.adminOrganizationsService.softDeleteOrganization(req, organizationId);
   }
 
   @Post(':id/sync-from-metadata')
   syncFromMetadata(
     @Req() req: Request,
-    @Param('id', ParseIntPipe) organizationId: number,
-  ) {
+    @Param('id', ParseIntPipe) organizationId: number) {
     return this.adminOrganizationsService.syncFromMetadata(req, organizationId);
   }
 
@@ -91,8 +87,7 @@ export class AdminOrganizationsController {
   addCertificate(
     @Req() req: Request,
     @Param('id', ParseIntPipe) organizationId: number,
-    @Body() dto: UploadOrganizationCertificateDto,
-  ) {
+    @Body() dto: UploadOrganizationCertificateDto) {
     return this.adminOrganizationsService.addCertificate(req, organizationId, dto);
   }
 
@@ -101,8 +96,7 @@ export class AdminOrganizationsController {
   async revokeCertificate(
     @Req() req: Request,
     @Param('id', ParseIntPipe) organizationId: number,
-    @Param('certId', ParseIntPipe) certificateId: number,
-  ): Promise<void> {
+    @Param('certId', ParseIntPipe) certificateId: number): Promise<void> {
     await this.adminOrganizationsService.revokeCertificate(req, organizationId, certificateId);
   }
 }

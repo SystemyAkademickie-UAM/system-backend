@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import {
   GROUP_API_JSON_STATUS_OK,
   GROUP_RESPONSE_GROUP_ID_OFFSET,
@@ -20,14 +20,14 @@ export type GetCurrencyResponseBody = {
   statusCode: number;
   groupId: number;
   currency: string | null;
-  currencyIcon: string | null;
+  currencyEmoji: string | null;
 };
 
 export type UpdateCurrencyResponseBody = {
   statusCode: number;
   groupId: number;
   currency: string | null;
-  currencyIcon: string | null;
+  currencyEmoji: string | null;
   updated: boolean;
 };
 
@@ -48,11 +48,10 @@ export class GroupsCurrencyService {
   private readonly logger = new Logger(GroupsCurrencyService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>,
-  ) {}
+    private readonly groupRepository: Repository<GroupEntity>) {}
 
   /**
    * Returns the current currency settings for a group owned by the lecturer.
@@ -60,21 +59,14 @@ export class GroupsCurrencyService {
   async getCurrencySettings(
     req: Request,
     publicGroupId: number,
-    browserIdHeader: string | undefined,
-    queryAuth: string | undefined,
   ): Promise<GetCurrencyResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      queryAuth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return this.buildGetCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return this.buildGetCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
     }
@@ -94,7 +86,7 @@ export class GroupsCurrencyService {
       statusCode: GROUP_API_JSON_STATUS_OK,
       groupId: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
       currency: group.currency,
-      currencyIcon: group.currencyIcon,
+      currencyEmoji: group.currencyEmoji,
     };
   }
 
@@ -104,21 +96,15 @@ export class GroupsCurrencyService {
   async updateCurrencySettings(
     req: Request,
     publicGroupId: number,
-    body: UpdateCurrencyDto,
-    browserIdHeader: string | undefined,
+    body: UpdateCurrencyDto
   ): Promise<UpdateCurrencyResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
     }
@@ -138,15 +124,15 @@ export class GroupsCurrencyService {
     if (body.currency !== undefined) {
       updates.currency = nullableTrimmedString(body.currency);
     }
-    if (body.currencyIcon !== undefined) {
-      updates.currencyIcon = nullableTrimmedString(body.currencyIcon);
+    if (body.currencyEmoji !== undefined) {
+      updates.currencyEmoji = nullableTrimmedString(body.currencyEmoji);
     }
     if (Object.keys(updates).length === 0) {
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
         groupId: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
         currency: group.currency,
-        currencyIcon: group.currencyIcon,
+        currencyEmoji: group.currencyEmoji,
         updated: false,
       };
     }
@@ -156,7 +142,7 @@ export class GroupsCurrencyService {
         statusCode: GROUP_API_JSON_STATUS_OK,
         groupId: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
         currency: updates.currency !== undefined ? updates.currency : group.currency,
-        currencyIcon: updates.currencyIcon !== undefined ? updates.currencyIcon : group.currencyIcon,
+        currencyEmoji: updates.currencyEmoji !== undefined ? updates.currencyEmoji : group.currencyEmoji,
         updated: true,
       };
     } catch (err: unknown) {
@@ -170,7 +156,7 @@ export class GroupsCurrencyService {
       statusCode: GROUP_API_JSON_STATUS_OK,
       groupId,
       currency: null,
-      currencyIcon: null,
+      currencyEmoji: null,
     };
   }
 
@@ -179,7 +165,7 @@ export class GroupsCurrencyService {
       statusCode: GROUP_API_JSON_STATUS_OK,
       groupId,
       currency: null,
-      currencyIcon: null,
+      currencyEmoji: null,
       updated: false,
     };
   }

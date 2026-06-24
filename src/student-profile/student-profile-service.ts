@@ -3,7 +3,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
 import { STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { UserRolesService } from '../user-roles/user-roles-service';
@@ -41,7 +41,7 @@ export type StudentProfileResponseBody = {
   totalEarned: number;
   badgesCount: number;
   groupCurrency: string | null;
-  groupCurrencyIcon: number | null;
+  groupCurrencyEmoji: string | null;
   lives: string | null;
   livesIcon: number | null;
   shopOpen: boolean;
@@ -62,7 +62,7 @@ type StudentProfileRow = {
   rankId: number | null;
   rankName: string | null;
   groupCurrency: string | null;
-  groupCurrencyIcon: number | null;
+  groupCurrencyEmoji: string | null;
   lives: string | null;
   livesIcon: number | null;
   shopOpen: boolean;
@@ -90,30 +90,23 @@ type CompletedActivityRow = {
 @Injectable()
 export class StudentProfileService {
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectDataSource()
-    private readonly dataSource: DataSource,
-  ) {}
+    private readonly dataSource: DataSource) {}
 
   async getStudentProfile(
     req: Request,
-    publicGroupId: number,
-    browserIdHeader: string | undefined,
+    publicGroupId: number
   ): Promise<StudentProfileResponseBody | { error: string }> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      undefined,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, undefined);
     if (!subject) {
       return { error: 'Unauthorized' };
     }
 
     const studentAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      STUDENT_ROLE_NAME,
-    );
+      STUDENT_ROLE_NAME);
     if (studentAccountId === null) {
       return { error: 'Brak profilu studenta dla tego użytkownika' };
     }
@@ -137,7 +130,7 @@ export class StudentProfileService {
          ss.rank_id                   AS "rankId",
          r.name                       AS "rankName",
          g.currency                   AS "groupCurrency",
-         g.currency_icon              AS "groupCurrencyIcon",
+         g.currency_emoji             AS "groupCurrencyEmoji",
          g.lives                      AS "lives",
          g.lives_icon                 AS "livesIcon",
          g.shop_open                  AS "shopOpen"
@@ -150,8 +143,7 @@ export class StudentProfileService {
        JOIN education.groups g ON g.id = e.group_id
        WHERE e.group_id = $1 AND e.student_account_id = $2
        LIMIT 1`,
-      [internalGroupId, studentAccountId],
-    );
+      [internalGroupId, studentAccountId]);
 
     const row = rows[0];
     if (!row) {
@@ -171,8 +163,7 @@ export class StudentProfileService {
        JOIN gamification.badges b ON b.id = eb.badge_id
        WHERE eb.enrollment_id = $1
        ORDER BY b.id ASC`,
-      [row.enrollmentId],
-    );
+      [row.enrollmentId]);
 
     const earnedBadges: StudentProfileBadgeItem[] = earnedBadgeRows.map((badge) => ({
       id: badge.id,
@@ -196,8 +187,7 @@ export class StudentProfileService {
        JOIN education.activities a ON a.id = ab.activity_id
        WHERE ab.group_id = $1 AND ab.account_id = $2
        ORDER BY ab.date DESC NULLS LAST, a.id ASC`,
-      [internalGroupId, row.studentAccountId],
-    );
+      [internalGroupId, row.studentAccountId]);
 
     const completedActivities: StudentProfileActivityItem[] = completedActivityRows.map((activity) => ({
       id: activity.id,
@@ -222,7 +212,7 @@ export class StudentProfileService {
       totalEarned: row.totalEarned ?? 0,
       badgesCount: earnedBadges.length,
       groupCurrency: row.groupCurrency,
-      groupCurrencyIcon: row.groupCurrencyIcon,
+      groupCurrencyEmoji: row.groupCurrencyEmoji,
       lives: row.lives,
       livesIcon: row.livesIcon,
       shopOpen: row.shopOpen === true || row.shopOpen === ('t' as unknown) || row.shopOpen === (1 as unknown),

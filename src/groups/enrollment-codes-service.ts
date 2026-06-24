@@ -12,7 +12,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { QueryFailedError, Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import {
   ENROLLMENT_CODE_GENERATED_BYTE_LENGTH,
 } from '../constants/enrollment-code-constants';
@@ -56,13 +56,12 @@ export class EnrollmentCodesService {
   private readonly logger = new Logger(EnrollmentCodesService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(EnrollmentCodeEntity)
     private readonly enrollmentCodeRepository: Repository<EnrollmentCodeEntity>,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>,
-  ) {}
+    private readonly groupRepository: Repository<GroupEntity>) {}
 
   async listCodesForGroup(req: Request, groupId: number, queryAuth?: string): Promise<EnrollmentCodeEntity[]> {
     await this.assertLecturerOwnsGroup(req, groupId, queryAuth);
@@ -108,8 +107,7 @@ export class EnrollmentCodesService {
       } catch (err: unknown) {
         if (postgresUniqueViolation(err)) {
           this.logger.warn(
-            `Enrollment code collision for group ${groupId} (attempt ${attempt + 1}/${ENROLLMENT_CODE_COLLISION_RETRIES})`,
-          );
+            `Enrollment code collision for group ${groupId} (attempt ${attempt + 1}/${ENROLLMENT_CODE_COLLISION_RETRIES})`);
           continue;
         }
         throw err;
@@ -122,8 +120,7 @@ export class EnrollmentCodesService {
     req: Request,
     groupId: number,
     codeId: number,
-    dto: UpdateEnrollmentCodeDto,
-  ): Promise<EnrollmentCodeEntity> {
+    dto: UpdateEnrollmentCodeDto): Promise<EnrollmentCodeEntity> {
     await this.assertLecturerOwnsGroup(req, groupId, dto.auth);
     const entity = await this.enrollmentCodeRepository.findOne({ where: { id: codeId, groupId } });
     if (entity === null) {
@@ -173,8 +170,7 @@ export class EnrollmentCodesService {
   async validateCodeForGroup(
     groupId: number,
     rawCode: string,
-    asOf: Date = new Date(),
-  ): Promise<EnrollmentCodeValidationResult> {
+    asOf: Date = new Date()): Promise<EnrollmentCodeValidationResult> {
     const normalized = rawCode.trim().toUpperCase();
     if (normalized.length === 0) {
       return { ok: false, reason: 'not_found' };
@@ -221,7 +217,7 @@ export class EnrollmentCodesService {
   }
 
   private async assertLecturerOwnsGroup(req: Request, groupId: number, queryAuth?: string): Promise<void> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, queryAuth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, queryAuth);
     if (subject === null) {
       throw new ForbiddenException('Not authorized');
     }
@@ -245,8 +241,7 @@ export class EnrollmentCodesService {
   private async persistEnrollmentCode(
     groupId: number,
     code: string,
-    dto: CreateEnrollmentCodeDto,
-  ): Promise<EnrollmentCodeEntity> {
+    dto: CreateEnrollmentCodeDto): Promise<EnrollmentCodeEntity> {
     const entity = this.enrollmentCodeRepository.create({
       groupId,
       code,

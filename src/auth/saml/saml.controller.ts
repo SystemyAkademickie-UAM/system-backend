@@ -20,13 +20,17 @@ import type { Request, Response } from 'express';
 import passport from 'passport';
 import type { AuthenticateOptions } from '@node-saml/passport-saml/lib/types';
 
-import { BROWSER_ID_UUID_REGEX } from '../../constants/browser-id-constants';
-import { MAQ_AUTH_COOKIE_NAME } from '../../constants/api-token-constants';
+import {
+  LEGACY_MAQ_AUTH_COOKIE_NAME,
+  LEGACY_MAQ_ACTIVE_ROLE_COOKIE_NAME,
+  MAQ_SESSION_COOKIE_NAME,
+} from '../../constants/session-constants';
 import {
   SAML_PENDING_ORG_COOKIE_MAX_AGE_MS,
   SAML_PENDING_ORG_COOKIE_NAME,
   SAML_SESSION_COOKIE_NAME,
 } from '../../constants/saml-constants';
+import { SessionService } from '../session/session.service';
 import {
   AUTH_THROTTLE_TTL_SECONDS,
   SAML_LOGIN_THROTTLE_LIMIT,
@@ -38,7 +42,10 @@ import {
   SamlOrganizationConfigService,
   type OrganizationSamlConfig,
 } from './saml-organization-config.service';
-import { SamlOrganizationsService } from './saml-organizations.service';
+import {
+  ORGANIZATION_LOGIN_METHOD_SAML,
+} from '../../constants/organization-constants';
+import { OrganizationLoginService } from '../organization-login/organization-login.service';
 import { SamlService } from './saml.service';
 import type { SamlUser } from './saml.types';
 import {
@@ -62,13 +69,13 @@ export class SamlController {
   constructor(
     private readonly samlConfig: SamlConfigService,
     private readonly samlService: SamlService,
-    private readonly samlOrganizationsService: SamlOrganizationsService,
+    private readonly organizationLoginService: OrganizationLoginService,
     private readonly samlOrganizationConfigService: SamlOrganizationConfigService,
     private readonly samlAccountProvisioningService: SamlAccountProvisioningService,
     @Inject(forwardRef(() => LoginApiService))
     private readonly loginApiService: LoginApiService,
     private readonly samlRelayStateTokenService: SamlRelayStateTokenService,
-  ) {
+    private readonly sessionService: SessionService) {
     this.initializeMetadataStrategy();
   }
 
@@ -103,8 +110,7 @@ export class SamlController {
       },
       function logoutVerify(_profile: Profile | null, done: VerifiedCallback) {
         done(null, undefined);
-      },
-    );
+      });
   }
 
   private registerStrategyForOrganization(orgConfig: OrganizationSamlConfig): Strategy {
@@ -161,16 +167,6 @@ export class SamlController {
     return { organizationId: cookieOrganizationId, browserId: null };
   }
 
-  private normalizeBrowserIdQuery(raw: string | undefined): string | undefined {
-    const trimmed = raw?.trim() ?? '';
-    if (trimmed === '') {
-      return undefined;
-    }
-    if (!BROWSER_ID_UUID_REGEX.test(trimmed)) {
-      throw new BadRequestException('browserId must be a UUID (RFC 4122)');
-    }
-    return trimmed;
-  }
 
   @Get('status')
   @ApiOperation({ summary: 'Get SAML SP configuration status' })
@@ -183,8 +179,8 @@ export class SamlController {
 
   @Get('organizations')
   @ApiOperation({ summary: 'List organizations with SAML enabled' })
-  async listOrganizations(): Promise<{ organizations: Awaited<ReturnType<SamlOrganizationsService['listOrganizations']>> }> {
-    const organizations = await this.samlOrganizationsService.listOrganizations();
+  async listOrganizations(): Promise<{ organizations: Awaited<ReturnType<OrganizationLoginService['listOrganizations']>> }> {
+    const organizations = await this.organizationLoginService.listOrganizations(ORGANIZATION_LOGIN_METHOD_SAML);
     return { organizations };
   }
 
@@ -206,8 +202,7 @@ export class SamlController {
     result = result.replace('<?xml version="1.0"?>', '<?xml version="1.0" encoding="UTF-8"?>');
     result = result.replace(
       'xmlns="urn:oasis:names:tc:SAML:2.0:metadata"',
-      'xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"',
-    );
+      'xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"');
     result = result.replace(/ xmlns:ds="http:\/\/www\.w3\.org\/2000\/09\/xmldsig#"/g, '');
     const mdElements = [
       'EntityDescriptor',
@@ -224,8 +219,7 @@ export class SamlController {
     }
     result = result.replace(
       '<ds:KeyInfo>',
-      '<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">',
-    );
+      '<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">');
     return result;
   }
 
@@ -236,9 +230,7 @@ export class SamlController {
   async login(
     @Req() req: Request,
     @Res() res: Response,
-    @Query('organizationId', new ParseIntPipe({ optional: true })) organizationId?: number,
-    @Query('browserId') browserIdRaw?: string,
-  ): Promise<void> {
+    @Query('organizationId', new ParseIntPipe({ optional: true })) organizationId?: number): Promise<void> {
     if (!this.samlConfig.isConfigured()) {
       res.status(503).json({ error: 'SAML_NOT_CONFIGURED' });
       return;
@@ -249,19 +241,17 @@ export class SamlController {
         message: 'Query parameter organizationId is required before starting SAML login.',
       });
     }
-    await this.samlOrganizationsService.assertOrganizationExists(organizationId);
+    await this.organizationLoginService.assertOrganizationLoginMethod(
+      organizationId,
+      ORGANIZATION_LOGIN_METHOD_SAML,
+    );
     const orgConfig = await this.samlOrganizationConfigService.loadOrganizationSamlConfig(organizationId);
     this.registerStrategyForOrganization(orgConfig);
-    const browserId = this.normalizeBrowserIdQuery(browserIdRaw);
-    const relayState = this.samlRelayStateTokenService.createRelayStateToken(
-      organizationId,
-      browserId ?? null,
-    );
+    const relayState = this.samlRelayStateTokenService.createRelayStateToken(organizationId, null);
     res.cookie(
       SAML_PENDING_ORG_COOKIE_NAME,
       String(organizationId),
-      buildPendingOrgCookieOptions(req, SAML_PENDING_ORG_COOKIE_MAX_AGE_MS),
-    );
+      buildPendingOrgCookieOptions(req, SAML_PENDING_ORG_COOKIE_MAX_AGE_MS));
     const samlLoginOptions: AuthenticateOptions = {
       additionalParams: { RelayState: relayState },
     };
@@ -284,8 +274,7 @@ export class SamlController {
     if (pendingLoginContext === null) {
       const relayStateHint = String(this.readRelayStateRaw(req) ?? '');
       this.logger.warn(
-        `ACS missing organization context (RelayState=${relayStateHint.length > 0 ? relayStateHint : '<empty>'}, pendingOrgCookie=${String(req.cookies?.[SAML_PENDING_ORG_COOKIE_NAME] ?? '<missing>')})`,
-      );
+        `ACS missing organization context (RelayState=${relayStateHint.length > 0 ? relayStateHint : '<empty>'}, pendingOrgCookie=${String(req.cookies?.[SAML_PENDING_ORG_COOKIE_NAME] ?? '<missing>')})`);
       res.status(400).json({ error: 'SAML_ORGANIZATION_PENDING_REQUIRED' });
       return;
     }
@@ -296,9 +285,8 @@ export class SamlController {
       this.strategyNameForOrganization(pendingOrgId),
       { session: false },
       (err: unknown, user: unknown) => {
-        void this.finalizeAcs(req, res, err, user, pendingOrgId, pendingLoginContext.browserId);
-      },
-    )(req, res);
+        void this.finalizeAcs(req, res, err, user, pendingOrgId);
+      })(req, res);
   }
 
   private async finalizeAcs(
@@ -306,9 +294,7 @@ export class SamlController {
     res: Response,
     err: unknown,
     user: unknown,
-    organizationId: number,
-    pendingBrowserId: string | null,
-  ): Promise<void> {
+    organizationId: number): Promise<void> {
     if (err) {
       this.logger.error('ACS error', err);
       res.status(401).json({ error: 'SAML_AUTH_FAILED' });
@@ -334,65 +320,61 @@ export class SamlController {
           role: samlUser.role,
           organizationId,
         },
-        organizationId,
-      );
+        organizationId);
     } catch (provisionErr) {
       const message = provisionErr instanceof Error ? provisionErr.message : String(provisionErr);
       this.logger.error(`SAML account provisioning failed: ${message}`);
       res.status(500).json({ error: 'SAML_PROVISIONING_FAILED' });
       return;
     }
-    const token = this.samlService.signSessionToken(samlUser, organizationId, userId);
     const pendingOrgClearOptions = buildClearSamlCookieOptions(req, resolvePendingOrgCookieSameSite(req));
     res.clearCookie(SAML_PENDING_ORG_COOKIE_NAME, pendingOrgClearOptions);
-    res.cookie(SAML_SESSION_COOKIE_NAME, token, buildSamlSessionCookieOptions(req));
-    if (pendingBrowserId !== null) {
-      const sessionPayload = this.samlService.verifySessionToken(token);
-      if (sessionPayload !== null) {
-        await this.loginApiService.mintAuthCookieFromSamlPayload(req, res, sessionPayload, pendingBrowserId);
-      }
-    }
+    await this.loginApiService.establishSession(req, res, {
+      userId,
+      loginMethod: 'saml',
+      organizationId,
+      samlNameId: samlUser.nameId,
+      samlNameIdFormat: samlUser.nameIdFormat,
+      samlSessionIndex: samlUser.sessionIndex,
+    });
     res.redirect(this.samlConfig.getLoginSuccessUrl());
   }
 
   @Get('me')
-  @ApiOperation({ summary: 'Get current SAML session user' })
-  getMe(@Req() req: Request): { authenticated: boolean; user?: unknown } {
-    const token = req.cookies?.[SAML_SESSION_COOKIE_NAME];
-    if (!token) {
+  @ApiOperation({ summary: 'Get current SAML session user (deprecated - use /login/me)' })
+  async getMe(@Req() req: Request): Promise<{ authenticated: boolean; user?: unknown }> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, undefined);
+    if (!subject) {
       return { authenticated: false };
     }
-    const user = this.samlService.verifySessionToken(token);
-    if (!user) {
-      return { authenticated: false };
-    }
-    return { authenticated: true, user };
+    return { authenticated: true, user: { userId: subject.userId } };
   }
 
   @Post('logout')
   @ApiOperation({ summary: 'Clear browser auth cookies' })
-  logout(@Req() req: Request, @Res() res: Response): void {
-    this.clearBrowserAuthCookies(req, res);
+  async logout(@Req() req: Request, @Res() res: Response): Promise<void> {
+    await this.clearBrowserAuthCookiesAndRevokeSession(req, res);
     res.json({ success: true });
   }
 
   @Get('logout')
   @ApiOperation({ summary: 'Initiate SAML single logout' })
   async samlLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
-    const token = req.cookies?.[SAML_SESSION_COOKIE_NAME];
-    const session = token ? this.samlService.verifySessionToken(token) : null;
-    this.clearBrowserAuthCookies(req, res);
-    if (!this.samlConfig.isConfigured() || session?.organizationId === undefined) {
+    const token = this.sessionService.extractSessionToken(req);
+    const sessionRow = token ? await this.sessionService.getSessionRow(token) : null;
+    await this.clearBrowserAuthCookiesAndRevokeSession(req, res);
+    if (!this.samlConfig.isConfigured() || sessionRow?.organizationId == null) {
       res.redirect(this.samlConfig.getLogoutUrl());
       return;
     }
-    if (!session.sub) {
+    if (!sessionRow.samlNameId) {
       res.redirect(this.samlConfig.getLogoutUrl());
       return;
     }
+    const organizationId = sessionRow.organizationId;
     let orgConfig: OrganizationSamlConfig;
     try {
-      orgConfig = await this.samlOrganizationConfigService.loadOrganizationSamlConfig(session.organizationId);
+      orgConfig = await this.samlOrganizationConfigService.loadOrganizationSamlConfig(organizationId);
     } catch {
       res.redirect(this.samlConfig.getLogoutUrl());
       return;
@@ -403,9 +385,9 @@ export class SamlController {
     }
     const strategy = this.registerStrategyForOrganization(orgConfig);
     const samlUser = {
-      nameID: session.sub,
-      nameIDFormat: session.nameIdFormat || 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
-      sessionIndex: session.sessionIndex,
+      nameID: sessionRow.samlNameId,
+      nameIDFormat: sessionRow.samlNameIdFormat || 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
+      sessionIndex: sessionRow.samlSessionIndex,
     };
     (req as unknown as { user: typeof samlUser }).user = samlUser;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -420,26 +402,29 @@ export class SamlController {
 
   @Get('slo')
   @ApiOperation({ summary: 'Handle SAML single logout callback (GET)' })
-  handleSloGet(@Req() req: Request, @Res() res: Response): void {
-    this.handleSloCallback(req, res);
+  async handleSloGet(@Req() req: Request, @Res() res: Response): Promise<void> {
+    await this.handleSloCallback(req, res);
   }
 
   @Post('slo')
   @ApiOperation({ summary: 'Handle SAML single logout callback (POST)' })
-  handleSloPost(@Req() req: Request, @Res() res: Response): void {
-    this.handleSloCallback(req, res);
+  async handleSloPost(@Req() req: Request, @Res() res: Response): Promise<void> {
+    await this.handleSloCallback(req, res);
   }
 
-  private handleSloCallback(req: Request, res: Response): void {
-    this.clearBrowserAuthCookies(req, res);
+  private async handleSloCallback(req: Request, res: Response): Promise<void> {
+    await this.clearBrowserAuthCookiesAndRevokeSession(req, res);
     res.redirect(this.samlConfig.getLogoutUrl());
   }
 
-  private clearBrowserAuthCookies(req: Request, res: Response): void {
+  private async clearBrowserAuthCookiesAndRevokeSession(req: Request, res: Response): Promise<void> {
+    await this.loginApiService.clearAuthCookiesAndRevokeSession(req, res);
     const sessionClearOptions = buildClearSamlCookieOptions(req, 'lax');
     const pendingOrgClearOptions = buildClearSamlCookieOptions(req, resolvePendingOrgCookieSameSite(req));
     res.clearCookie(SAML_SESSION_COOKIE_NAME, sessionClearOptions);
-    res.clearCookie(MAQ_AUTH_COOKIE_NAME, sessionClearOptions);
+    res.clearCookie(LEGACY_MAQ_AUTH_COOKIE_NAME, sessionClearOptions);
+    res.clearCookie(LEGACY_MAQ_ACTIVE_ROLE_COOKIE_NAME, sessionClearOptions);
+    res.clearCookie(MAQ_SESSION_COOKIE_NAME, sessionClearOptions);
     res.clearCookie(SAML_PENDING_ORG_COOKIE_NAME, pendingOrgClearOptions);
   }
 }

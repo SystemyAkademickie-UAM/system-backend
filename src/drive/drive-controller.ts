@@ -1,7 +1,6 @@
 import {
   Controller,
   Get,
-  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -44,8 +43,7 @@ export class DriveController {
   async serveDriveObject(
     @Param('driveRef') driveRef: string,
     @Query('organizationId') organizationIdQuery: string | undefined,
-    @Res() res: Response,
-  ): Promise<void> {
+    @Res() res: Response): Promise<void> {
     const organizationId = this.parseOrganizationId(organizationIdQuery);
     const { buffer, contentType } = await this.driveService.serveObject(organizationId, driveRef);
     res.set({
@@ -65,20 +63,15 @@ export class DriveController {
   @Post()
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'banner', maxCount: 1 }], { limits: { fileSize: DRIVE_MAX_FILE_BYTES } }),
-  )
+    FileFieldsInterceptor([{ name: 'banner', maxCount: 1 }], { limits: { fileSize: DRIVE_MAX_FILE_BYTES } }))
   @ApiOperation({ summary: 'Upload a banner via multipart drive request' })
-  handleDrive(
-    @Req() req: Request,
-    @Headers('x-browser-id') browserIdHeader: string | undefined,
-  ): Promise<DriveHandleResponseBody> {
+  handleDrive(@Req() req: Request): Promise<DriveHandleResponseBody> {
     const files = req.files as MulterBannerFiles | undefined;
     const bannerFile = files?.banner?.[0];
     return this.driveService.handleDrive({
       req,
       jsonField: req.body?.['json'],
       bannerFile,
-      browserIdHeader,
     });
   }
 

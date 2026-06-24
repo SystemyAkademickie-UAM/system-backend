@@ -18,8 +18,7 @@ export class SamlAccountProvisioningService {
     private readonly samlLinkedUserService: SamlLinkedUserService,
     private readonly superAdminBootstrapService: SuperAdminBootstrapService,
     @InjectRepository(AccountEntity)
-    private readonly accountRepository: Repository<AccountEntity>,
-  ) {}
+    private readonly accountRepository: Repository<AccountEntity>) {}
 
   async provisionFromSamlSession(payload: SamlSessionPayload, organizationId: number): Promise<number> {
     const userId = await this.samlLinkedUserService.findOrCreateFromSamlSession(payload);

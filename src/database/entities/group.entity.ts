@@ -34,14 +34,27 @@ export class GroupEntity {
   @Column({ name: 'currency', type: 'varchar', length: EDUCATION_GROUP_VARCHAR_MAX_LENGTH, nullable: true })
   currency: string | null;
 
-  @Column({ name: 'currency_icon', type: 'varchar', length: EDUCATION_GROUP_VARCHAR_MAX_LENGTH, nullable: true })
-  currencyIcon: string | null;
+  /** ASCII emoji representing the group currency (e.g. "🥕"). */
+  @Column({ name: 'currency_emoji', type: 'varchar', length: EDUCATION_GROUP_VARCHAR_MAX_LENGTH, nullable: true })
+  currencyEmoji: string | null;
 
   @Column({ name: 'lives', type: 'integer', nullable: true, default: 3 })
   lives: number | null;
 
   @Column({ name: 'lives_icon', type: 'varchar', length: EDUCATION_GROUP_VARCHAR_MAX_LENGTH, nullable: true })
   livesIcon: string | null;
+
+  /** Master toggle for the lives system (default off). */
+  @Column({ name: 'lives_enabled', type: 'boolean', default: false })
+  livesEnabled: boolean;
+
+  /** Custom display name for lives (e.g. "Tarcze", "Serca"). */
+  @Column({ name: 'lives_label', type: 'varchar', length: 100, nullable: true })
+  livesLabel: string | null;
+
+  /** Whether "extra life" appears automatically as a shop product. */
+  @Column({ name: 'lives_shop_enabled', type: 'boolean', default: false })
+  livesShopEnabled: boolean;
 
   @Column({ name: 'shop_open', type: 'boolean', default: true })
   shopOpen: boolean;

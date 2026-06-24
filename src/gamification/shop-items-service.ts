@@ -8,7 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
-import { AuthTokenSessionService, type AuthTokenSubject } from '../auth/api-token/auth-token-session-service';
+import { SessionService, type SessionSubject } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
@@ -25,7 +25,7 @@ export class ShopItemsService {
   private readonly logger = new Logger(ShopItemsService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(ItemEntity)
     private readonly itemRepository: Repository<ItemEntity>,
@@ -37,12 +37,15 @@ export class ShopItemsService {
     private readonly groupRepository: Repository<GroupEntity>,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
-    private readonly dataSource: DataSource,
-  ) {}
+    private readonly dataSource: DataSource) {}
 
   async getItemsForGroup(req: Request, groupId: number, queryAuth?: string) {
-    await this.assertCanReadGroupShop(req, groupId, queryAuth);
-    const items = await this.itemRepository.find({ where: { groupId } });
+    const isLecturer = await this.assertCanReadGroupShop(req, groupId, queryAuth);
+    const whereClause: any = { groupId };
+    if (!isLecturer) {
+      whereClause.isPublished = true;
+    }
+    const items = await this.itemRepository.find({ where: whereClause });
     if (items.length === 0) return [];
     const listings = await this.shopListingRepository.find({
       where: items.map((i) => ({ itemId: i.id })),
@@ -166,6 +169,10 @@ export class ShopItemsService {
       if (dto.educationalDescription !== undefined) item.educationalDescription = dto.educationalDescription;
       if (dto.imageRef !== undefined) item.imageRef = dto.imageRef;
       if (dto.categoryId !== undefined) item.categoryId = dto.categoryId;
+      if (dto.isPublished !== undefined) {
+        item.isPublished = dto.isPublished;
+        item.publishedAt = dto.isPublished ? new Date() : null;
+      }
 
       const savedItem = await queryRunner.manager.save(item);
 
@@ -206,8 +213,8 @@ export class ShopItemsService {
     return { deleted: true };
   }
 
-  private async resolveSubject(req: Request, queryAuth?: string): Promise<AuthTokenSubject> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, queryAuth);
+  private async resolveSubject(req: Request, queryAuth?: string): Promise<SessionSubject> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, queryAuth);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }
@@ -237,7 +244,7 @@ export class ShopItemsService {
     }
   }
 
-  private async assertCanReadGroupShop(req: Request, groupId: number, queryAuth?: string): Promise<void> {
+  private async assertCanReadGroupShop(req: Request, groupId: number, queryAuth?: string): Promise<boolean> {
     const subject = await this.resolveSubject(req, queryAuth);
     await this.assertGroupExists(groupId);
     const group = await this.groupRepository.findOne({ where: { id: groupId }, select: ['id', 'teacherAccountId'] });
@@ -246,7 +253,7 @@ export class ShopItemsService {
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
     if (lecturerAccountId !== null && group.teacherAccountId === lecturerAccountId) {
-      return;
+      return true;
     }
     const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
     if (studentAccountId === null) {
@@ -256,5 +263,6 @@ export class ShopItemsService {
     if (!isEnrolled) {
       throw new ForbiddenException('Not authorized');
     }
+    return false;
   }
 }

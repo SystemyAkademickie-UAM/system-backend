@@ -2,7 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { ItemCategoryEntity } from '../database/entities/item-category.entity';
@@ -11,7 +11,7 @@ import { ItemCategoriesService } from './item-categories-service';
 
 describe('ItemCategoriesService', () => {
   let service: ItemCategoriesService;
-  let authTokenSessionService: { resolveSubjectSoftFromRequest: jest.Mock };
+  let sessionService: { resolveSubjectFromRequest: jest.Mock };
   let userRolesService: {
     userHasRole: jest.Mock;
     findAccountIdForRole: jest.Mock;
@@ -28,8 +28,8 @@ describe('ItemCategoriesService', () => {
   const mockRequest = {} as import('express').Request;
 
   beforeEach(async () => {
-    authTokenSessionService = {
-      resolveSubjectSoftFromRequest: jest.fn().mockResolvedValue({ userId: 1 }),
+    sessionService = {
+      resolveSubjectFromRequest: jest.fn().mockResolvedValue({ userId: 1 }),
     };
     userRolesService = {
       userHasRole: jest.fn().mockResolvedValue(true),
@@ -57,7 +57,7 @@ describe('ItemCategoriesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ItemCategoriesService,
-        { provide: AuthTokenSessionService, useValue: authTokenSessionService },
+        { provide: SessionService, useValue: sessionService },
         { provide: UserRolesService, useValue: userRolesService },
         { provide: getRepositoryToken(ItemCategoryEntity), useValue: itemCategoryRepository },
         { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },

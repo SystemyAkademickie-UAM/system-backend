@@ -12,8 +12,7 @@ import { AccountEntity } from '../database/entities/account.entity';
 export class UserRolesService {
   constructor(
     @InjectRepository(AccountEntity)
-    private readonly accountRepository: Repository<AccountEntity>,
-  ) {}
+    private readonly accountRepository: Repository<AccountEntity>) {}
 
   /**
    * @returns whether the user has at least one account row with the given `roleName`.
@@ -34,6 +33,19 @@ export class UserRolesService {
       select: ['id'],
     });
     return row?.id ?? null;
+  }
+
+  /**
+   * @returns whether the user has an account row with the given role in the organization.
+   */
+  async userHasRoleInOrganization(
+    userId: number,
+    organizationId: number,
+    roleName: string): Promise<boolean> {
+    const row = await this.accountRepository.findOne({
+      where: { userId, organizationId, role: roleName },
+    });
+    return row !== null;
   }
 
   /**

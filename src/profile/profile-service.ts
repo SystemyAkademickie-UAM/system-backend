@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { AvatarEntity } from '../database/entities/avatar.entity';
 import { UserEntity } from '../database/entities/user.entity';
 import { UpdateProfileSettingsDto } from './dto/update-profile-settings.dto';
@@ -13,12 +13,11 @@ export class ProfileService {
   private readonly logger = new Logger(ProfileService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(AvatarEntity)
-    private readonly avatarRepository: Repository<AvatarEntity>,
-  ) {}
+    private readonly avatarRepository: Repository<AvatarEntity>) {}
 
   /**
    * Retrieves all avatars from the database, ordered by ID ascending.
@@ -31,7 +30,7 @@ export class ProfileService {
    * Retrieves profile settings for the currently logged-in user.
    */
   async getProfile(req: Request, auth?: string): Promise<UserEntity> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, auth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, auth);
     if (!subject) {
       throw new ForbiddenException('Brak autoryzacji');
     }
@@ -48,7 +47,7 @@ export class ProfileService {
    * Updates profile settings for the currently logged-in user.
    */
   async updateSettings(req: Request, dto: UpdateProfileSettingsDto): Promise<UserEntity> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
     if (!subject) {
       throw new ForbiddenException('Brak autoryzacji');
     }

@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
@@ -22,9 +22,7 @@ export class StagesController {
   @ApiOperation({ summary: 'Handle stage operations based on the request body method field' })
   handleStage(
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-    @Body() body: unknown,
-  ): Promise<StageResponseBody> {
-    return this.stagesService.handleStage(req, body, browserId);
+    @Body() body: unknown): Promise<StageResponseBody> {
+    return this.stagesService.handleStage(req, body);
   }
 }

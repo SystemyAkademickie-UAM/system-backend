@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { QueryFailedError, Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import {
   GROUP_API_JSON_STATUS_OK,
   GROUP_RESPONSE_GROUP_ID_OFFSET,
@@ -26,6 +26,7 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
+import { UpdateLivesConfigDto } from './dto/update-lives-config.dto';
 import { UpdateShopStatusDto } from './dto/update-shop-status.dto';
 import { EnrollmentCodesService } from './enrollment-codes-service';
 
@@ -45,8 +46,21 @@ export type UserGroupListItem = {
   lecturers: string;
   description: string | null;
   currency: string | null;
-  currencyIcon: string | null;
+  currencyEmoji: string | null;
   shopOpen: boolean;
+  livesEnabled: boolean;
+  lives: number | null;
+  livesLabel: string | null;
+  livesIcon: string | null;
+  livesShopEnabled: boolean;
+};
+
+export type LivesConfigResponseBody = {
+  livesEnabled: boolean;
+  livesMax: number | null;
+  livesLabel: string | null;
+  livesIcon: string | null;
+  livesShopEnabled: boolean;
 };
 
 export type GetUserGroupsResponseBody = {
@@ -103,23 +117,35 @@ export class GroupsService {
   private readonly logger = new Logger(GroupsService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     private readonly enrollmentCodesService: EnrollmentCodesService,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>,
-  ) { }
+    private readonly groupRepository: Repository<GroupEntity>) { }
+
+  async assertLecturerOwnsGroupAndGetAccountId(userId: number, internalGroupId: number): Promise<number> {
+    const lecturerAccountId = await this.assertLecturerAndGetAccountId(userId);
+    const group = await this.groupRepository.findOne({
+      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!group) {
+      throw new ForbiddenException('Not authorized to manage this group');
+    }
+    return lecturerAccountId;
+  }
+
+  async assertLecturerAndGetAccountId(userId: number): Promise<number> {
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(userId, LECTURER_ROLE_NAME);
+    if (lecturerAccountId === null) {
+      throw new ForbiddenException('Requires lecturer privileges');
+    }
+    return lecturerAccountId;
+  }
 
   async createGroup(
     req: Request,
-    body: CreateGroupBodyDto,
-    browserIdHeader: string | undefined,
-  ): Promise<CreateGroupResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    body: CreateGroupBodyDto): Promise<CreateGroupResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID };
     }
@@ -139,7 +165,7 @@ export class GroupsService {
         subjectName: nullableTrimmedString(groupPayload.subjectName),
         description: nullableTrimmedString(groupPayload.description),
         currency: nullableTrimmedString(groupPayload.currency),
-        currencyIcon: nullableTrimmedString(groupPayload.currencyIcon),
+        currencyEmoji: nullableTrimmedString(groupPayload.currencyEmoji),
         lives: groupPayload.lives ?? null,
         livesIcon: nullableTrimmedString(groupPayload.livesIcon),
         imageRef: nullableTrimmedString(groupPayload.imageRef),
@@ -162,14 +188,8 @@ export class GroupsService {
   async updateGroup(
     req: Request,
     publicGroupId: number,
-    body: UpdateGroupBodyDto,
-    browserIdHeader: string | undefined,
-  ): Promise<UpdateGroupResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    body: UpdateGroupBodyDto): Promise<UpdateGroupResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
@@ -179,8 +199,7 @@ export class GroupsService {
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
@@ -234,8 +253,8 @@ export class GroupsService {
     if (payload.currency !== undefined) {
       updates.currency = nullableTrimmedString(payload.currency);
     }
-    if (payload.currencyIcon !== undefined) {
-      updates.currencyIcon = nullableTrimmedString(payload.currencyIcon);
+    if (payload.currencyEmoji !== undefined) {
+      updates.currencyEmoji = nullableTrimmedString(payload.currencyEmoji);
     }
     if (payload.lives !== undefined) {
       updates.lives = payload.lives;
@@ -278,21 +297,14 @@ export class GroupsService {
   async updateShopStatus(
     req: Request,
     publicGroupId: number,
-    body: UpdateShopStatusDto,
-    browserIdHeader: string | undefined,
-  ): Promise<UpdateGroupResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    body: UpdateShopStatusDto): Promise<UpdateGroupResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       throw new UnauthorizedException('Missing or invalid session');
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       throw new ForbiddenException('Requires lecturer privileges');
     }
@@ -328,6 +340,131 @@ export class GroupsService {
     }
   }
 
+  /**
+   * Updates the lives system configuration for a group owned by the lecturer.
+   */
+  async updateLivesConfig(
+    req: Request,
+    publicGroupId: number,
+    body: UpdateLivesConfigDto): Promise<UpdateGroupResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
+    if (!subject) {
+      throw new UnauthorizedException('Missing or invalid session');
+    }
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME);
+    if (lecturerAccountId === null) {
+      throw new ForbiddenException('Requires lecturer privileges');
+    }
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+
+    const existing = await this.groupRepository.findOne({
+      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!existing) {
+      throw new ForbiddenException('Not authorized to manage this group');
+    }
+
+    const updates: Partial<GroupEntity> = {};
+    if (body.livesEnabled !== undefined) {
+      updates.livesEnabled = body.livesEnabled;
+    }
+    if (body.lives !== undefined) {
+      updates.lives = body.lives;
+    }
+    if (body.livesLabel !== undefined) {
+      updates.livesLabel = nullableTrimmedString(body.livesLabel);
+    }
+    if (body.livesIcon !== undefined) {
+      updates.livesIcon = nullableTrimmedString(body.livesIcon);
+    }
+    if (body.livesShopEnabled !== undefined) {
+      updates.livesShopEnabled = body.livesShopEnabled;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        updated: false,
+      };
+    }
+
+    try {
+      await this.groupRepository.update({ id: internalGroupId }, updates);
+      return {
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        updated: true,
+      };
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        this.logger.error(`updateLivesConfig failed: ${err.message}`, err.stack);
+      } else {
+        this.logger.error(`updateLivesConfig failed: ${String(err)}`);
+      }
+      throw new InternalServerErrorException('Database update failed');
+    }
+  }
+
+  /**
+   * Returns the lives configuration for a group.
+   * Accessible by both the lecturer (owner) and enrolled students.
+   */
+  async getLivesConfig(
+    req: Request,
+    publicGroupId: number,
+  ): Promise<LivesConfigResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      throw new UnauthorizedException('Missing or invalid session');
+    }
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME);
+    const studentAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      STUDENT_ROLE_NAME);
+
+    const rows = await this.fetchAllGroupsWithMembershipFlags(
+      lecturerAccountId,
+      studentAccountId,
+      internalGroupId);
+    const row = rows[0];
+    if (!row) {
+      throw new BadRequestException('Group not found');
+    }
+
+    const isOwner = Boolean(row.is_owner);
+    const isEnrolled = Boolean(row.is_enrolled);
+    if (!isOwner && !isEnrolled) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return {
+      livesEnabled: row.lives_enabled,
+      livesMax: row.lives,
+      livesLabel: row.lives_label,
+      livesIcon: row.lives_icon,
+      livesShopEnabled: row.lives_shop_enabled,
+    };
+  }
+
   private logGroupCreationFailure(err: unknown): void {
     if (postgresFkViolation(err)) {
       const detail =
@@ -345,21 +482,14 @@ export class GroupsService {
   async getAccessCodeForGroup(
     req: Request,
     publicGroupId: number,
-    browserIdHeader: string | undefined,
-    queryAuth: string | undefined,
   ): Promise<GenerateCodeResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      queryAuth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
@@ -389,21 +519,14 @@ export class GroupsService {
 
   async generateCodeForGroup(
     req: Request,
-    body: GenerateCodeBodyDto,
-    browserIdHeader: string | undefined,
-  ): Promise<GenerateCodeResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    body: GenerateCodeBodyDto): Promise<GenerateCodeResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
@@ -457,12 +580,8 @@ export class GroupsService {
     this.logger.error(`Group entry code generation failed: ${String(err)}`);
   }
 
-  async getUserGroups(
-    req: Request,
-    browserIdHeader: string | undefined,
-    queryAuth: string | undefined,
-  ): Promise<GetUserGroupsResponseBody> {
-    const catalog = await this.getGroupsCatalog(req, browserIdHeader, queryAuth);
+  async getUserGroups(req: Request): Promise<GetUserGroupsResponseBody> {
+    const catalog = await this.getGroupsCatalog(req);
     return {
       statusCode: catalog.statusCode,
       groups: catalog.myGroups,
@@ -472,31 +591,20 @@ export class GroupsService {
   /**
    * Returns all groups split into membership buckets for the authenticated user.
    */
-  async getGroupsCatalog(
-    req: Request,
-    browserIdHeader: string | undefined,
-    queryAuth: string | undefined,
-  ): Promise<GetGroupsCatalogResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      queryAuth,
-    );
+  async getGroupsCatalog(req: Request): Promise<GetGroupsCatalogResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return { statusCode: GROUP_API_JSON_STATUS_OK, myGroups: [], otherGroups: [] };
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     const studentAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      STUDENT_ROLE_NAME,
-    );
+      STUDENT_ROLE_NAME);
     const allGroups = await this.fetchAllGroupsWithMembershipFlags(
       lecturerAccountId,
-      studentAccountId,
-    );
+      studentAccountId);
     const myGroups: UserGroupListItem[] = [];
     const otherGroups: UserGroupListItem[] = [];
     for (const row of allGroups) {
@@ -516,8 +624,6 @@ export class GroupsService {
   async getGroupPreview(
     req: Request,
     publicGroupId: number,
-    browserIdHeader: string | undefined,
-    queryAuth: string | undefined,
   ): Promise<GroupPreviewResponseBody> {
     const empty: GroupPreviewResponseBody = {
       statusCode: GROUP_API_JSON_STATUS_OK,
@@ -526,11 +632,7 @@ export class GroupsService {
       isOwner: false,
       isEnrolled: false,
     };
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      queryAuth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return empty;
     }
@@ -542,17 +644,14 @@ export class GroupsService {
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     const studentAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      STUDENT_ROLE_NAME,
-    );
+      STUDENT_ROLE_NAME);
     const rows = await this.fetchAllGroupsWithMembershipFlags(
       lecturerAccountId,
       studentAccountId,
-      internalGroupId,
-    );
+      internalGroupId);
     const row = rows[0];
     if (!row) {
       return empty;
@@ -571,8 +670,7 @@ export class GroupsService {
   private formatLecturerDisplay(
     nickname: string | null | undefined,
     name: string | null | undefined,
-    surname: string | null | undefined,
-  ): string {
+    surname: string | null | undefined): string {
     const nick = nickname ? String(nickname).trim() : '';
     const legal = [name, surname]
       .filter(Boolean)
@@ -596,17 +694,22 @@ export class GroupsService {
     image_ref: string | null;
     description: string | null;
     currency: string | null;
-    currency_icon: string | null;
+    currency_emoji: string | null;
     teacher_nickname: string | null;
     teacher_name: string | null;
     teacher_surname: string | null;
     shop_open: boolean;
+    lives_enabled: boolean;
+    lives: number | null;
+    lives_label: string | null;
+    lives_icon: string | null;
+    lives_shop_enabled: boolean;
   }): UserGroupListItem {
     const lecturers = this.formatLecturerDisplay(
       row.teacher_nickname,
       row.teacher_name,
-      row.teacher_surname,
-    );
+      row.teacher_surname);
+    const toBool = (v: unknown) => v === true || v === ('t' as unknown) || v === (1 as unknown);
     return {
       id: row.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
       groupName: row.name,
@@ -615,16 +718,20 @@ export class GroupsService {
       lecturers: lecturers || '',
       description: row.description ?? null,
       currency: row.currency ?? null,
-      currencyIcon: row.currency_icon ?? null,
-      shopOpen: row.shop_open === true || row.shop_open === ('t' as unknown) || row.shop_open === (1 as unknown),
+      currencyEmoji: row.currency_emoji ?? null,
+      shopOpen: toBool(row.shop_open),
+      livesEnabled: toBool(row.lives_enabled),
+      lives: row.lives ?? null,
+      livesLabel: row.lives_label ?? null,
+      livesIcon: row.lives_icon ?? null,
+      livesShopEnabled: toBool(row.lives_shop_enabled),
     };
   }
 
   private async fetchAllGroupsWithMembershipFlags(
     lecturerAccountId: number | null,
     studentAccountId: number | null,
-    internalGroupId?: number,
-  ): Promise<
+    internalGroupId?: number): Promise<
     Array<{
       id: number;
       name: string;
@@ -632,11 +739,16 @@ export class GroupsService {
       image_ref: string | null;
       description: string | null;
       currency: string | null;
-      currency_icon: string | null;
+      currency_emoji: string | null;
       teacher_nickname: string | null;
       teacher_name: string | null;
       teacher_surname: string | null;
       shop_open: boolean;
+      lives_enabled: boolean;
+      lives: number | null;
+      lives_label: string | null;
+      lives_icon: string | null;
+      lives_shop_enabled: boolean;
       is_owner: boolean;
       is_enrolled: boolean;
     }>
@@ -651,8 +763,13 @@ export class GroupsService {
         'group.image_ref AS image_ref',
         'group.description AS description',
         'group.currency AS currency',
-        'group.currency_icon AS currency_icon',
+        'group.currency_emoji AS currency_emoji',
         'group.shop_open AS shop_open',
+        'group.lives_enabled AS lives_enabled',
+        'group.lives AS lives',
+        'group.lives_label AS lives_label',
+        'group.lives_icon AS lives_icon',
+        'group.lives_shop_enabled AS lives_shop_enabled',
         'user.nickname AS teacher_nickname',
         'user.name AS teacher_name',
         'user.surname AS teacher_surname',
@@ -662,8 +779,7 @@ export class GroupsService {
         EnrollmentEntity,
         'enrollment',
         'enrollment.group_id = group.id AND enrollment.student_account_id = :studentId',
-        { studentId: studentAccountId },
-      );
+        { studentId: studentAccountId });
       qb.addSelect('CASE WHEN enrollment.id IS NOT NULL THEN true ELSE false END', 'is_enrolled');
     } else {
       qb.addSelect('false', 'is_enrolled');
@@ -671,8 +787,7 @@ export class GroupsService {
     if (lecturerAccountId !== null) {
       qb.addSelect(
         'CASE WHEN group.teacher_account_id = :lecturerId THEN true ELSE false END',
-        'is_owner',
-      );
+        'is_owner');
       qb.setParameter('lecturerId', lecturerAccountId);
     } else {
       qb.addSelect('false', 'is_owner');
@@ -682,6 +797,7 @@ export class GroupsService {
     }
     qb.orderBy('group.name', 'ASC');
     const rawGroups = await qb.getRawMany();
+    const toBool = (v: unknown) => v === true || v === 't' || v === 1;
     return rawGroups.map((row) => ({
       id: Number(row.id),
       name: String(row.name),
@@ -689,13 +805,18 @@ export class GroupsService {
       image_ref: row.image_ref ?? null,
       description: row.description ?? null,
       currency: row.currency ?? null,
-      currency_icon: row.currency_icon ?? null,
+      currency_emoji: row.currency_emoji ?? null,
       teacher_nickname: row.teacher_nickname ?? null,
       teacher_name: row.teacher_name ?? null,
       teacher_surname: row.teacher_surname ?? null,
-      shop_open: row.shop_open === true || row.shop_open === ('t' as unknown) || row.shop_open === (1 as unknown),
-      is_owner: row.is_owner === true || row.is_owner === 't' || row.is_owner === 1,
-      is_enrolled: row.is_enrolled === true || row.is_enrolled === 't' || row.is_enrolled === 1,
+      shop_open: toBool(row.shop_open),
+      lives_enabled: toBool(row.lives_enabled),
+      lives: row.lives ?? null,
+      lives_label: row.lives_label ?? null,
+      lives_icon: row.lives_icon ?? null,
+      lives_shop_enabled: toBool(row.lives_shop_enabled),
+      is_owner: toBool(row.is_owner),
+      is_enrolled: toBool(row.is_enrolled),
     }));
   }
 }

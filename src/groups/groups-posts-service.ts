@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import {
   GROUP_API_JSON_STATUS_OK,
   GROUP_RESPONSE_GROUP_ID_OFFSET,
@@ -21,7 +21,14 @@ import { UpdatePostDto } from './dto/update-post.dto';
 export type CreatePostResponseBody = { status: number; post: number };
 export type GetPostsResponseBody = {
   status: number;
-  posts: Array<{ id: number; title: string; content: string }>;
+  posts: Array<{
+    id: number;
+    title: string;
+    content: string;
+    isPublished: boolean;
+    createdAt: string | null;
+    publishedAt: string | null;
+  }>;
 };
 export type DeletePostResponseBody = { status: number; deleted: boolean };
 export type UpdatePostResponseBody = { status: number; updated: boolean };
@@ -31,34 +38,27 @@ export class GroupsPostsService {
   private readonly logger = new Logger(GroupsPostsService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(PostEntity)
-    private readonly postRepository: Repository<PostEntity>,
-  ) {}
+    private readonly postRepository: Repository<PostEntity>) {}
 
   async createPost(
     req: Request,
     publicGroupId: number,
-    body: CreatePostDto,
-    browserIdHeader: string | undefined,
+    body: CreatePostDto
   ): Promise<CreatePostResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { status: GROUP_API_JSON_STATUS_OK, post: POST_ERROR_CODE_NOT_AUTHORIZED }; // -1 = Not authorized
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return { status: GROUP_API_JSON_STATUS_OK, post: POST_ERROR_CODE_NOT_AUTHORIZED }; // -1 = Not authorized
     }
@@ -76,10 +76,14 @@ export class GroupsPostsService {
     }
 
     try {
+      const createdAt = body.createdAt ? new Date(body.createdAt) : new Date();
       const entity = this.postRepository.create({
         groupId,
         title: body.title,
         content: body.content,
+        isPublished: false,
+        createdAt,
+        publishedAt: null,
       });
       const saved = await this.postRepository.save(entity);
       return { status: GROUP_API_JSON_STATUS_OK, post: saved.id };
@@ -92,14 +96,9 @@ export class GroupsPostsService {
   async getPosts(
     req: Request,
     publicGroupId: number,
-    browserIdHeader: string | undefined,
     authParam?: string,
   ): Promise<GetPostsResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      authParam,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, authParam);
     if (!subject) {
       return { status: GROUP_API_JSON_STATUS_OK, posts: [] };
     }
@@ -110,13 +109,13 @@ export class GroupsPostsService {
         : publicGroupId;
 
     let authorized = false;
+    let ownsGroup = false;
 
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId !== null) {
-      const ownsGroup = await this.groupRepository.exist({
+      ownsGroup = await this.groupRepository.exist({
         where: { id: groupId, teacherAccountId: lecturerAccountId },
       });
       if (ownsGroup) {
@@ -127,8 +126,7 @@ export class GroupsPostsService {
     if (!authorized) {
       const studentAccountId = await this.userRolesService.findAccountIdForRole(
         subject.userId,
-        STUDENT_ROLE_NAME,
-      );
+        STUDENT_ROLE_NAME);
       if (studentAccountId !== null) {
         const enrolled = await this.enrollmentRepository.exist({
           where: { groupId, studentAccountId },
@@ -144,10 +142,13 @@ export class GroupsPostsService {
     }
 
     try {
+      const whereClause = ownsGroup
+        ? { groupId }
+        : { groupId, isPublished: true };
       const posts = await this.postRepository.find({
-        where: { groupId },
+        where: whereClause,
         order: { id: 'DESC' },
-        select: ['id', 'title', 'content'],
+        select: ['id', 'title', 'content', 'isPublished', 'createdAt', 'publishedAt'],
       });
       return {
         status: GROUP_API_JSON_STATUS_OK,
@@ -155,6 +156,9 @@ export class GroupsPostsService {
           id: p.id,
           title: p.title ?? '',
           content: p.content ?? '',
+          isPublished: p.isPublished,
+          createdAt: p.createdAt ? p.createdAt.toISOString() : null,
+          publishedAt: p.publishedAt ? p.publishedAt.toISOString() : null,
         })),
       };
     } catch (err: unknown) {
@@ -167,21 +171,15 @@ export class GroupsPostsService {
     req: Request,
     publicGroupId: number,
     postId: number,
-    browserIdHeader: string | undefined,
     bodyAuth?: string,
   ): Promise<DeletePostResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      bodyAuth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, bodyAuth);
     if (!subject) {
       return { status: GROUP_API_JSON_STATUS_OK, deleted: false };
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return { status: GROUP_API_JSON_STATUS_OK, deleted: false };
     }
@@ -214,21 +212,15 @@ export class GroupsPostsService {
     req: Request,
     publicGroupId: number,
     postId: number,
-    body: UpdatePostDto,
-    browserIdHeader: string | undefined,
+    body: UpdatePostDto
   ): Promise<UpdatePostResponseBody> {
-    const subject = await this.authTokenSessionService.resolveSubjectStrongFromRequest(
-      req,
-      browserIdHeader,
-      body.auth,
-    );
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
       return { status: GROUP_API_JSON_STATUS_OK, updated: false };
     }
     const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
       subject.userId,
-      LECTURER_ROLE_NAME,
-    );
+      LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return { status: GROUP_API_JSON_STATUS_OK, updated: false };
     }
@@ -249,7 +241,10 @@ export class GroupsPostsService {
       const updateData: Partial<PostEntity> = {};
       if (body.title !== undefined) updateData.title = body.title;
       if (body.content !== undefined) updateData.content = body.content;
-
+      if (body.isPublished !== undefined) {
+        updateData.isPublished = body.isPublished;
+        updateData.publishedAt = body.isPublished ? new Date() : null;
+      }
       const result = await this.postRepository.update({ id: postId, groupId }, updateData);
       return {
         status: GROUP_API_JSON_STATUS_OK,

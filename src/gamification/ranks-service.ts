@@ -1,9 +1,9 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { GroupEntity } from '../database/entities/group.entity';
 import { RankEntity } from '../database/entities/rank.entity';
@@ -19,23 +19,22 @@ export class RanksService {
   private readonly logger = new Logger(RanksService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(RankEntity)
     private readonly rankRepository: Repository<RankEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
-    private readonly dataSource: DataSource,
-  ) {}
+    private readonly dataSource: DataSource) {}
 
   /**
    * Returns all ranks for a group, ordered by requiredPoints ascending.
    * Auth is read from `maq_auth` cookie OR query `auth` parameter (soft token resolution).
    */
   async getRanksForGroup(req: Request, groupId: number, queryAuth?: string): Promise<RankEntity[]> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, queryAuth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, queryAuth);
     if (!subject) {
-      throw new ForbiddenException('Not authorized');
+      throw new UnauthorizedException('Not authorized');
     }
     await this.assertGroupExists(groupId);
     return this.rankRepository.find({
@@ -48,9 +47,9 @@ export class RanksService {
    * Updates an existing rank.
    */
   async updateRank(req: Request, groupId: number, rankId: number, dto: UpdateRankDto): Promise<RankEntity> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
     if (!subject) {
-      throw new ForbiddenException('Not authorized');
+      throw new UnauthorizedException('Not authorized');
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
@@ -68,6 +67,7 @@ export class RanksService {
     if (dto.storyDescription !== undefined) rank.storyDescription = dto.storyDescription;
     if (dto.storeDiscount !== undefined) rank.storeDiscount = dto.storeDiscount;
     if (dto.uniqueStoreItems !== undefined) rank.uniqueStoreItems = dto.uniqueStoreItems;
+    if (dto.discount !== undefined) rank.discount = dto.discount;
 
     const saved = await this.rankRepository.save(rank);
     await this.recalculateRanksForGroup(groupId);
@@ -79,9 +79,9 @@ export class RanksService {
    * Deletes a rank from a group.
    */
   async deleteRank(req: Request, groupId: number, rankId: number, bodyAuth?: string): Promise<{ deleted: boolean }> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, bodyAuth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, bodyAuth);
     if (!subject) {
-      throw new ForbiddenException('Not authorized');
+      throw new UnauthorizedException('Not authorized');
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
@@ -104,8 +104,7 @@ export class RanksService {
            AND enrollment_id IN (
              SELECT id FROM gamification.enrollments WHERE group_id = $2
            )`,
-        [rankId, groupId],
-      );
+        [rankId, groupId]);
       await queryRunner.manager.remove(RankEntity, rank);
       await queryRunner.commitTransaction();
       this.logger.log(`Rank (id=${rankId}) deleted from group ${groupId}`);
@@ -128,9 +127,9 @@ export class RanksService {
    * @returns The persisted rank entity
    */
   async createRank(req: Request, groupId: number, dto: CreateRankDto): Promise<RankEntity> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
     if (!subject) {
-      throw new ForbiddenException('Not authorized');
+      throw new UnauthorizedException('Not authorized');
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
@@ -147,6 +146,7 @@ export class RanksService {
       storyDescription: dto.storyDescription ?? null,
       storeDiscount: dto.storeDiscount ?? 0,
       uniqueStoreItems: dto.uniqueStoreItems ?? null,
+      discount: dto.discount ?? 0,
     });
 
     const saved = await this.rankRepository.save(entity);
@@ -192,8 +192,7 @@ export class RanksService {
        WHERE enrollment_id IN (
            SELECT id FROM gamification.enrollments WHERE group_id = $1
        )`,
-      [groupId],
-    );
+      [groupId]);
     this.logger.debug(`Recalculated ranks for all students in group ${groupId}`);
   }
 }

@@ -9,6 +9,7 @@ export type ParsedStageRequest = {
   stageId?: number;
   groupId?: number;
   name?: string;
+  visibilityStatus?: number;
 };
 
 export type StageParseFailure = {
@@ -77,6 +78,17 @@ function parseOptionalNonEmptyString(value: unknown): string | undefined | null 
   return trimmed;
 }
 
+function parseOptionalVisibilityStatus(value: unknown): number | undefined | null {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (Number.isInteger(parsed) && (parsed === 0 || parsed === 1 || parsed === 2)) {
+    return parsed;
+  }
+  return null;
+}
+
 function invalid(method: StageMethod): StageParseFailure {
   return { ok: false, method, stage: STAGE_RESPONSE_INVALID_REQUEST_ID };
 }
@@ -108,6 +120,10 @@ export function parseStageRequest(body: unknown): StageParseResult {
   if (name === null) {
     return invalid(method);
   }
+  const visibilityStatus = parseOptionalVisibilityStatus(body.visibilityStatus);
+  if (visibilityStatus === null) {
+    return invalid(method);
+  }
   return {
     ok: true,
     request: {
@@ -116,6 +132,7 @@ export function parseStageRequest(body: unknown): StageParseResult {
       stageId,
       groupId,
       name,
+      visibilityStatus,
     },
   };
 }
