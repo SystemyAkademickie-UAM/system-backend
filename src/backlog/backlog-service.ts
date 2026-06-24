@@ -79,6 +79,9 @@ export class BacklogService {
     }
 
     const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
+    if (!primaryRole) {
+      return { error: 'Forbidden: No role found' };
+    }
     if (primaryRole !== STUDENT_ROLE_NAME) {
       return { error: 'Forbidden: Requires privilege' };
     }
@@ -141,6 +144,9 @@ export class BacklogService {
     }
 
     const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
+    if (!primaryRole) {
+      return { error: 'Forbidden: No role found' };
+    }
     const hasPrivileges =
       primaryRole === SUPER_ROLE_NAME ||
       primaryRole === ADMINISTRATOR_ROLE_NAME ||
