@@ -96,6 +96,7 @@ export class ShopItemsService {
         educationalDescription: dto.educationalDescription ?? null,
         imageRef: dto.imageRef ?? null,
         categoryId: dto.categoryId ?? null,
+        isPublished: true,
       });
 
       const savedItem = await queryRunner.manager.save(item);
@@ -174,6 +175,7 @@ export class ShopItemsService {
         storyDescription: template.storyDescription,
         educationalDescription: template.educationalDescription,
         categoryId: dto.categoryId ?? null,
+        isPublished: true,
       });
 
       const savedItem = await queryRunner.manager.save(item);
