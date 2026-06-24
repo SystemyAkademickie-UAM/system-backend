@@ -23,6 +23,7 @@ describe('BacklogService', () => {
       find: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
+      update: jest.fn(),
     };
     groupRepository = {
       exist: jest.fn(),
@@ -292,6 +293,154 @@ describe('BacklogService', () => {
       expect(result).toEqual([
         { id: 1, type: 'SHOP_PURCHASE', date: mockDate.toISOString(), value: 'item_1', accountId: 10, isRead: false },
       ]);
+    });
+  });
+
+  describe('markAsRead', () => {
+    const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 5;
+    const internalGroupId = 5;
+    const backlogId = 42;
+
+    it('should return error if unauthorized', async () => {
+      // Arrange
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue(null);
+
+      // Act
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+
+      // Assert
+      expect(result).toEqual({ error: 'Unauthorized' });
+    });
+
+    it('should return error if no role found', async () => {
+      // Arrange
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue(null);
+
+      // Act
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+
+      // Assert
+      expect(result).toEqual({ error: 'Forbidden: No role found' });
+    });
+
+    it('should allow SUPER to mark any backlog item without ownership check', async () => {
+      // Arrange
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('super');
+      backlogRepository.update.mockResolvedValue({ affected: 1 });
+
+      // Act
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+
+      // Assert
+      expect(userRolesService.findAccountIdForRole).not.toHaveBeenCalled();
+      expect(groupRepository.exist).not.toHaveBeenCalled();
+      expect(backlogRepository.update).toHaveBeenCalledWith(
+        { id: backlogId, groupId: internalGroupId },
+        { isRead: true },
+      );
+      expect(result).toEqual({ updated: true });
+    });
+
+    it('should return updated: false for SUPER when no row matched', async () => {
+      // Arrange
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('super');
+      backlogRepository.update.mockResolvedValue({ affected: 0 });
+
+      // Act
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+
+      // Assert
+      expect(result).toEqual({ updated: false });
+    });
+
+    it('should allow enrolled student to mark their own item as read', async () => {
+      // Arrange
+      const studentAccountId = 10;
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
+      userRolesService.findAccountIdForRole.mockResolvedValue(studentAccountId);
+      enrollmentRepository.exist.mockResolvedValue(true);
+      backlogRepository.update.mockResolvedValue({ affected: 1 });
+
+      // Act
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+
+      // Assert
+      expect(enrollmentRepository.exist).toHaveBeenCalledWith({
+        where: { groupId: internalGroupId, studentAccountId },
+      });
+      expect(backlogRepository.update).toHaveBeenCalledWith(
+        { id: backlogId, groupId: internalGroupId, accountId: studentAccountId },
+        { isRead: true },
+      );
+      expect(result).toEqual({ updated: true });
+    });
+
+    it('should return Forbidden for student not enrolled in group', async () => {
+      // Arrange
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('student');
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      enrollmentRepository.exist.mockResolvedValue(false);
+
+      // Act
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+
+      // Assert
+      expect(result).toEqual({ error: 'Forbidden: Not enrolled' });
+    });
+
+    it('should allow lecturer who owns the group to mark any item as read', async () => {
+      // Arrange
+      const lecturerAccountId = 20;
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('lecturer');
+      userRolesService.findAccountIdForRole.mockResolvedValue(lecturerAccountId);
+      groupRepository.exist.mockResolvedValue(true);
+      backlogRepository.update.mockResolvedValue({ affected: 1 });
+
+      // Act
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+
+      // Assert
+      expect(groupRepository.exist).toHaveBeenCalledWith({
+        where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+      });
+      expect(backlogRepository.update).toHaveBeenCalledWith(
+        { id: backlogId, groupId: internalGroupId },
+        { isRead: true },
+      );
+      expect(result).toEqual({ updated: true });
+    });
+
+    it('should return Forbidden for lecturer who does not own the group', async () => {
+      // Arrange
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('lecturer');
+      userRolesService.findAccountIdForRole.mockResolvedValue(20);
+      groupRepository.exist.mockResolvedValue(false);
+
+      // Act
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+
+      // Assert
+      expect(result).toEqual({ error: 'Forbidden: Not group owner' });
+    });
+
+    it('should return Forbidden for unknown role', async () => {
+      // Arrange
+      authTokenSessionService.resolveSubjectStrongFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('unknown_role');
+      userRolesService.findAccountIdForRole.mockResolvedValue(99);
+
+      // Act
+      const result = await service.markAsRead({} as Request, publicGroupId, backlogId, 'browser-id', undefined);
+
+      // Assert
+      expect(result).toEqual({ error: 'Forbidden: Role not authorized' });
     });
   });
 });

@@ -109,4 +109,53 @@ describe('BacklogController', () => {
       );
     });
   });
+
+  describe('markAsRead', () => {
+    it('should return updated result when service succeeds', async () => {
+      // Arrange
+      const mockReq = {} as Request;
+      service.markAsRead.mockResolvedValue({ updated: true });
+
+      // Act
+      const result = await controller.markAsRead(100001, 42, mockReq, 'browser-id');
+
+      // Assert
+      expect(result).toEqual({ updated: true });
+      expect(service.markAsRead).toHaveBeenCalledWith(mockReq, 100001, 42, 'browser-id', undefined);
+    });
+
+    it('should return updated: false when no backlog row matched', async () => {
+      // Arrange
+      const mockReq = {} as Request;
+      service.markAsRead.mockResolvedValue({ updated: false });
+
+      // Act
+      const result = await controller.markAsRead(100001, 42, mockReq, 'browser-id');
+
+      // Assert
+      expect(result).toEqual({ updated: false });
+    });
+
+    it('should throw ForbiddenException when service returns a Forbidden error', async () => {
+      // Arrange
+      const mockReq = {} as Request;
+      service.markAsRead.mockResolvedValue({ error: 'Forbidden: Not enrolled' });
+
+      // Act & Assert
+      await expect(controller.markAsRead(100001, 42, mockReq, 'browser-id')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should throw UnauthorizedException when service returns an unauthorized error', async () => {
+      // Arrange
+      const mockReq = {} as Request;
+      service.markAsRead.mockResolvedValue({ error: 'Unauthorized' });
+
+      // Act & Assert
+      await expect(controller.markAsRead(100001, 42, mockReq, 'browser-id')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
 });

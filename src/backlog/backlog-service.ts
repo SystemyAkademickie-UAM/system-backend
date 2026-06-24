@@ -219,7 +219,15 @@ export class BacklogService {
 
     const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
     if (!primaryRole) return { error: 'Forbidden: No role found' };
-    
+
+    if (primaryRole === SUPER_ROLE_NAME) {
+      const result = await this.backlogRepository.update(
+        { id: backlogId, groupId: internalGroupId },
+        { isRead: true },
+      );
+      return { updated: result.affected ? result.affected > 0 : false };
+    }
+
     const accountId = await this.userRolesService.findAccountIdForRole(subject.userId, primaryRole);
     if (!accountId) return { error: 'Forbidden: Account not found' };
 
@@ -228,7 +236,7 @@ export class BacklogService {
         where: { groupId: internalGroupId, studentAccountId: accountId },
       });
       if (!isEnrolled) return { error: 'Forbidden: Not enrolled' };
-      
+
       const result = await this.backlogRepository.update(
         { id: backlogId, groupId: internalGroupId, accountId },
         { isRead: true },
