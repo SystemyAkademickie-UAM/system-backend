@@ -27,8 +27,7 @@ export class SuperAdminBootstrapService implements OnModuleInit {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(OrganizationEntity)
-    private readonly organizationRepository: Repository<OrganizationEntity>,
-  ) {}
+    private readonly organizationRepository: Repository<OrganizationEntity>) {}
 
   async onModuleInit(): Promise<void> {
     await this.ensureBootstrapSuperAdminIfNeeded();
@@ -56,8 +55,7 @@ export class SuperAdminBootstrapService implements OnModuleInit {
     if (bootstrapEmail === null) {
       this.logger.warn(
         `No super admin account in database and ${SUPERADMIN_BOOTSTRAP_EMAIL_ENV_KEY} is unset — ` +
-          'admin API will be unavailable until a super row is inserted manually.',
-      );
+          'admin API will be unavailable until a super row is inserted manually.');
       return;
     }
     const user = await this.userRepository
@@ -67,8 +65,7 @@ export class SuperAdminBootstrapService implements OnModuleInit {
     if (user === null) {
       this.logger.warn(
         `Bootstrap super admin pending: no auth.users row for ${bootstrapEmail} — ` +
-          'will grant super on first SAML login with that email.',
-      );
+          'will grant super on first SAML login with that email.');
       return;
     }
     await this.grantSuperRoleIfFirst(user.id);
@@ -117,8 +114,7 @@ export class SuperAdminBootstrapService implements OnModuleInit {
           return parsed;
         }
         this.logger.warn(
-          `${SUPERADMIN_BOOTSTRAP_ORGANIZATION_ID_ENV_KEY}=${parsed} not found — falling back to first active organization`,
-        );
+          `${SUPERADMIN_BOOTSTRAP_ORGANIZATION_ID_ENV_KEY}=${parsed} not found — falling back to first active organization`);
       }
     }
     const firstActive = await this.organizationRepository.findOne({

@@ -9,6 +9,7 @@ import type { Request } from 'express';
 import { Repository } from 'typeorm';
 
 import { AdminAccessService } from '../admin-access.service';
+import { AccountRemovalService } from '../accounts/account-removal.service';
 import { ADMINISTRATOR_ROLE_NAME } from '../../constants/role-name-constants';
 import { AccountEntity } from '../../database/entities/account.entity';
 import { OrganizationEntity } from '../../database/entities/organization.entity';
@@ -30,19 +31,18 @@ export class AdminOrganizationAdministratorsService {
 
   constructor(
     private readonly adminAccessService: AdminAccessService,
+    private readonly accountRemovalService: AccountRemovalService,
     @InjectRepository(OrganizationEntity)
     private readonly organizationRepository: Repository<OrganizationEntity>,
     @InjectRepository(AccountEntity)
     private readonly accountRepository: Repository<AccountEntity>,
     @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>,
-  ) {}
+    private readonly userRepository: Repository<UserEntity>) {}
 
   async listAdministrators(
     req: Request,
     organizationId: number,
-    queryAuth?: string,
-  ): Promise<OrganizationAdministratorListItem[]> {
+    queryAuth?: string): Promise<OrganizationAdministratorListItem[]> {
     await this.adminAccessService.assertSuperAdmin(req, queryAuth);
     await this.assertOrganizationExists(organizationId);
     const rows = await this.accountRepository.find({
@@ -70,8 +70,7 @@ export class AdminOrganizationAdministratorsService {
   async grantAdministrator(
     req: Request,
     organizationId: number,
-    dto: GrantOrganizationAdministratorDto,
-  ): Promise<OrganizationAdministratorListItem> {
+    dto: GrantOrganizationAdministratorDto): Promise<OrganizationAdministratorListItem> {
     await this.adminAccessService.assertSuperAdmin(req, dto.auth);
     await this.assertOrganizationExists(organizationId);
     const normalizedEmail = dto.email.trim().toLowerCase();
@@ -81,8 +80,7 @@ export class AdminOrganizationAdministratorsService {
       .getOne();
     if (user === null) {
       throw new NotFoundException(
-        `No user with email ${dto.email.trim()} — they must complete SAML login once before becoming an administrator.`,
-      );
+        `No user with email ${dto.email.trim()} — they must complete SAML login once before becoming an administrator.`);
     }
     const existing = await this.accountRepository.findOne({
       where: { userId: user.id, organizationId, role: ADMINISTRATOR_ROLE_NAME },
@@ -104,8 +102,7 @@ export class AdminOrganizationAdministratorsService {
     });
     const saved = await this.accountRepository.save(row);
     this.logger.log(
-      `Granted administrator org=${organizationId} userId=${user.id} accountId=${saved.id}`,
-    );
+      `Granted administrator org=${organizationId} userId=${user.id} accountId=${saved.id}`);
     return {
       accountId: saved.id,
       userId: user.id,
@@ -120,8 +117,7 @@ export class AdminOrganizationAdministratorsService {
     req: Request,
     organizationId: number,
     accountId: number,
-    queryAuth?: string,
-  ): Promise<void> {
+    queryAuth?: string): Promise<void> {
     await this.adminAccessService.assertSuperAdmin(req, queryAuth);
     await this.assertOrganizationExists(organizationId);
     const row = await this.accountRepository.findOne({
@@ -129,11 +125,13 @@ export class AdminOrganizationAdministratorsService {
     });
     if (row === null) {
       throw new NotFoundException(
-        `Administrator account ${accountId} not found for organization ${organizationId}`,
-      );
+        `Administrator account ${accountId} not found for organization ${organizationId}`);
     }
-    await this.accountRepository.delete({ id: row.id });
-    this.logger.log(`Revoked administrator org=${organizationId} accountId=${accountId}`);
+    const result = await this.accountRemovalService.removeOrganizationAccountRecord(
+      organizationId,
+      accountId);
+    this.logger.log(
+      `Revoked administrator org=${organizationId} accountId=${accountId} userRemoved=${result.userRemoved}`);
   }
 
   private async assertOrganizationExists(organizationId: number): Promise<void> {

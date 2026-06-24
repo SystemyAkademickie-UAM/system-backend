@@ -55,8 +55,7 @@ function splitDisplayName(displayName: string | undefined): { name: string; surn
 export class SamlLinkedUserService {
   constructor(
     @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>,
-  ) {}
+    private readonly userRepository: Repository<UserEntity>) {}
 
   /**
    * Finds an existing profile by email or creates a row satisfying NOT NULL columns.
@@ -84,8 +83,7 @@ export class SamlLinkedUserService {
           {
             name,
             surname,
-          },
-        );
+          });
         return byEmail.id;
       }
     }

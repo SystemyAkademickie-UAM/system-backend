@@ -38,11 +38,11 @@ describe('BacklogController', () => {
       service.getStudentBacklog.mockResolvedValue(expectedItems);
 
       // Act
-      const result = await controller.getStudentBacklog(1, mockReq, 'browser-id');
+      const result = await controller.getStudentBacklog(1, mockReq);
 
       // Assert
       expect(result).toEqual(expectedItems);
-      expect(service.getStudentBacklog).toHaveBeenCalledWith(mockReq, 1, 'browser-id', undefined, 50, 0);
+      expect(service.getStudentBacklog).toHaveBeenCalledWith(mockReq, 1, 50, 0);
     });
 
     it('should throw UnauthorizedException when service returns an error', async () => {
@@ -51,7 +51,7 @@ describe('BacklogController', () => {
       service.getStudentBacklog.mockResolvedValue({ error: 'Unauthorized' });
 
       // Act & Assert
-      await expect(controller.getStudentBacklog(1, mockReq, 'browser-id')).rejects.toThrow(
+      await expect(controller.getStudentBacklog(1, mockReq)).rejects.toThrow(
         UnauthorizedException,
       );
     });
@@ -62,7 +62,7 @@ describe('BacklogController', () => {
       service.getStudentBacklog.mockResolvedValue({ error: 'Forbidden: access denied' });
 
       // Act & Assert
-      await expect(controller.getStudentBacklog(1, mockReq, 'browser-id')).rejects.toThrow(
+      await expect(controller.getStudentBacklog(1, mockReq)).rejects.toThrow(
         ForbiddenException,
       );
     });
@@ -76,11 +76,11 @@ describe('BacklogController', () => {
       service.getGroupBacklog.mockResolvedValue(expectedItems);
 
       // Act
-      const result = await controller.getGroupBacklog(1, mockReq, 'browser-id');
+      const result = await controller.getGroupBacklog(1, mockReq);
 
       // Assert
       expect(result).toEqual(expectedItems);
-      expect(service.getGroupBacklog).toHaveBeenCalledWith(mockReq, 1, 'browser-id', undefined, 50, 0);
+      expect(service.getGroupBacklog).toHaveBeenCalledWith(mockReq, 1, 50, 0);
     });
 
     it('should throw UnauthorizedException when service returns an unauthorized error', async () => {
@@ -89,7 +89,7 @@ describe('BacklogController', () => {
       service.getGroupBacklog.mockResolvedValue({ error: 'Unauthorized' });
 
       // Act & Assert
-      await expect(controller.getGroupBacklog(1, mockReq, 'browser-id')).rejects.toThrow(
+      await expect(controller.getGroupBacklog(1, mockReq)).rejects.toThrow(
         UnauthorizedException,
       );
     });
@@ -100,7 +100,7 @@ describe('BacklogController', () => {
       service.getGroupBacklog.mockResolvedValue({ error: 'Forbidden: access denied' });
 
       // Act & Assert
-      await expect(controller.getGroupBacklog(1, mockReq, 'browser-id')).rejects.toThrow(
+      await expect(controller.getGroupBacklog(1, mockReq)).rejects.toThrow(
         ForbiddenException,
       );
     });

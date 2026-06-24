@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { BadgeEntity } from '../database/entities/badge.entity';
 import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
@@ -31,7 +31,7 @@ export class StudentBadgesService {
   private readonly logger = new Logger(StudentBadgesService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     private readonly ranksService: RanksService,
     private readonly dataSource: DataSource,
@@ -40,8 +40,7 @@ export class StudentBadgesService {
     @InjectRepository(EarnedBadgeEntity)
     private readonly earnedBadgeRepository: Repository<EarnedBadgeEntity>,
     @InjectRepository(EnrollmentEntity)
-    private readonly enrollmentRepository: Repository<EnrollmentEntity>,
-  ) {}
+    private readonly enrollmentRepository: Repository<EnrollmentEntity>) {}
 
   /** GET /groups/:groupId/students/:accountId/badges */
   async getStudentBadges(req: Request, groupId: number, accountId: number): Promise<{ badges: StudentBadgeItem[] }> {
@@ -69,8 +68,7 @@ export class StudentBadgesService {
     req: Request,
     groupId: number,
     accountId: number,
-    badgeId: number,
-  ): Promise<{ isEarned: boolean }> {
+    badgeId: number): Promise<{ isEarned: boolean }> {
     await this.assertLecturer(req);
     const enrollment = await this.findEnrollmentOrFail(groupId, accountId);
     const badge = await this.badgeRepository.findOne({ where: { id: badgeId, groupId } });
@@ -93,8 +91,7 @@ export class StudentBadgesService {
           this.ranksService,
           enrollment.id,
           groupId,
-          rewardAmount,
-        );
+          rewardAmount);
         isEarned = false;
         this.logger.log(`Badge ${badgeId} revoked from enrollment ${enrollment.id}`);
       } else {
@@ -108,8 +105,7 @@ export class StudentBadgesService {
           this.ranksService,
           enrollment.id,
           groupId,
-          rewardAmount,
-        );
+          rewardAmount);
         isEarned = true;
         this.logger.log(`Badge ${badgeId} granted to enrollment ${enrollment.id}`);
       }
@@ -130,14 +126,13 @@ export class StudentBadgesService {
     });
     if (!enrollment) {
       throw new NotFoundException(
-        `Student with accountId ${accountId} is not enrolled in group ${groupId}`,
-      );
+        `Student with accountId ${accountId} is not enrolled in group ${groupId}`);
     }
     return enrollment;
   }
 
   private async assertLecturer(req: Request): Promise<void> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }

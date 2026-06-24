@@ -8,7 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
-import { AuthTokenSessionService, type AuthTokenSubject } from '../auth/api-token/auth-token-session-service';
+import { SessionService, type SessionSubject } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
@@ -34,7 +34,7 @@ export class ShopItemsService {
   private readonly logger = new Logger(ShopItemsService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(ItemEntity)
     private readonly itemRepository: Repository<ItemEntity>,
@@ -58,8 +58,7 @@ export class ShopItemsService {
     private readonly groupRepository: Repository<GroupEntity>,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
-    private readonly dataSource: DataSource,
-  ) {}
+    private readonly dataSource: DataSource) {}
 
   async getItemsForGroup(req: Request, groupId: number, queryAuth?: string) {
     const isLecturer = await this.assertCanReadGroupShop(req, groupId, queryAuth);
@@ -306,8 +305,8 @@ export class ShopItemsService {
     return { deleted: true };
   }
 
-  private async resolveSubject(req: Request, queryAuth?: string): Promise<AuthTokenSubject> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, queryAuth);
+  private async resolveSubject(req: Request, queryAuth?: string): Promise<SessionSubject> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, queryAuth);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }

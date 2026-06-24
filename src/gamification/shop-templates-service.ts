@@ -8,8 +8,7 @@ import { DefaultItemTemplateEntity } from '../database/entities/default-item-tem
 export class ShopTemplatesService {
   constructor(
     @InjectRepository(DefaultItemTemplateEntity)
-    private readonly templateRepository: Repository<DefaultItemTemplateEntity>,
-  ) {}
+    private readonly templateRepository: Repository<DefaultItemTemplateEntity>) {}
 
   async getDefaultTemplates(): Promise<DefaultItemTemplateEntity[]> {
     return this.templateRepository.find({

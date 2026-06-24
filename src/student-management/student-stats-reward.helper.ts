@@ -10,8 +10,7 @@ export async function ensureStudentStatsRow(
   queryRunner: QueryRunner,
   ranksService: RanksService,
   enrollmentId: number,
-  groupId: number,
-): Promise<StudentStatsEntity> {
+  groupId: number): Promise<StudentStatsEntity> {
   let stats = await queryRunner.manager.findOne(StudentStatsEntity, {
     where: { enrollmentId },
   });
@@ -35,8 +34,7 @@ export async function applyActivityCurrencyDelta(
   ranksService: RanksService,
   enrollmentId: number,
   groupId: number,
-  delta: number,
-): Promise<void> {
+  delta: number): Promise<void> {
   if (delta === 0) {
     return;
   }
@@ -55,8 +53,7 @@ export async function applyBadgeGrantDelta(
   ranksService: RanksService,
   enrollmentId: number,
   groupId: number,
-  rewardAmount: number,
-): Promise<void> {
+  rewardAmount: number): Promise<void> {
   await applyActivityCurrencyDelta(queryRunner, ranksService, enrollmentId, groupId, rewardAmount);
 }
 
@@ -68,8 +65,7 @@ export async function applyBadgeRevokeDelta(
   ranksService: RanksService,
   enrollmentId: number,
   groupId: number,
-  rewardAmount: number,
-): Promise<void> {
+  rewardAmount: number): Promise<void> {
   if (rewardAmount === 0) {
     return;
   }

@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { BadgeEntity, BadgeRarity } from '../database/entities/badge.entity';
 import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
@@ -27,7 +27,7 @@ export class BadgesService {
   private readonly logger = new Logger(BadgesService.name);
 
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     private readonly ranksService: RanksService,
     private readonly dataSource: DataSource,
@@ -36,11 +36,10 @@ export class BadgesService {
     @InjectRepository(EarnedBadgeEntity)
     private readonly earnedBadgeRepository: Repository<EarnedBadgeEntity>,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>,
-  ) {}
+    private readonly groupRepository: Repository<GroupEntity>) {}
 
   async getBadgesForGroup(req: Request, groupId: number, queryAuth?: string): Promise<BadgeEntity[]> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, queryAuth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, queryAuth);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }
@@ -59,7 +58,7 @@ export class BadgesService {
   }
 
   async updateBadge(req: Request, groupId: number, badgeId: number, dto: UpdateBadgeDto): Promise<BadgeEntity> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }
@@ -95,9 +94,8 @@ export class BadgesService {
     req: Request,
     groupId: number,
     badgeId: number,
-    bodyAuth?: string,
-  ): Promise<DeleteBadgeResponse> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, bodyAuth);
+    bodyAuth?: string): Promise<DeleteBadgeResponse> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, bodyAuth);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }
@@ -123,8 +121,7 @@ export class BadgesService {
             this.ranksService,
             earned.enrollmentId,
             groupId,
-            rewardAmount,
-          );
+            rewardAmount);
           revokedFromStudents += 1;
         }
         await queryRunner.manager.remove(EarnedBadgeEntity, earned);
@@ -132,8 +129,7 @@ export class BadgesService {
       await queryRunner.manager.remove(BadgeEntity, badge);
       await queryRunner.commitTransaction();
       this.logger.log(
-        `Badge (id=${badgeId}) deleted from group ${groupId}; revokedFromStudents=${revokedFromStudents}`,
-      );
+        `Badge (id=${badgeId}) deleted from group ${groupId}; revokedFromStudents=${revokedFromStudents}`);
       return { deleted: true, revokedFromStudents };
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
@@ -145,7 +141,7 @@ export class BadgesService {
   }
 
   async createBadge(req: Request, groupId: number, dto: CreateBadgeDto): Promise<BadgeEntity> {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }

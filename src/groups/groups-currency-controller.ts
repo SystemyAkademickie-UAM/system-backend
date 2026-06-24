@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -39,9 +38,8 @@ export class GroupsCurrencyController {
   getCurrencySettings(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
   ): Promise<GetCurrencyResponseBody> {
-    return this.groupsCurrencyService.getCurrencySettings(req, publicGroupId, browserId, undefined);
+    return this.groupsCurrencyService.getCurrencySettings(req, publicGroupId);
   }
 
   /**
@@ -54,9 +52,7 @@ export class GroupsCurrencyController {
   updateCurrencySettings(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,
-    @Headers('x-browser-id') browserId: string | undefined,
-    @Body() body: UpdateCurrencyDto,
-  ): Promise<UpdateCurrencyResponseBody> {
-    return this.groupsCurrencyService.updateCurrencySettings(req, publicGroupId, body, browserId);
+    @Body() body: UpdateCurrencyDto): Promise<UpdateCurrencyResponseBody> {
+    return this.groupsCurrencyService.updateCurrencySettings(req, publicGroupId, body);
   }
 }

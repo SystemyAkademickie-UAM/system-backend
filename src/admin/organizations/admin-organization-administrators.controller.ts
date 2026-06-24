@@ -21,17 +21,16 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 
-import { MAQ_AUTH_COOKIE_NAME } from '../../constants/api-token-constants';
+import { MAQ_SESSION_COOKIE_NAME } from '../../constants/session-constants';
 import { GrantOrganizationAdministratorDto } from './dto/grant-organization-administrator.dto';
 import { AdminOrganizationAdministratorsService } from './admin-organization-administrators.service';
 
 @ApiTags('Admin organizations')
-@ApiCookieAuth(MAQ_AUTH_COOKIE_NAME)
+@ApiCookieAuth(MAQ_SESSION_COOKIE_NAME)
 @Controller('admin/organizations/:organizationId/administrators')
 export class AdminOrganizationAdministratorsController {
   constructor(
-    private readonly adminOrganizationAdministratorsService: AdminOrganizationAdministratorsService,
-  ) {}
+    private readonly adminOrganizationAdministratorsService: AdminOrganizationAdministratorsService) {}
 
   @Get()
   @ApiOperation({ summary: 'List organization administrators (super role)' })
@@ -39,8 +38,7 @@ export class AdminOrganizationAdministratorsController {
   @ApiForbiddenResponse({ description: 'Caller lacks super role' })
   listAdministrators(
     @Req() req: Request,
-    @Param('organizationId', ParseIntPipe) organizationId: number,
-  ) {
+    @Param('organizationId', ParseIntPipe) organizationId: number) {
     return this.adminOrganizationAdministratorsService.listAdministrators(req, organizationId);
   }
 
@@ -53,8 +51,7 @@ export class AdminOrganizationAdministratorsController {
   grantAdministrator(
     @Req() req: Request,
     @Param('organizationId', ParseIntPipe) organizationId: number,
-    @Body() dto: GrantOrganizationAdministratorDto,
-  ) {
+    @Body() dto: GrantOrganizationAdministratorDto) {
     return this.adminOrganizationAdministratorsService.grantAdministrator(req, organizationId, dto);
   }
 
@@ -65,12 +62,10 @@ export class AdminOrganizationAdministratorsController {
   async revokeAdministrator(
     @Req() req: Request,
     @Param('organizationId', ParseIntPipe) organizationId: number,
-    @Param('accountId', ParseIntPipe) accountId: number,
-  ): Promise<void> {
+    @Param('accountId', ParseIntPipe) accountId: number): Promise<void> {
     await this.adminOrganizationAdministratorsService.revokeAdministrator(
       req,
       organizationId,
-      accountId,
-    );
+      accountId);
   }
 }

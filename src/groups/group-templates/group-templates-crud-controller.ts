@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 
-import { AuthTokenSessionService } from '../../auth/api-token/auth-token-session-service';
+import { SessionService } from '../../auth/session/session.service';
 import { GroupsService } from '../groups-service';
 import { CloneGroupTemplateDto, GetGroupTemplatesQueryDto, UpdateGroupTemplateDto } from '../dto/group-templates-crud.dto';
 import { GroupTemplatesCrudService } from './group-templates-crud-service';
@@ -23,17 +23,15 @@ import { GroupTemplatesCrudService } from './group-templates-crud-service';
 @Controller('group-templates')
 export class GroupTemplatesCrudController {
   constructor(
-    private readonly authTokenSessionService: AuthTokenSessionService,
+    private readonly sessionService: SessionService,
     private readonly groupsService: GroupsService,
-    private readonly crudService: GroupTemplatesCrudService,
-  ) {}
+    private readonly crudService: GroupTemplatesCrudService) {}
 
   @Get()
   async getTemplates(
     @Query() query: GetGroupTemplatesQueryDto,
-    @Req() req: Request,
-  ) {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, query.auth);
+    @Req() req: Request) {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, query.auth);
     if (!subject) {
       throw new ForbiddenException('Missing or invalid session');
     }
@@ -44,17 +42,15 @@ export class GroupTemplatesCrudController {
       lecturerAccountId,
       query.scope || 'public',
       query.limit || 20,
-      query.offset || 0,
-    );
+      query.offset || 0);
   }
 
   @Get(':id')
   async getTemplateDetails(
     @Param('id', ParseIntPipe) templateId: number,
     @Query('auth') auth: string | undefined,
-    @Req() req: Request,
-  ) {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, auth);
+    @Req() req: Request) {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, auth);
     if (!subject) {
       throw new ForbiddenException('Missing or invalid session');
     }
@@ -68,9 +64,8 @@ export class GroupTemplatesCrudController {
   async updateTemplate(
     @Param('id', ParseIntPipe) templateId: number,
     @Body() dto: UpdateGroupTemplateDto,
-    @Req() req: Request,
-  ) {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    @Req() req: Request) {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
     if (!subject) {
       throw new ForbiddenException('Missing or invalid session');
     }
@@ -89,9 +84,8 @@ export class GroupTemplatesCrudController {
   async deleteTemplate(
     @Param('id', ParseIntPipe) templateId: number,
     @Body('auth') auth: string | undefined,
-    @Req() req: Request,
-  ) {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, auth);
+    @Req() req: Request) {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, auth);
     if (!subject) {
       throw new ForbiddenException('Missing or invalid session');
     }
@@ -108,7 +102,7 @@ export class GroupTemplatesCrudController {
     @Body() dto: CloneGroupTemplateDto,
     @Req() req: Request,
   ) {
-    const subject = await this.authTokenSessionService.resolveSubjectSoftFromRequest(req, dto.auth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
     if (!subject) {
       throw new ForbiddenException('Missing or invalid session');
     }

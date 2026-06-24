@@ -27,7 +27,7 @@ export interface GroupTemplateGroupSettings {
   imageRef: string | null;
   description: string | null;
   currency: string | null;
-  currencyIcon: string | null;
+  currencyEmoji: string | null;
   lives: number | null;
   livesIcon: string | null;
 }

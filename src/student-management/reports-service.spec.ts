@@ -3,7 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import type { Request } from 'express';
 
-import { AuthTokenSessionService } from '../auth/api-token/auth-token-session-service';
+import { SessionService, type SessionSubject } from '../auth/session/session.service';
 import { DataSource } from 'typeorm';
 import { ActivityBacklogEntity } from '../database/entities/activity-backlog.entity';
 import { ActivityEntity } from '../database/entities/activity.entity';
@@ -13,9 +13,13 @@ import { StageEntity } from '../database/entities/stage.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { ReportsService } from './reports-service';
 
+function mockSubject(userId: number): SessionSubject {
+  return { userId, activeRole: null, sessionId: 1 };
+}
+
 describe('ReportsService', () => {
   let service: ReportsService;
-  let authTokenSessionService: jest.Mocked<AuthTokenSessionService>;
+  let sessionService: jest.Mocked<SessionService>;
   let userRolesService: jest.Mocked<UserRolesService>;
   let dataSourceQueryMock: jest.Mock;
   let groupRepository: any;
@@ -26,8 +30,8 @@ describe('ReportsService', () => {
 
   beforeEach(async () => {
     dataSourceQueryMock = jest.fn();
-    const mockAuthTokenSessionService = {
-      resolveSubjectSoftFromRequest: jest.fn(),
+    const mockSessionService = {
+      resolveSubjectFromRequest: jest.fn(),
     };
     const mockUserRolesService = {
       userHasRole: jest.fn(),
@@ -40,7 +44,7 @@ describe('ReportsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReportsService,
-        { provide: AuthTokenSessionService, useValue: mockAuthTokenSessionService },
+        { provide: SessionService, useValue: mockSessionService },
         { provide: UserRolesService, useValue: mockUserRolesService },
         {
           provide: DataSource,
@@ -55,20 +59,20 @@ describe('ReportsService', () => {
     }).compile();
 
     service = module.get<ReportsService>(ReportsService);
-    authTokenSessionService = module.get(AuthTokenSessionService);
+    sessionService = module.get(SessionService);
     userRolesService = module.get(UserRolesService);
   });
 
   describe('Authorization checks', () => {
     it('should throw ForbiddenException if no subject is resolved', async () => {
-      authTokenSessionService.resolveSubjectSoftFromRequest.mockResolvedValue(null);
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(null);
       await expect(service.generateGroupReport(mockRequest, 1)).rejects.toThrow(
         ForbiddenException,
       );
     });
 
     it('should throw ForbiddenException if user lacks lecturer role', async () => {
-      authTokenSessionService.resolveSubjectSoftFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.userHasRole.mockResolvedValue(false);
       await expect(service.generateGroupReport(mockRequest, 1)).rejects.toThrow(
         ForbiddenException,
@@ -76,7 +80,7 @@ describe('ReportsService', () => {
     });
 
     it('should throw ForbiddenException if lecturer is not group owner', async () => {
-      authTokenSessionService.resolveSubjectSoftFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.userHasRole.mockResolvedValue(true);
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.exist.mockResolvedValue(false);
@@ -88,7 +92,7 @@ describe('ReportsService', () => {
 
   describe('generateGroupReport', () => {
     beforeEach(() => {
-      authTokenSessionService.resolveSubjectSoftFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.userHasRole.mockResolvedValue(true);
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.exist.mockResolvedValue(true);
@@ -127,7 +131,7 @@ describe('ReportsService', () => {
 
   describe('generateStageReport', () => {
     beforeEach(() => {
-      authTokenSessionService.resolveSubjectSoftFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.userHasRole.mockResolvedValue(true);
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.exist.mockResolvedValue(true);
@@ -164,7 +168,7 @@ describe('ReportsService', () => {
 
   describe('generateStudentReport', () => {
     beforeEach(() => {
-      authTokenSessionService.resolveSubjectSoftFromRequest.mockResolvedValue({ userId: 1 });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.userHasRole.mockResolvedValue(true);
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.exist.mockResolvedValue(true);

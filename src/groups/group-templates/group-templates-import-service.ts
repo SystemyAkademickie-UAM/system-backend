@@ -49,7 +49,7 @@ export class GroupTemplatesImportService {
         imageRef: groupPayload.imageRef,
         description: groupPayload.description,
         currency: groupPayload.currency,
-        currencyIcon: groupPayload.currencyIcon,
+        currencyEmoji: groupPayload.currencyEmoji,
         lives: groupPayload.lives,
         livesIcon: groupPayload.livesIcon,
       });

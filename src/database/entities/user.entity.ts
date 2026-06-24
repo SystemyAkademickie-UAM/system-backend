@@ -44,4 +44,8 @@ export class UserEntity {
   /** Timestamp when the user accepted EULA (null if not accepted). */
   @Column({ name: 'eula_accepted_at', type: 'timestamp', nullable: true, default: null })
   eulaAcceptedAt: Date | null;
+
+  /** Set when nickname/avatar are saved during the registration wizard (before EULA). */
+  @Column({ name: 'profile_submitted_at', type: 'timestamp', nullable: true, default: null })
+  profileSubmittedAt: Date | null;
 }

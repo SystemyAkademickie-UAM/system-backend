@@ -12,3 +12,6 @@ export const ACTIVE_ROLE_THROTTLE_LIMIT = 20;
 
 /** Max `GET /api/auth/saml/login` SSO starts per window per client IP. */
 export const SAML_LOGIN_THROTTLE_LIMIT = 15;
+
+/** Max `POST /api/login/magic-link/request` calls per window per client IP. */
+export const MAGIC_LINK_REQUEST_THROTTLE_LIMIT = 5;

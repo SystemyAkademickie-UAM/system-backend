@@ -77,3 +77,29 @@ One-time network setup: see [installation.md](./installation.md#docker-compose-l
 Interactive API explorer: [openapi.md](./openapi.md).
 
 Never commit `.env`; only `.env.example`.
+
+## CLI scripts (local provisioning)
+
+Run from `system-backend/` with Postgres configured (same env as the API). Role flags: `--student` (default), `--lecturer`, `--administrator`, `--super`.
+
+| npm script | Purpose |
+| ---------- | ------- |
+| `register:org` | Create/update organization (SAML metadata or email login). |
+| `unregister:org` | Soft-delete organization. |
+| `register:user` | Provision user + account in an organization. |
+| `unregister:user` | Remove all accounts for a user (full purge when last membership). |
+| `grant:user-role` | Add role membership for an existing user in an org. |
+| `revoke:user-role` | Remove one role membership (same cascade as account removal). |
+
+Examples:
+
+```bash
+npm run register:user -- user@example.com --org-id 11 --lecturer
+npm run register:user -- jan@example.com --org-id 11 --name Jan --surname Kowalski --complete-registration
+npm run unregister:user -- user@example.com
+npm run grant:user-role -- user@example.com --org-id 11 --administrator
+```
+
+Optional profile flags for `register:user`: `--name`, `--surname`, `--nickname`, `--avatar-id`, `--language`, `--student-id`. With `--complete-registration`, the user skips the registration wizard (profile + EULA marked done).
+
+CLI scripts use the same `DATABASE_*` values as the API. When the API runs in Docker, point `DATABASE_HOST` at the published host port (see `.env.example`).
