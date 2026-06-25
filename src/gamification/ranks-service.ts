@@ -65,6 +65,7 @@ export class RanksService {
     if (dto.icon !== undefined) rank.icon = dto.icon;
     if (dto.requiredPoints !== undefined) rank.requiredPoints = dto.requiredPoints;
     if (dto.storyDescription !== undefined) rank.storyDescription = dto.storyDescription;
+    if (dto.uniqueStoreItems !== undefined) rank.uniqueStoreItems = dto.uniqueStoreItems;
     if (dto.globalDiscountType !== undefined) rank.globalDiscountType = dto.globalDiscountType;
     if (dto.globalDiscountValue !== undefined) rank.globalDiscountValue = dto.globalDiscountValue;
 

@@ -1,4 +1,5 @@
-import { IsArray, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min, Max } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
+import { SHOP_PROMOTION_PERCENT_MAX } from '../../constants/shop-promotion-constants';
 import { PromotionType } from '../../database/entities/badge.entity';
 
 /**
@@ -39,5 +40,7 @@ export class CreateRankDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  @ValidateIf((dto: CreateRankDto) => dto.globalDiscountType === PromotionType.PERCENT)
+  @Max(SHOP_PROMOTION_PERCENT_MAX)
   globalDiscountValue?: number;
 }

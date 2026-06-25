@@ -1,4 +1,5 @@
-import { IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
+import { SHOP_PROMOTION_PERCENT_MAX } from '../../constants/shop-promotion-constants';
 import { BadgeRarity, PromotionType } from '../../database/entities/badge.entity';
 
 /**
@@ -43,5 +44,7 @@ export class CreateBadgeDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  @ValidateIf((dto: CreateBadgeDto) => dto.globalDiscountType === PromotionType.PERCENT)
+  @Max(SHOP_PROMOTION_PERCENT_MAX)
   globalDiscountValue?: number;
 }
