@@ -532,8 +532,9 @@ Manages announcements / posts in **`edukacja.posts`** for a given course group. 
 | `title` | string | Title of the announcement (non-empty). |
 | `content` | string | Body text of the announcement (non-empty). |
 | `createdAt` | string (ISO-8601) | (Optional) Creation date from the frontend. Defaults to server `now()` if omitted. |
+| `publishAt` | string (ISO-8601) | (Optional) Schedule publication. When omitted, post stays unpublished until manually published. When in the past or present, post is published immediately. When in the future, `isPublished` stays `false` until `publishAt` (polled every 60s). |
 
-Posts are created with `isPublished: false` and `publishedAt: null`.
+Posts without `publishAt` are created with `isPublished: false` and `publishedAt: null`. Scheduled posts expose `publishAt` in list responses until published.
 
 **Authorization:** session auth. Caller must have **`autoryzacja.konta`** with **`rola = lecturer`** and must own the group (`edukacja.grupy.teacher_account_id`). Missing lecturer account, invalid token, browser mismatch, or ownership mismatch yields `{ "status": 200, "post": -1 }` (or `-2` for creation error).
 
@@ -575,7 +576,8 @@ Posts are created with `isPublished: false` and `publishedAt: null`.
       "content": "Zajęcia w czwartek zostają odwołane.",
       "isPublished": true,
       "createdAt": "2026-06-15T20:00:00.000Z",
-      "publishedAt": "2026-06-15T21:30:00.000Z"
+      "publishedAt": "2026-06-15T21:30:00.000Z",
+      "publishAt": null
     }
   ]
 }
@@ -596,6 +598,7 @@ Posts are created with `isPublished: false` and `publishedAt: null`.
 | `title` | string | New title. |
 | `content` | string | New content. |
 | `isPublished` | boolean | Toggle visibility. When set to `true`, backend auto-sets `publishedAt` to current timestamp. When set to `false`, `publishedAt` resets to `null`. |
+| `publishAt` | string (ISO-8601) \| null | Schedule or unschedule publication. Future timestamp keeps the post hidden; past/present publishes immediately. Pass `null` to clear scheduling. |
 | `auth` | string | Plaintext bearer (alternative to cookie). |
 
 **Response example:**
@@ -667,6 +670,42 @@ Cookie: maq_auth=<token>
 ```json
 { "statusCode": 200, "enrollmentId": 42, "groupId": 100137 }
 ```
+
+---
+
+## Group participants (student & lecturer)
+
+Limited roster for in-group UI (nickname, avatar, name). Does not expose email, currency, or rank stats.
+
+**Endpoint:** `GET /api/groups/:groupId/participants`
+
+**Auth:** Session required. Caller must be the group owner (lecturer) or an enrolled student. Others receive `403 Forbidden`.
+
+**Response:** `200 OK` — JSON array:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `accountId` | integer | Student account id. |
+| `nickname` | string | Display nickname. |
+| `avatarUrl` | string \| null | Avatar image URL. |
+| `name` | string (optional) | First name. |
+| `surname` | string (optional) | Last name. |
+
+---
+
+## Student stats bulk update (lecturer)
+
+**Endpoint:** `PATCH /api/groups/:groupId/students/bulk-update`
+
+**Auth:** Lecturer only.
+
+**Body:** `{ "students": [ { "enrollmentId", "currency?", "totalEarned?", "rankId?", "autoRankEnabled?" } ] }`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `autoRankEnabled` | boolean (optional) | When `true`, rank is recalculated from `totalEarned`. When `false` or omitted with explicit `rankId`, manual `rankId` is kept and auto-assignment is disabled. |
+
+**Response:** `{ "updated": number }`
 
 ---
 
@@ -883,15 +922,17 @@ Manage stages within groups. Each stage belongs to a group and contains activiti
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | `auth` | string (optional) | Plaintext bearer token (can also be passed via `maq_session` cookie). |
-| `method` | string | One of: `post`, `modify`, `remove`, `retrieve`. |
+| `method` | string | One of: `post`, `modify`, `remove`, `retrieve`, `reorder`. |
 | `stageId` | integer (optional) | Stage primary key (`education.stages.id`). Required for `modify`/`remove`. |
-| `groupId` | integer (optional) | Public group ID (includes `GROUP_RESPONSE_GROUP_ID_OFFSET = 100000`). Required for `post`. |
+| `groupId` | integer (optional) | Public group ID (includes `GROUP_RESPONSE_GROUP_ID_OFFSET = 100000`). Required for `post` and `reorder`. |
 | `name` | string (optional) | Stage name. Required for `post`. |
 | `visibilityStatus` | integer (optional) | Controls visibility (0 = hidden, 1 = visible). Defaults to 0. |
+| `displayOrder` | integer (optional) | Sort index for UI tree (`modify`). |
+| `stageIds` | integer[] (optional) | Ordered stage ids for `reorder` (must all belong to `groupId`). |
 
 **Authorization:**
 - `post`: session auth (token + browser binding) + lecturer role.
-- `modify`/`remove`: session auth (token only) + lecturer role.
+- `modify`/`remove`/`reorder`: session auth (token only) + lecturer role; `reorder` also requires group ownership.
 - `retrieve`: session auth (any authenticated user).
 
 **Response:** `200 OK` with JSON body:
@@ -900,8 +941,8 @@ Manage stages within groups. Each stage belongs to a group and contains activiti
 | ----- | ---- | ----------- |
 | `statusCode` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
 | `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
-| `stage` | integer | For `post`/`modify`: stage DB id (positive); for `remove`: the removed id; for `retrieve`: count of stages returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = invalid request. |
-| `stages` | array (optional) | For `retrieve`: array of `{ id, groupId, name, visibilityStatus }` — `id` is DB id; `groupId` is public (with offset). |
+| `stage` | integer | For `post`/`modify`: stage DB id (positive); for `remove`: the removed id; for `retrieve`: count of stages returned; for `reorder`: number of stages reordered. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = invalid request. |
+| `stages` | array (optional) | For `retrieve`: array of `{ id, groupId, name, visibilityStatus, displayOrder }` — `id` is DB id; `groupId` is public (with offset). Stages are ordered by `displayOrder ASC NULLS LAST`, then `id`. |
 
 All responses use this flat JSON shape only (no Nest `message` / `error` fields).
 

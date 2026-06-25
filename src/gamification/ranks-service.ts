@@ -107,6 +107,7 @@ export class RanksService {
         [rankId, groupId]);
       await queryRunner.manager.remove(RankEntity, rank);
       await queryRunner.commitTransaction();
+      await this.recalculateRanksForGroup(groupId);
       this.logger.log(`Rank (id=${rankId}) deleted from group ${groupId}`);
       return { deleted: true };
     } catch (err: unknown) {
@@ -191,7 +192,7 @@ export class RanksService {
        )
        WHERE enrollment_id IN (
            SELECT id FROM gamification.enrollments WHERE group_id = $1
-       )`,
+       ) AND auto_rank_enabled = true`,
       [groupId]);
     this.logger.debug(`Recalculated ranks for all students in group ${groupId}`);
   }

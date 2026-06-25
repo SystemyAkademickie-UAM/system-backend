@@ -112,5 +112,6 @@ export interface GroupTemplateStage {
   id: number;
   groupId: number;
   name: string;
+  displayOrder?: number | null;
   activities: GroupTemplateActivity[];
 }

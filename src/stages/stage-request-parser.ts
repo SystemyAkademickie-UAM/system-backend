@@ -10,6 +10,8 @@ export type ParsedStageRequest = {
   groupId?: number;
   name?: string;
   visibilityStatus?: number;
+  stageIds?: number[];
+  displayOrder?: number;
 };
 
 export type StageParseFailure = {
@@ -25,7 +27,7 @@ export type StageParseSuccess = {
 
 export type StageParseResult = StageParseFailure | StageParseSuccess;
 
-const STAGE_METHODS: readonly StageMethod[] = ['post', 'modify', 'remove', 'retrieve'];
+const STAGE_METHODS: readonly StageMethod[] = ['post', 'modify', 'remove', 'retrieve', 'reorder'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -89,6 +91,25 @@ function parseOptionalVisibilityStatus(value: unknown): number | undefined | nul
   return null;
 }
 
+function parseOptionalPositiveIntArray(value: unknown): number[] | undefined | null {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) return null;
+  const res: number[] = [];
+  for (const item of value) {
+    if (typeof item === 'number' && Number.isInteger(item) && item > 0) res.push(item);
+    else if (typeof item === 'string' && /^[1-9]\d*$/.test(item)) res.push(Number(item));
+    else return null;
+  }
+  return res;
+}
+
+function parseOptionalInt(value: unknown): number | undefined | null {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'number' && Number.isInteger(value)) return value;
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) return Number(value);
+  return null;
+}
+
 function invalid(method: StageMethod): StageParseFailure {
   return { ok: false, method, stage: STAGE_RESPONSE_INVALID_REQUEST_ID };
 }
@@ -124,6 +145,15 @@ export function parseStageRequest(body: unknown): StageParseResult {
   if (visibilityStatus === null) {
     return invalid(method);
   }
+  const stageIds = parseOptionalPositiveIntArray(body.stageIds);
+  if (stageIds === null) return invalid(method);
+  const displayOrder = parseOptionalInt(body.displayOrder);
+  if (displayOrder === null) return invalid(method);
+
+  if (method === 'reorder' && (!groupId || !stageIds || stageIds.length === 0)) {
+    return invalid('reorder');
+  }
+
   return {
     ok: true,
     request: {
@@ -133,6 +163,8 @@ export function parseStageRequest(body: unknown): StageParseResult {
       groupId,
       name,
       visibilityStatus,
+      stageIds,
+      displayOrder,
     },
   };
 }

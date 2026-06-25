@@ -1,10 +1,10 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
-import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
@@ -27,6 +27,18 @@ export interface StudentListItem {
   rankId: number | null;
   currency: number;
   totalEarned: number;
+  autoRankEnabled: boolean;
+}
+
+/**
+ * Response shape for a single participant row (limited data for students).
+ */
+export interface ParticipantListItem {
+  accountId: number;
+  nickname: string;
+  avatarUrl: string | null;
+  name?: string;
+  surname?: string;
 }
 
 /**
@@ -68,12 +80,57 @@ export class StudentManagementService {
          av.image_url    AS "avatarUrl",
          ss.rank_id      AS "rankId",
          COALESCE(ss.currency, 0)     AS "currency",
-         COALESCE(ss.total_earned, 0) AS "totalEarned"
+         COALESCE(ss.total_earned, 0) AS "totalEarned",
+         COALESCE(ss.auto_rank_enabled, true) AS "autoRankEnabled"
        FROM gamification.enrollments e
        JOIN auth.accounts a  ON a.id = e.student_account_id
        JOIN auth.users u     ON u.id = a.user_id
        LEFT JOIN auth.avatars av ON av.id = u.avatar_id
        LEFT JOIN gamification.student_stats ss ON ss.enrollment_id = e.id
+       WHERE e.group_id = $1
+       ORDER BY u.surname, u.name`,
+      [groupId]);
+
+    return rows;
+  }
+
+  /**
+   * GET /groups/:groupId/participants
+   * Limited participants list accessible to enrolled students and lecturers.
+   */
+  async getParticipants(req: Request, groupId: number): Promise<ParticipantListItem[]> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      throw new UnauthorizedException('Not authorized');
+    }
+    await this.assertGroupExists(groupId);
+
+    let authorized = false;
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
+    if (lecturerAccountId !== null) {
+      authorized = await this.groupRepository.exist({ where: { id: groupId, teacherAccountId: lecturerAccountId } });
+    }
+    if (!authorized) {
+      const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
+      if (studentAccountId !== null) {
+        authorized = await this.enrollmentRepository.exist({ where: { groupId, studentAccountId } });
+      }
+    }
+    if (!authorized) {
+      throw new ForbiddenException('Not authorized');
+    }
+
+    const rows = await this.dataSource.query<ParticipantListItem[]>(
+      `SELECT
+         a.id            AS "accountId",
+         u.nickname      AS "nickname",
+         av.image_url    AS "avatarUrl",
+         u.name          AS "name",
+         u.surname       AS "surname"
+       FROM gamification.enrollments e
+       JOIN auth.accounts a  ON a.id = e.student_account_id
+       JOIN auth.users u     ON u.id = a.user_id
+       LEFT JOIN auth.avatars av ON av.id = u.avatar_id
        WHERE e.group_id = $1
        ORDER BY u.surname, u.name`,
       [groupId]);
@@ -119,6 +176,7 @@ export class StudentManagementService {
             currency: 0,
             totalEarned: 0,
             rankId: null,
+            autoRankEnabled: true,
           });
         }
 
@@ -133,11 +191,19 @@ export class StudentManagementService {
           stats.totalEarned = item.totalEarned;
         }
 
-        const newRankId = await this.ranksService.calculateRankForPoints(groupId, stats.totalEarned || 0);
-        stats.rankId = newRankId;
+        if (item.autoRankEnabled !== undefined) {
+          stats.autoRankEnabled = item.autoRankEnabled;
+        }
 
-        if (item.rankId !== undefined) {
-          stats.rankId = item.rankId;
+        const manualRankAssignment =
+          item.rankId !== undefined
+          && (item.autoRankEnabled === false || item.autoRankEnabled === undefined);
+        if (manualRankAssignment) {
+          stats.rankId = item.rankId ?? null;
+          stats.autoRankEnabled = false;
+        } else if (stats.autoRankEnabled) {
+          const newRankId = await this.ranksService.calculateRankForPoints(groupId, stats.totalEarned || 0);
+          stats.rankId = newRankId;
         }
 
         await queryRunner.manager.save(StudentStatsEntity, stats);

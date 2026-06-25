@@ -24,6 +24,10 @@ export class StudentStatsEntity {
   @Column({ name: 'rank_id', type: 'integer', nullable: true })
   rankId: number | null;
 
+  /** Whether automatic rank assignment based on totalEarned is active. */
+  @Column({ name: 'auto_rank_enabled', type: 'boolean', default: true })
+  autoRankEnabled: boolean;
+
   @Column({ name: 'lives', type: 'integer', nullable: true, default: 3 })
   lives: number | null;
 }

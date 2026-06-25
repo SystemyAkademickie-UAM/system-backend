@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
 import {
@@ -24,7 +24,7 @@ export type StageResponseBody = {
   statusCode: number;
   method: StageMethod;
   stage: number;
-  stages?: Array<{ id: number; groupId: number; name: string; visibilityStatus: number }>;
+  stages?: Array<{ id: number; groupId: number; name: string; visibilityStatus: number; displayOrder: number | null }>;
 };
 
 function toInternalGroupId(publicGroupId: number): number {
@@ -44,6 +44,7 @@ export class StagesService {
   constructor(
     private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
+    private readonly dataSource: DataSource,
     @InjectRepository(StageEntity)
     private readonly stageRepository: Repository<StageEntity>,
     @InjectRepository(GroupEntity)
@@ -70,6 +71,9 @@ export class StagesService {
     }
     if (method === 'remove') {
       return this.removeStage(req, request);
+    }
+    if (method === 'reorder') {
+      return this.reorderStages(req, request);
     }
     return this.retrieveStages(req, request);
   }
@@ -135,6 +139,9 @@ export class StagesService {
       if (body.visibilityStatus !== undefined) {
         existing.visibilityStatus = body.visibilityStatus;
       }
+      if (body.displayOrder !== undefined) {
+        existing.displayOrder = body.displayOrder;
+      }
       await this.stageRepository.save(existing);
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: existing.id };
     } catch (err) {
@@ -183,14 +190,15 @@ export class StagesService {
 
     try {
       let stages: StageEntity[];
+      const order = { displayOrder: { direction: 'ASC', nulls: 'LAST' }, id: 'ASC' } as any;
       if (body.groupId) {
         const internalGroupId = toInternalGroupId(body.groupId);
-        stages = await this.stageRepository.find({ where: { groupId: internalGroupId, ...visibilityCondition }, order: { id: 'ASC' } });
+        stages = await this.stageRepository.find({ where: { groupId: internalGroupId, ...visibilityCondition }, order });
       } else if (body.stageId) {
         const single = await this.stageRepository.findOne({ where: { id: body.stageId, ...visibilityCondition } });
         stages = single ? [single] : [];
       } else {
-        stages = await this.stageRepository.find({ where: { ...visibilityCondition }, order: { id: 'ASC' } });
+        stages = await this.stageRepository.find({ where: { ...visibilityCondition }, order });
       }
       return {
         statusCode: STAGE_API_JSON_STATUS_OK,
@@ -201,11 +209,56 @@ export class StagesService {
           groupId: toPublicGroupId(s.groupId),
           name: s.name,
           visibilityStatus: s.visibilityStatus,
+          displayOrder: s.displayOrder ?? null,
         })),
       };
     } catch (err) {
       this.logger.error(`Stage retrieval failed: ${err instanceof Error ? err.message : String(err)}`);
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'retrieve', stage: 0, stages: [] };
+    }
+  }
+
+  private async reorderStages(
+    req: Request,
+    body: ParsedStageRequest): Promise<StageResponseBody> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
+    if (!subject) {
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'reorder', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+    }
+    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
+    if (!isLecturer) {
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'reorder', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+    }
+    if (!body.groupId || !body.stageIds) {
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'reorder', stage: STAGE_RESPONSE_NOT_FOUND_ID };
+    }
+    const internalGroupId = toInternalGroupId(body.groupId);
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
+    if (lecturerAccountId === null) {
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'reorder', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+    }
+    const isOwner = await this.groupRepository.exist({
+      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!isOwner) {
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'reorder', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+    }
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      for (let i = 0; i < body.stageIds.length; i++) {
+        const id = body.stageIds[i];
+        await queryRunner.manager.update(StageEntity, { id, groupId: internalGroupId }, { displayOrder: i });
+      }
+      await queryRunner.commitTransaction();
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'reorder', stage: body.stageIds.length };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Stage reorder failed: ${err instanceof Error ? err.message : String(err)}`);
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'reorder', stage: STAGE_RESPONSE_NOT_FOUND_ID };
+    } finally {
+      await queryRunner.release();
     }
   }
 }

@@ -31,4 +31,8 @@ export class PostEntity {
   /** Set automatically by the backend when `isPublished` flips to `true`. */
   @Column({ name: 'published_at', type: 'timestamp', nullable: true })
   publishedAt: Date | null;
+
+  /** Scheduled publish timestamp */
+  @Column({ name: 'publish_at', type: 'timestamp with time zone', nullable: true })
+  publishAt: Date | null;
 }

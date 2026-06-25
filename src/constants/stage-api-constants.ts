@@ -20,4 +20,4 @@ export const STAGE_RESPONSE_NOT_FOUND_ID = -3;
 export const STAGE_RESPONSE_INVALID_REQUEST_ID = -4;
 
 /** Available methods for stage API. */
-export type StageMethod = 'post' | 'modify' | 'remove' | 'retrieve';
+export type StageMethod = 'post' | 'modify' | 'remove' | 'retrieve' | 'reorder';

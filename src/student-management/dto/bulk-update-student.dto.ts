@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 
 /**
  * Single item in the bulk-update payload for student stats.
@@ -21,6 +21,10 @@ export class BulkUpdateStudentItemDto {
   @IsInt()
   @Min(0)
   totalEarned?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  autoRankEnabled?: boolean;
 }
 
 /**

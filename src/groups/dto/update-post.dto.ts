@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsISO8601, IsOptional, IsString, ValidateIf } from 'class-validator';
 
 export class UpdatePostDto {
   @IsOptional()
@@ -17,4 +17,10 @@ export class UpdatePostDto {
   @IsOptional()
   @IsString()
   auth?: string;
+
+  /** Optional ISO-8601 scheduled publication timestamp or null to unschedule. */
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsISO8601()
+  publishAt?: string | null;
 }

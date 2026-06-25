@@ -21,4 +21,9 @@ export class CreatePostDto {
   @IsOptional()
   @IsISO8601()
   createdAt?: string;
+
+  /** Optional ISO-8601 scheduled publication timestamp. */
+  @IsOptional()
+  @IsISO8601()
+  publishAt?: string;
 }

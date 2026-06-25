@@ -50,6 +50,17 @@ export class StudentManagementController {
   }
 
   /**
+   * Returns limited participant list accessible to enrolled students and lecturers.
+   */
+  @Get(':groupId/participants')
+  @ApiOperation({ summary: 'List limited participant data for enrolled students and lecturers' })
+  getParticipants(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request) {
+    return this.studentManagementService.getParticipants(req, toInternalGroupId(publicGroupId));
+  }
+
+  /**
    * Bulk-updates student stats (currency, totalEarned, rankId) from the table save button.
    */
   @Patch(':groupId/students/bulk-update')

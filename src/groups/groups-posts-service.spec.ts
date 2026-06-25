@@ -32,6 +32,12 @@ describe('GroupsPostsService', () => {
       find: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      createQueryBuilder: jest.fn(() => ({
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      })),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -94,6 +100,43 @@ describe('GroupsPostsService', () => {
       const createArg = postRepository.create.mock.calls[0][0];
       expect(createArg.createdAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
       expect(createArg.createdAt.getTime()).toBeLessThanOrEqual(after.getTime());
+    });
+
+    it('should schedule future publishAt without publishing immediately', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.exist.mockResolvedValue(true);
+
+      const futureIso = '2099-01-01T12:00:00.000Z';
+      await service.createPost(mockRequest, 1, {
+        title: 'Scheduled',
+        content: 'Later',
+        publishAt: futureIso,
+      });
+
+      expect(postRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isPublished: false,
+          publishedAt: null,
+          publishAt: new Date(futureIso),
+        }),
+      );
+    });
+  });
+
+  describe('publishScheduledPosts', () => {
+    it('should promote due scheduled posts', async () => {
+      const execute = jest.fn().mockResolvedValue({ affected: 2 });
+      postRepository.createQueryBuilder.mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute,
+      });
+
+      await service.publishScheduledPosts();
+
+      expect(execute).toHaveBeenCalled();
     });
   });
 

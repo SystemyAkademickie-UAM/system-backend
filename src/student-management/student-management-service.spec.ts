@@ -1,0 +1,169 @@
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import type { Request } from 'express';
+import { DataSource } from 'typeorm';
+
+import { SessionService, type SessionSubject } from '../auth/session/session.service';
+import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { EnrollmentEntity } from '../database/entities/enrollment.entity';
+import { GroupEntity } from '../database/entities/group.entity';
+import { StudentStatsEntity } from '../database/entities/student-stats.entity';
+import { RanksService } from '../gamification/ranks-service';
+import { UserRolesService } from '../user-roles/user-roles-service';
+import { StudentManagementService } from './student-management-service';
+
+function mockSubject(userId: number): SessionSubject {
+  return { userId, activeRole: null, sessionId: 1 };
+}
+
+describe('StudentManagementService', () => {
+  let service: StudentManagementService;
+  let sessionService: jest.Mocked<SessionService>;
+  let userRolesService: jest.Mocked<UserRolesService>;
+  let groupRepository: { exist: jest.Mock };
+  let enrollmentRepository: { exist: jest.Mock; findOne: jest.Mock };
+  let dataSource: { query: jest.Mock; createQueryRunner: jest.Mock };
+  let ranksService: { calculateRankForPoints: jest.Mock };
+  let mockQueryRunner: {
+    connect: jest.Mock;
+    startTransaction: jest.Mock;
+    commitTransaction: jest.Mock;
+    rollbackTransaction: jest.Mock;
+    release: jest.Mock;
+    manager: {
+      findOne: jest.Mock;
+      create: jest.Mock;
+      save: jest.Mock;
+    };
+  };
+
+  const mockRequest = {} as Request;
+  const groupId = 5;
+
+  beforeEach(async () => {
+    mockQueryRunner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      manager: {
+        findOne: jest.fn(),
+        create: jest.fn((_, data) => data),
+        save: jest.fn(async (entity) => entity),
+      },
+    };
+    dataSource = {
+      query: jest.fn(),
+      createQueryRunner: jest.fn(() => mockQueryRunner),
+    };
+    groupRepository = { exist: jest.fn().mockResolvedValue(true) };
+    enrollmentRepository = { exist: jest.fn(), findOne: jest.fn() };
+    ranksService = { calculateRankForPoints: jest.fn().mockResolvedValue(99) };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        StudentManagementService,
+        { provide: SessionService, useValue: { resolveSubjectFromRequest: jest.fn() } },
+        {
+          provide: UserRolesService,
+          useValue: { userHasRole: jest.fn(), findAccountIdForRole: jest.fn() },
+        },
+        { provide: DataSource, useValue: dataSource },
+        { provide: RanksService, useValue: ranksService },
+        { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },
+        { provide: getRepositoryToken(EnrollmentEntity), useValue: enrollmentRepository },
+        { provide: getRepositoryToken(StudentStatsEntity), useValue: {} },
+      ],
+    }).compile();
+
+    service = module.get(StudentManagementService);
+    sessionService = module.get(SessionService);
+    userRolesService = module.get(UserRolesService);
+  });
+
+  describe('getParticipants', () => {
+    it('should throw UnauthorizedException when session is missing', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(null);
+
+      await expect(service.getParticipants(mockRequest, groupId)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw ForbiddenException when caller is neither owner nor enrolled', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.findAccountIdForRole.mockResolvedValue(null);
+      enrollmentRepository.exist.mockResolvedValue(false);
+
+      await expect(service.getParticipants(mockRequest, groupId)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should return participant rows for enrolled student', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) =>
+        role === STUDENT_ROLE_NAME ? 20 : null,
+      );
+      enrollmentRepository.exist.mockResolvedValue(true);
+      dataSource.query.mockResolvedValue([
+        { accountId: 20, nickname: 'hero', avatarUrl: null, name: 'Jan', surname: 'Kowalski' },
+      ]);
+
+      const actualRows = await service.getParticipants(mockRequest, groupId);
+
+      expect(actualRows).toHaveLength(1);
+      expect(dataSource.query).toHaveBeenCalled();
+    });
+  });
+
+  describe('bulkUpdate', () => {
+    beforeEach(() => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.userHasRole.mockResolvedValue(true);
+      mockQueryRunner.manager.findOne.mockImplementation(async (entity, options) => {
+        if (entity === EnrollmentEntity) {
+          return { id: options.where.enrollmentId, groupId, studentAccountId: 1 };
+        }
+        return {
+          enrollmentId: 1,
+          currency: 0,
+          totalEarned: 100,
+          rankId: 1,
+          autoRankEnabled: true,
+        };
+      });
+    });
+
+    it('should disable auto rank and keep manual rankId when rankId is sent without autoRankEnabled', async () => {
+      const savedStats: StudentStatsEntity[] = [];
+      mockQueryRunner.manager.save.mockImplementation(async (_entity, data) => {
+        savedStats.push(data);
+        return data;
+      });
+
+      const actualResult = await service.bulkUpdate(mockRequest, groupId, {
+        students: [{ enrollmentId: 1, rankId: 7 }],
+      });
+
+      expect(actualResult.updated).toBe(1);
+      expect(savedStats[0].rankId).toBe(7);
+      expect(savedStats[0].autoRankEnabled).toBe(false);
+      expect(ranksService.calculateRankForPoints).not.toHaveBeenCalled();
+    });
+
+    it('should recalculate rank when autoRankEnabled is true', async () => {
+      const savedStats: StudentStatsEntity[] = [];
+      mockQueryRunner.manager.save.mockImplementation(async (_entity, data) => {
+        savedStats.push(data);
+        return data;
+      });
+
+      await service.bulkUpdate(mockRequest, groupId, {
+        students: [{ enrollmentId: 1, autoRankEnabled: true, totalEarned: 500 }],
+      });
+
+      expect(ranksService.calculateRankForPoints).toHaveBeenCalledWith(groupId, 500);
+      expect(savedStats[0].rankId).toBe(99);
+      expect(savedStats[0].autoRankEnabled).toBe(true);
+    });
+  });
+});

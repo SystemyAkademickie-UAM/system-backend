@@ -81,7 +81,7 @@ export class StudentProgressService {
     await this.assertEnrollmentExists(groupId, accountId);
     const stages = await this.stageRepository.find({
       where: { groupId },
-      order: { id: 'ASC' },
+      order: { displayOrder: { direction: 'ASC', nulls: 'LAST' }, id: 'ASC' } as any,
     });
     const stageIds = stages.map((s) => s.id);
     const activities =
