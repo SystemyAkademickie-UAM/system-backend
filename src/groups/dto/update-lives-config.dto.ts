@@ -27,8 +27,27 @@ export class UpdateLivesConfigDto {
   })
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(0)
   lives?: number;
+
+  /** Starting number of lives a student has. */
+  @Transform(({ value }) => {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.trunc(value);
+    }
+    if (typeof value === 'string') {
+      const n = Number.parseInt(value.trim(), 10);
+      return Number.isFinite(n) ? n : undefined;
+    }
+    return undefined;
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  startingLives?: number;
 
   /** Custom display name for lives (e.g. "Tarcze", "Serca"). */
   @IsOptional()

@@ -57,6 +57,25 @@ export class UpdateGroupPayloadDto {
   @Min(0)
   lives?: number;
 
+  /** Starting number of lives for new enrollments (must not exceed `lives` cap). */
+  @Transform(({ value }) => {
+    if (value === undefined || value === null) {
+      return value;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.trunc(value);
+    }
+    if (typeof value === 'string') {
+      const n = Number.parseInt(value.trim(), 10);
+      return Number.isFinite(n) ? n : undefined;
+    }
+    return undefined;
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  startingLives?: number;
+
   @Transform(({ value }) => transformOptionalString(value))
   @IsOptional()
   @IsString()

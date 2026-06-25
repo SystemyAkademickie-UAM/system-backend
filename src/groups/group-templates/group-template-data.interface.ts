@@ -29,6 +29,7 @@ export interface GroupTemplateGroupSettings {
   currency: string | null;
   currencyEmoji: string | null;
   lives: number | null;
+  startingLives: number | null;
   livesIcon: string | null;
 }
 

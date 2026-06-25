@@ -50,6 +50,7 @@ export type UserGroupListItem = {
   shopOpen: boolean;
   livesEnabled: boolean;
   lives: number | null;
+  startingLives: number | null;
   livesLabel: string | null;
   livesIcon: string | null;
   livesShopEnabled: boolean;
@@ -58,6 +59,7 @@ export type UserGroupListItem = {
 export type LivesConfigResponseBody = {
   livesEnabled: boolean;
   livesMax: number | null;
+  startingLives: number | null;
   livesLabel: string | null;
   livesIcon: string | null;
   livesShopEnabled: boolean;
@@ -159,6 +161,13 @@ export class GroupsService {
       if (nameTrimmed === '') {
         return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID };
       }
+      const finalLives = groupPayload.lives ?? null;
+      const finalStartingLives = groupPayload.startingLives ?? groupPayload.lives ?? 3;
+
+      if (finalLives !== null && finalStartingLives !== null && finalStartingLives > finalLives) {
+        throw new BadRequestException('startingLives must not exceed lives (max cap)');
+      }
+
       const entity = this.groupRepository.create({
         teacherAccountId: lecturerAccountId,
         name: nameTrimmed,
@@ -166,7 +175,8 @@ export class GroupsService {
         description: nullableTrimmedString(groupPayload.description),
         currency: nullableTrimmedString(groupPayload.currency),
         currencyEmoji: nullableTrimmedString(groupPayload.currencyEmoji),
-        lives: groupPayload.lives ?? null,
+        lives: finalLives,
+        startingLives: finalStartingLives,
         livesIcon: nullableTrimmedString(groupPayload.livesIcon),
         imageRef: nullableTrimmedString(groupPayload.imageRef),
       });
@@ -176,6 +186,9 @@ export class GroupsService {
         group: saved.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
       };
     } catch (err: unknown) {
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
       this.logGroupCreationFailure(err);
       return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_CREATED_ID };
     }
@@ -259,11 +272,22 @@ export class GroupsService {
     if (payload.lives !== undefined) {
       updates.lives = payload.lives;
     }
+    if (payload.startingLives !== undefined) {
+      updates.startingLives = payload.startingLives;
+    }
     if (payload.livesIcon !== undefined) {
       updates.livesIcon = nullableTrimmedString(payload.livesIcon);
     }
     if (payload.imageRef !== undefined) {
       updates.imageRef = nullableTrimmedString(payload.imageRef);
+    }
+
+    if (updates.startingLives !== undefined || updates.lives !== undefined) {
+      const finalStartingLives = updates.startingLives !== undefined ? updates.startingLives : existing.startingLives;
+      const finalLives = updates.lives !== undefined ? updates.lives : existing.lives;
+      if (finalLives !== null && finalStartingLives !== null && finalStartingLives > finalLives) {
+        throw new BadRequestException('startingLives must not exceed lives (max cap)');
+      }
     }
 
     if (Object.keys(updates).length === 0) {
@@ -379,6 +403,9 @@ export class GroupsService {
     if (body.lives !== undefined) {
       updates.lives = body.lives;
     }
+    if (body.startingLives !== undefined) {
+      updates.startingLives = body.startingLives;
+    }
     if (body.livesLabel !== undefined) {
       updates.livesLabel = nullableTrimmedString(body.livesLabel);
     }
@@ -395,6 +422,12 @@ export class GroupsService {
         group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
         updated: false,
       };
+    }
+
+    const effectiveLives = updates.lives !== undefined ? updates.lives : existing.lives;
+    const effectiveStarting = updates.startingLives !== undefined ? updates.startingLives : existing.startingLives;
+    if (effectiveLives !== null && effectiveStarting !== null && effectiveStarting > effectiveLives) {
+      throw new BadRequestException('startingLives must not exceed lives (max cap)');
     }
 
     try {
@@ -459,6 +492,7 @@ export class GroupsService {
     return {
       livesEnabled: row.lives_enabled,
       livesMax: row.lives,
+      startingLives: row.starting_lives,
       livesLabel: row.lives_label,
       livesIcon: row.lives_icon,
       livesShopEnabled: row.lives_shop_enabled,
@@ -701,6 +735,7 @@ export class GroupsService {
     shop_open: boolean;
     lives_enabled: boolean;
     lives: number | null;
+    starting_lives: number | null;
     lives_label: string | null;
     lives_icon: string | null;
     lives_shop_enabled: boolean;
@@ -722,6 +757,7 @@ export class GroupsService {
       shopOpen: toBool(row.shop_open),
       livesEnabled: toBool(row.lives_enabled),
       lives: row.lives ?? null,
+      startingLives: row.starting_lives ?? null,
       livesLabel: row.lives_label ?? null,
       livesIcon: row.lives_icon ?? null,
       livesShopEnabled: toBool(row.lives_shop_enabled),
@@ -746,6 +782,7 @@ export class GroupsService {
       shop_open: boolean;
       lives_enabled: boolean;
       lives: number | null;
+      starting_lives: number | null;
       lives_label: string | null;
       lives_icon: string | null;
       lives_shop_enabled: boolean;
@@ -767,6 +804,7 @@ export class GroupsService {
         'group.shop_open AS shop_open',
         'group.lives_enabled AS lives_enabled',
         'group.lives AS lives',
+        'group.starting_lives AS starting_lives',
         'group.lives_label AS lives_label',
         'group.lives_icon AS lives_icon',
         'group.lives_shop_enabled AS lives_shop_enabled',
@@ -812,6 +850,7 @@ export class GroupsService {
       shop_open: toBool(row.shop_open),
       lives_enabled: toBool(row.lives_enabled),
       lives: row.lives ?? null,
+      starting_lives: row.starting_lives ?? null,
       lives_label: row.lives_label ?? null,
       lives_icon: row.lives_icon ?? null,
       lives_shop_enabled: toBool(row.lives_shop_enabled),

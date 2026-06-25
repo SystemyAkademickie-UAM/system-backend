@@ -23,4 +23,7 @@ export class StudentStatsEntity {
   /** FK to `gamification.ranks.id`. */
   @Column({ name: 'rank_id', type: 'integer', nullable: true })
   rankId: number | null;
+
+  @Column({ name: 'lives', type: 'integer', nullable: true, default: 3 })
+  lives: number | null;
 }

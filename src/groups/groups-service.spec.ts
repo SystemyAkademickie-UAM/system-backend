@@ -142,6 +142,7 @@ describe('GroupsService', () => {
           shop_open: true,
           lives_enabled: false,
           lives: 3,
+          starting_lives: null,
           lives_label: null,
           lives_icon: null,
           lives_shop_enabled: false,
@@ -176,6 +177,7 @@ describe('GroupsService', () => {
             shopOpen: true,
             livesEnabled: false,
             lives: 3,
+            startingLives: null,
             livesLabel: null,
             livesIcon: null,
             livesShopEnabled: false,
@@ -207,6 +209,7 @@ describe('GroupsService', () => {
           shop_open: true,
           lives_enabled: false,
           lives: 3,
+          starting_lives: null,
           lives_label: null,
           lives_icon: null,
           lives_shop_enabled: false,
@@ -225,6 +228,7 @@ describe('GroupsService', () => {
           shop_open: true,
           lives_enabled: false,
           lives: 3,
+          starting_lives: null,
           lives_label: null,
           lives_icon: null,
           lives_shop_enabled: false,
@@ -277,6 +281,7 @@ describe('GroupsService', () => {
           shop_open: true,
           lives_enabled: false,
           lives: 3,
+          starting_lives: null,
           lives_label: null,
           lives_icon: null,
           lives_shop_enabled: false,
@@ -415,6 +420,39 @@ describe('GroupsService', () => {
         service.updateLivesConfig(mockRequest, 100001, { livesEnabled: true }),
       ).rejects.toThrow('Not authorized to manage this group');
     });
+
+    it('should persist startingLives when provided', async () => {
+      // Arrange
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({ id: 1, teacherAccountId: 10, lives: 5, startingLives: null });
+      groupRepository.update = jest.fn().mockResolvedValue({ affected: 1 });
+
+      // Act
+      const result = await service.updateLivesConfig(
+        mockRequest,
+        100001,
+        { startingLives: 3 }
+      );
+
+      // Assert
+      expect(groupRepository.update).toHaveBeenCalledWith({ id: 1 }, { startingLives: 3 });
+      expect(result).toEqual({
+        statusCode: GROUP_API_JSON_STATUS_OK,
+        group: 100001,
+        updated: true,
+      });
+    });
+
+    it('should throw BadRequestException when startingLives exceeds lives cap', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({ id: 1, teacherAccountId: 10, lives: 3, startingLives: null });
+
+      await expect(
+        service.updateLivesConfig(mockRequest, 100001, { startingLives: 5 })
+      ).rejects.toThrow('startingLives must not exceed lives (max cap)');
+    });
   });
 
   describe('getLivesConfig', () => {
@@ -429,6 +467,7 @@ describe('GroupsService', () => {
         is_enrolled: false,
         lives_enabled: true,
         lives: 5,
+        starting_lives: 3,
         lives_label: 'Serca',
         lives_icon: 'heart.png',
         lives_shop_enabled: false,
@@ -439,6 +478,7 @@ describe('GroupsService', () => {
       expect(result).toEqual({
         livesEnabled: true,
         livesMax: 5,
+        startingLives: 3,
         livesLabel: 'Serca',
         livesIcon: 'heart.png',
         livesShopEnabled: false,
@@ -456,6 +496,7 @@ describe('GroupsService', () => {
         is_enrolled: true,
         lives_enabled: false,
         lives: null,
+        starting_lives: null,
         lives_label: null,
         lives_icon: null,
         lives_shop_enabled: false,
@@ -482,6 +523,33 @@ describe('GroupsService', () => {
       sessionService.resolveSubjectFromRequest.mockResolvedValue(null);
       await expect(service.getLivesConfig(mockRequest, 100001))
         .rejects.toThrow('Missing or invalid session');
+    });
+  });
+
+  describe('createGroup', () => {
+    it('should throw BadRequestException when startingLives exceeds lives cap', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      
+      await expect(
+        service.createGroup(mockRequest, {
+          group: { name: 'Test Group', lives: 3, startingLives: 5 }
+        })
+      ).rejects.toThrow('startingLives must not exceed lives (max cap)');
+    });
+  });
+
+  describe('updateGroup', () => {
+    it('should throw BadRequestException when startingLives exceeds lives cap', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({ id: 1, teacherAccountId: 10, lives: 3, startingLives: null });
+
+      await expect(
+        service.updateGroup(mockRequest, 100001, {
+          group: { startingLives: 5 }
+        })
+      ).rejects.toThrow('startingLives must not exceed lives (max cap)');
     });
   });
 });
