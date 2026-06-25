@@ -1028,6 +1028,8 @@ Creates a badge definition in `gamification.badges` for a course group.
 | `storyDescription` | string (optional) | — | Narrative text. |
 | `rewardAmount` | integer (optional) | ≥ 0 | Reward points (default `0`). |
 | `isPublished` | boolean (optional) | — | Visibility toggle. When false, students cannot see it. Auto-sets `publishedAt` on true. (default `false`). |
+| `globalDiscountType` | string (optional) | `percent` \| `fixed` | Default shop discount type for this badge. |
+| `globalDiscountValue` | integer (optional) | ≥ 0; ≤ 100 when type is `percent` | Default shop discount amount (percent points or fixed currency). |
 
 **Response:** `201 Created` — persisted badge entity (camelCase fields, including `isPublished` and `publishedAt`).
 
@@ -1126,9 +1128,9 @@ Creates a rank definition in `gamification.ranks` for a course group.
 | `icon` | string | required | Icon (emoji or id). |
 | `requiredPoints` | integer | required, ≥ 0 | Points threshold. |
 | `storyDescription` | string (optional) | — | Narrative text. |
-| `storeDiscount` | integer (optional) | ≥ 0 | Flat currency shop discount (default `0`). |
-| `discount` | number (optional) | 0-100 | Percentage shop discount (default `0`). |
-| `uniqueStoreItems` | string[] (optional) | — | Exclusive shop item names. |
+| `globalDiscountType` | string (optional) | `percent` \| `fixed` | Default shop discount type for this rank. |
+| `globalDiscountValue` | integer (optional) | ≥ 0; ≤ 100 when type is `percent` | Default shop discount amount (percent points or fixed currency). |
+| `uniqueStoreItems` | string[] (optional) | — | Item ids (as strings) unlocked only when the student reaches this rank. |
 
 **Response:** `201 Created` — persisted rank entity (camelCase fields).
 
@@ -1147,14 +1149,42 @@ Cookie: maq_auth=…
   "icon": "⭐",
   "requiredPoints": 100,
   "storyDescription": "Adept to ktoś, kto opanował podstawy magii arkanowej.",
-  "storeDiscount": 5,
-  "uniqueStoreItems": ["Zwój Mądrości", "Eliksir Skupienia"]
+  "globalDiscountType": "fixed",
+  "globalDiscountValue": 5,
+  "uniqueStoreItems": ["42", "43"]
 }
 ```
 
 **Endpoint:** `DELETE /api/groups/:groupId/ranks/:rankId`
 
 Deletes the rank. Students who had this rank get `rank_id = NULL` (“Brak”) before removal. Response: `{ "deleted": true }`.
+
+---
+
+## Shop items (lecturer / student)
+
+Catalog items live in `gamification.items` with pricing in `gamification.shop_listings`. Per-listing promotions override badge/rank global defaults.
+
+**Endpoint:** `GET /api/groups/:groupId/shop-items`
+
+**Auth:** Soft token + group owner (lecturer) or enrolled student. Students only see published items.
+
+**Student listing fields (on each `listing`):** `basePrice`, `discountedPrice` (server-calculated from earned badges/ranks and listing promotions), `isLocked` (true when the item is rank-gated and not yet unlocked).
+
+**Endpoint:** `POST /api/groups/:groupId/shop-items` · `PATCH /api/groups/:groupId/shop-items/:itemId`
+
+**Auth:** Soft token + lecturer who owns the group.
+
+**Promotion arrays (optional on create/update):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `badgePromotions` | array | optional | `{ id: badgeId, promotionType: "percent"\|"fixed", value: int }` — badge must belong to the group. |
+| `rankPromotions` | array | optional | `{ id: rankId, promotionType: "percent"\|"fixed", value: int }` — rank must belong to the group; `value` ≤ 100 when type is `percent`. |
+
+**Endpoint:** `POST /api/groups/:groupId/shop-items/:itemId/buy`
+
+**Auth:** Soft token + enrolled student. Purchase price is recalculated server-side (`discountedPrice`); rank-locked items return `403 Forbidden`.
 
 ---
 
@@ -1352,7 +1382,7 @@ Save a group's full configuration (settings, badges, ranks, shop items with pric
 | `isPublic` | boolean | Visibility flag. |
 | `creatorAccountId` | integer | Lecturer account id that created the template. |
 | `baseGroupId` | integer \| null | Source group id. |
-| `data` | object (JSONB) | Full snapshot — group settings, badges, ranks, item categories, items with shop listings (incl. rank prices & badge promotions), posts, stages with activities. |
+| `data` | object (JSONB) | Full snapshot — group settings, badges, ranks, item categories, items with shop listings (incl. rank promotions & badge promotions), posts, stages with activities. |
 | `createdAt` | string (ISO-8601) | Creation timestamp. |
 
 **Errors:**

@@ -1,3 +1,4 @@
+import { SHOP_PROMOTION_PERCENT_MAX } from '../constants/shop-promotion-constants';
 import { BadgeEntity } from '../database/entities/badge.entity';
 import { RankEntity } from '../database/entities/rank.entity';
 import { ShopListingBadgePromotionEntity } from '../database/entities/shop-listing-badge-promotion.entity';
@@ -23,7 +24,7 @@ export class DiscountCalculator {
     }
 
     // Cap badge percent discounts at 100% to prevent over-discount
-    totalBadgePercent = Math.min(totalBadgePercent, 100);
+    totalBadgePercent = Math.min(totalBadgePercent, SHOP_PROMOTION_PERCENT_MAX);
 
     let maxRankDiscountVal = 0;
     let bestRankPercent = 0;
@@ -46,7 +47,7 @@ export class DiscountCalculator {
       }
     }
 
-    const totalPercent = Math.min(totalBadgePercent + bestRankPercent, 100);
+    const totalPercent = Math.min(totalBadgePercent + bestRankPercent, SHOP_PROMOTION_PERCENT_MAX);
     const totalFixed = totalBadgeFixed + bestRankFixed;
 
     const discountedPrice = Math.floor(basePrice * (1 - totalPercent / 100)) - totalFixed;
