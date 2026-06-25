@@ -41,6 +41,8 @@ export interface GroupTemplateBadge {
   storyDescription: string | null;
   rewardAmount: number | null;
   rarity: string;
+  globalDiscountType: string | null;
+  globalDiscountValue: number | null;
 }
 
 export interface GroupTemplateRank {
@@ -50,9 +52,9 @@ export interface GroupTemplateRank {
   requiredPoints: number;
   icon: string | null;
   storyDescription: string | null;
-  storeDiscount: number | null;
   uniqueStoreItems: string[] | null;
-  discount: number;
+  globalDiscountType: string | null;
+  globalDiscountValue: number | null;
 }
 
 export interface GroupTemplateItemCategory {
@@ -63,9 +65,10 @@ export interface GroupTemplateItemCategory {
   displayOrder: number | null;
 }
 
-export interface GroupTemplateShopListingRankPrice {
+export interface GroupTemplateShopListingRankPromotion {
   rankId: number;
-  price: number;
+  promotionType: string;
+  value: number;
 }
 
 export interface GroupTemplateShopListingBadgePromotion {
@@ -78,7 +81,7 @@ export interface GroupTemplateShopListing {
   basePrice: number;
   stockQuantity: number | null;
   perStudentLimit: number | null;
-  rankPrices: GroupTemplateShopListingRankPrice[];
+  rankPromotions: GroupTemplateShopListingRankPromotion[];
   badgePromotions: GroupTemplateShopListingBadgePromotion[];
 }
 

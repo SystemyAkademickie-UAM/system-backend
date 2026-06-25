@@ -76,6 +76,8 @@ export class BadgesService {
     if (dto.storyDescription !== undefined) badge.storyDescription = dto.storyDescription;
     if (dto.rewardAmount !== undefined) badge.rewardAmount = dto.rewardAmount;
     if (dto.rarity !== undefined) badge.rarity = dto.rarity;
+    if (dto.globalDiscountType !== undefined) badge.globalDiscountType = dto.globalDiscountType;
+    if (dto.globalDiscountValue !== undefined) badge.globalDiscountValue = dto.globalDiscountValue;
     if (dto.isPublished !== undefined) {
       badge.isPublished = dto.isPublished;
       badge.publishedAt = dto.isPublished ? new Date() : null;
@@ -156,6 +158,8 @@ export class BadgesService {
       storyDescription: dto.storyDescription ?? null,
       rewardAmount: dto.rewardAmount ?? 0,
       rarity: dto.rarity ?? BadgeRarity.COMMON,
+      globalDiscountType: dto.globalDiscountType ?? null,
+      globalDiscountValue: dto.globalDiscountValue ?? 0,
     });
     const saved = await this.badgeRepository.save(entity);
     this.logger.log(`Badge "${saved.name}" (id=${saved.id}) created for group ${groupId}`);

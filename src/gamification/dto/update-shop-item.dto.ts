@@ -1,5 +1,8 @@
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ValidateNested } from 'class-validator';
 import { GAMIFICATION_BADGE_NAME_MAX_LENGTH, EDUCATION_GROUP_VARCHAR_MAX_LENGTH } from '../../constants/database-entity-constants';
+import { ShopListingPromotionDto } from './shop-listing-promotion.dto';
 
 export class UpdateShopItemDto {
   @IsOptional()
@@ -47,4 +50,16 @@ export class UpdateShopItemDto {
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ShopListingPromotionDto)
+  badgePromotions?: ShopListingPromotionDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ShopListingPromotionDto)
+  rankPromotions?: ShopListingPromotionDto[];
 }

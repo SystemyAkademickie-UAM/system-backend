@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -6,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 
 import { SessionService, type SessionSubject } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
@@ -18,6 +19,15 @@ import { DefaultItemTemplateEntity } from '../database/entities/default-item-tem
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateShopItemDto } from './dto/create-shop-item.dto';
 import { UpdateShopItemDto } from './dto/update-shop-item.dto';
+
+import { ShopListingBadgePromotionEntity } from '../database/entities/shop-listing-badge-promotion.entity';
+import { ShopListingRankPromotionEntity } from '../database/entities/shop-listing-rank-promotion.entity';
+import { BadgeEntity } from '../database/entities/badge.entity';
+import { RankEntity } from '../database/entities/rank.entity';
+import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
+import { StudentStatsEntity } from '../database/entities/student-stats.entity';
+import { DiscountCalculator } from './discount-calculator';
+
 import { CreateShopItemFromTemplateDto } from './dto/create-shop-item-from-template.dto';
 
 @Injectable()
@@ -31,6 +41,18 @@ export class ShopItemsService {
     private readonly itemRepository: Repository<ItemEntity>,
     @InjectRepository(ShopListingEntity)
     private readonly shopListingRepository: Repository<ShopListingEntity>,
+    @InjectRepository(ShopListingBadgePromotionEntity)
+    private readonly shopListingBadgePromotionRepository: Repository<ShopListingBadgePromotionEntity>,
+    @InjectRepository(ShopListingRankPromotionEntity)
+    private readonly shopListingRankPromotionRepository: Repository<ShopListingRankPromotionEntity>,
+    @InjectRepository(BadgeEntity)
+    private readonly badgeRepository: Repository<BadgeEntity>,
+    @InjectRepository(EarnedBadgeEntity)
+    private readonly earnedBadgeRepository: Repository<EarnedBadgeEntity>,
+    @InjectRepository(RankEntity)
+    private readonly rankRepository: Repository<RankEntity>,
+    @InjectRepository(StudentStatsEntity)
+    private readonly studentStatsRepository: Repository<StudentStatsEntity>,
     @InjectRepository(DefaultItemTemplateEntity)
     private readonly templateRepository: Repository<DefaultItemTemplateEntity>,
     @InjectRepository(GroupEntity)
@@ -51,17 +73,86 @@ export class ShopItemsService {
       where: items.map((i) => ({ itemId: i.id })),
     });
 
+    let earnedBadges: BadgeEntity[] = [];
+    let eligibleRanks: RankEntity[] = [];
+    let allRanks: RankEntity[] = [];
+    let studentTotalEarned = 0;
+
+    if (!isLecturer) {
+      const subject = await this.resolveSubject(req, queryAuth);
+      const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
+      if (studentAccountId) {
+        const enrollment = await this.enrollmentRepository.findOne({ where: { groupId, studentAccountId } });
+        if (enrollment) {
+          const stats = await this.studentStatsRepository.findOne({ where: { enrollmentId: enrollment.id } });
+          studentTotalEarned = stats?.totalEarned ?? 0;
+          const earnedBadgeRows = await this.earnedBadgeRepository.find({ where: { enrollmentId: enrollment.id } });
+          if (earnedBadgeRows.length > 0) {
+            earnedBadges = await this.badgeRepository.findBy({ id: In(earnedBadgeRows.map(e => e.badgeId)) });
+          }
+        }
+      }
+      allRanks = await this.rankRepository.find({ where: { groupId } });
+      eligibleRanks = allRanks.filter(r => r.requiredPoints <= studentTotalEarned);
+    }
+
+    let allBadgePromos: ShopListingBadgePromotionEntity[] = [];
+    let allRankPromos: ShopListingRankPromotionEntity[] = [];
+    if (!isLecturer && listings.length > 0) {
+      allBadgePromos = await this.shopListingBadgePromotionRepository.find({ where: { shopListingId: In(listings.map(l => l.id)) } });
+      allRankPromos = await this.shopListingRankPromotionRepository.find({ where: { shopListingId: In(listings.map(l => l.id)) } });
+    }
+
     return items.map((item) => {
       const listing = listings.find((l) => l.itemId === item.id);
+      if (!listing) {
+        return { ...item, listing: null };
+      }
+
+      if (isLecturer) {
+        return { ...item, listing };
+      }
+
+      const badgePromotions = allBadgePromos.filter(p => p.shopListingId === listing.id);
+      const rankPromotions = allRankPromos.filter(p => p.shopListingId === listing.id);
+
+      const discountedPrice = DiscountCalculator.calculateDiscountedPrice(
+        listing.basePrice,
+        earnedBadges,
+        eligibleRanks,
+        badgePromotions,
+        rankPromotions
+      );
+      const isLocked = DiscountCalculator.isItemLocked(item.id, allRanks, studentTotalEarned);
+
       return {
         ...item,
-        listing: listing ?? null,
+        listing: {
+          ...listing,
+          discountedPrice,
+          isLocked
+        }
       };
     });
   }
 
   async createItem(req: Request, groupId: number, dto: CreateShopItemDto) {
     await this.assertLecturerOwnsGroup(req, groupId, dto.auth);
+
+    if (dto.badgePromotions && dto.badgePromotions.length > 0) {
+      const badgeIds = dto.badgePromotions.map(bp => bp.id);
+      const validBadgesCount = await this.badgeRepository.count({ where: { id: In(badgeIds), groupId } });
+      if (validBadgesCount !== badgeIds.length) {
+        throw new BadRequestException('One or more badge promotions reference a badge that does not belong to this group');
+      }
+    }
+    if (dto.rankPromotions && dto.rankPromotions.length > 0) {
+      const rankIds = dto.rankPromotions.map(rp => rp.id);
+      const validRanksCount = await this.rankRepository.count({ where: { id: In(rankIds), groupId } });
+      if (validRanksCount !== rankIds.length) {
+        throw new BadRequestException('One or more rank promotions reference a rank that does not belong to this group');
+      }
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -75,6 +166,7 @@ export class ShopItemsService {
         educationalDescription: dto.educationalDescription ?? null,
         imageRef: dto.imageRef ?? null,
         categoryId: dto.categoryId ?? null,
+        isPublished: true,
       });
 
       const savedItem = await queryRunner.manager.save(item);
@@ -88,12 +180,39 @@ export class ShopItemsService {
 
       const savedListing = await queryRunner.manager.save(listing);
 
+      let badgePromotions: ShopListingBadgePromotionEntity[] = [];
+      let rankPromotions: ShopListingRankPromotionEntity[] = [];
+      
+      if (dto.badgePromotions && dto.badgePromotions.length > 0) {
+        const promosToSave = dto.badgePromotions.map(bp => this.shopListingBadgePromotionRepository.create({
+          shopListingId: savedListing.id,
+          badgeId: bp.id,
+          promotionType: bp.promotionType,
+          value: bp.value
+        }));
+        badgePromotions = await queryRunner.manager.save(ShopListingBadgePromotionEntity, promosToSave);
+      }
+      
+      if (dto.rankPromotions && dto.rankPromotions.length > 0) {
+        const promosToSave = dto.rankPromotions.map(rp => this.shopListingRankPromotionRepository.create({
+          shopListingId: savedListing.id,
+          rankId: rp.id,
+          promotionType: rp.promotionType,
+          value: rp.value
+        }));
+        rankPromotions = await queryRunner.manager.save(ShopListingRankPromotionEntity, promosToSave);
+      }
+
       await queryRunner.commitTransaction();
       this.logger.log(`Shop item "${savedItem.name}" (id=${savedItem.id}) created for group ${groupId}`);
 
       return {
         ...savedItem,
-        listing: savedListing,
+        listing: {
+          ...savedListing,
+          badgePromotions,
+          rankPromotions
+        },
       };
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -122,6 +241,7 @@ export class ShopItemsService {
         storyDescription: template.storyDescription,
         educationalDescription: template.educationalDescription,
         categoryId: dto.categoryId ?? null,
+        isPublished: true,
       });
 
       const savedItem = await queryRunner.manager.save(item);
@@ -135,6 +255,7 @@ export class ShopItemsService {
 
       const savedListing = await queryRunner.manager.save(listing);
 
+      
       await queryRunner.commitTransaction();
       this.logger.log(`Shop item from template (id=${savedItem.id}) created for group ${groupId}`);
 
@@ -159,6 +280,21 @@ export class ShopItemsService {
     }
     const listing = await this.shopListingRepository.findOne({ where: { itemId: item.id } });
 
+    if (dto.badgePromotions && dto.badgePromotions.length > 0) {
+      const badgeIds = dto.badgePromotions.map(bp => bp.id);
+      const validBadgesCount = await this.badgeRepository.count({ where: { id: In(badgeIds), groupId } });
+      if (validBadgesCount !== badgeIds.length) {
+        throw new BadRequestException('One or more badge promotions reference a badge that does not belong to this group');
+      }
+    }
+    if (dto.rankPromotions && dto.rankPromotions.length > 0) {
+      const rankIds = dto.rankPromotions.map(rp => rp.id);
+      const validRanksCount = await this.rankRepository.count({ where: { id: In(rankIds), groupId } });
+      if (validRanksCount !== rankIds.length) {
+        throw new BadRequestException('One or more rank promotions reference a rank that does not belong to this group');
+      }
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -176,6 +312,9 @@ export class ShopItemsService {
 
       const savedItem = await queryRunner.manager.save(item);
 
+      let badgePromotions: ShopListingBadgePromotionEntity[] = [];
+      let rankPromotions: ShopListingRankPromotionEntity[] = [];
+      
       let savedListing = listing;
       if (listing && (dto.basePrice !== undefined || dto.stockQuantity !== undefined || dto.perStudentLimit !== undefined)) {
         if (dto.basePrice !== undefined) listing.basePrice = dto.basePrice;
@@ -183,13 +322,45 @@ export class ShopItemsService {
         if (dto.perStudentLimit !== undefined) listing.perStudentLimit = dto.perStudentLimit;
         savedListing = await queryRunner.manager.save(listing);
       }
+      
+      if (listing) {
+        if (dto.badgePromotions !== undefined) {
+           await queryRunner.manager.delete(ShopListingBadgePromotionEntity, { shopListingId: listing.id });
+           const promosToSave = dto.badgePromotions.map(bp => this.shopListingBadgePromotionRepository.create({
+             shopListingId: listing.id,
+             badgeId: bp.id,
+             promotionType: bp.promotionType,
+             value: bp.value
+           }));
+           badgePromotions = await queryRunner.manager.save(ShopListingBadgePromotionEntity, promosToSave);
+        } else {
+           badgePromotions = await this.shopListingBadgePromotionRepository.find({ where: { shopListingId: listing.id } });
+        }
+        
+        if (dto.rankPromotions !== undefined) {
+           await queryRunner.manager.delete(ShopListingRankPromotionEntity, { shopListingId: listing.id });
+           const promosToSave = dto.rankPromotions.map(rp => this.shopListingRankPromotionRepository.create({
+             shopListingId: listing.id,
+             rankId: rp.id,
+             promotionType: rp.promotionType,
+             value: rp.value
+           }));
+           rankPromotions = await queryRunner.manager.save(ShopListingRankPromotionEntity, promosToSave);
+        } else {
+           rankPromotions = await this.shopListingRankPromotionRepository.find({ where: { shopListingId: listing.id } });
+        }
+      }
 
       await queryRunner.commitTransaction();
       this.logger.log(`Shop item (id=${itemId}) updated in group ${groupId}`);
 
       return {
         ...savedItem,
-        listing: savedListing,
+        listing: savedListing ? {
+           ...savedListing,
+           badgePromotions,
+           rankPromotions
+        } : null,
       };
     } catch (err) {
       await queryRunner.rollbackTransaction();

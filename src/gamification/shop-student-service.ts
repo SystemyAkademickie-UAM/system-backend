@@ -14,6 +14,14 @@ import { SessionService } from '../auth/session/session.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 
+import { ShopListingBadgePromotionEntity } from '../database/entities/shop-listing-badge-promotion.entity';
+import { ShopListingRankPromotionEntity } from '../database/entities/shop-listing-rank-promotion.entity';
+import { BadgeEntity } from '../database/entities/badge.entity';
+import { RankEntity } from '../database/entities/rank.entity';
+import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
+import { DiscountCalculator } from './discount-calculator';
+
+
 @Injectable()
 export class ShopStudentService {
   constructor(
@@ -92,8 +100,34 @@ export class ShopStudentService {
       }
       const currentCurrency = stats.currency || 0;
 
-      // Sprawdzenie czy studenta stać na ten przedmiot
-      const price = listing.basePrice;
+// Sprawdzenie czy przedmiot jest zablokowany lub ma zniżkę
+      const earnedBadgeRows = await manager.find(EarnedBadgeEntity, { where: { enrollmentId: enrollment.id } });
+      let earnedBadges: BadgeEntity[] = [];
+      if (earnedBadgeRows.length > 0) {
+        earnedBadges = await manager.createQueryBuilder(BadgeEntity, 'b')
+          .where('b.id IN (:...bIds)', { bIds: earnedBadgeRows.map(e => e.badgeId) })
+          .getMany();
+      }
+      
+      const allRanks = await manager.find(RankEntity, { where: { groupId: internalGroupId } });
+      const eligibleRanks = allRanks.filter(r => r.requiredPoints <= (stats.totalEarned ?? 0));
+      
+      const isLocked = DiscountCalculator.isItemLocked(item.id, allRanks, (stats.totalEarned ?? 0));
+      if (isLocked) {
+        throw new ForbiddenException('Przedmiot jest zablokowany. Zdobądź wyższą rangę, aby go odblokować.');
+      }
+      
+      const badgePromotions = await manager.find(ShopListingBadgePromotionEntity, { where: { shopListingId: listing.id } });
+      const rankPromotions = await manager.find(ShopListingRankPromotionEntity, { where: { shopListingId: listing.id } });
+      
+      const price = DiscountCalculator.calculateDiscountedPrice(
+         listing.basePrice,
+         earnedBadges,
+         eligibleRanks,
+         badgePromotions,
+         rankPromotions
+      );
+      
       if (currentCurrency < price) {
         throw new BadRequestException('Not enough currency');
       }

@@ -43,6 +43,17 @@ export class BadgeEntity {
   /** Set automatically by the backend when `isPublished` flips to `true`. */
   @Column({ name: 'published_at', type: 'timestamp', nullable: true })
   publishedAt: Date | null;
+
+  @Column({ name: 'global_discount_type', type: 'varchar', length: 20, nullable: true })
+  globalDiscountType: string | null;
+
+  @Column({ name: 'global_discount_value', type: 'integer', nullable: true, default: 0 })
+  globalDiscountValue: number | null;
+}
+
+export enum PromotionType {
+  PERCENT = 'percent',
+  FIXED = 'fixed',
 }
 
 export enum BadgeRarity {

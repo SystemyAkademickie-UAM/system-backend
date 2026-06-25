@@ -18,7 +18,7 @@ import type {
   GroupTemplateItem,
   GroupTemplateShopListing,
   GroupTemplateShopListingBadgePromotion,
-  GroupTemplateShopListingRankPrice,
+  GroupTemplateShopListingRankPromotion,
 } from './group-template-data.interface';
 
 @Injectable()
@@ -60,13 +60,13 @@ export class GroupTemplatesExportService {
           .getMany();
       }
 
-      // ── Shop Listing Rank Prices (raw query — no entity) ──
+      // ── Shop Listing Rank Promotions (raw query — no entity) ──
       const listingIds = shopListings.map((sl) => sl.id);
-      let rankPricesRaw: Array<{ shop_listing_id: number; rank_id: number; price: number }> = [];
+      let rankPromotionsRaw: Array<{ shop_listing_id: number; rank_id: number; promotion_type: string; value: number }> = [];
       if (listingIds.length > 0) {
-        rankPricesRaw = await manager.query(
-          `SELECT shop_listing_id, rank_id, price
-           FROM gamification.shop_listing_rank_prices
+        rankPromotionsRaw = await manager.query(
+          `SELECT shop_listing_id, rank_id, promotion_type, value
+           FROM gamification.shop_listing_rank_promotions
            WHERE shop_listing_id = ANY($1)`,
           [listingIds],
         );
@@ -108,9 +108,9 @@ export class GroupTemplatesExportService {
         let templateListing: GroupTemplateShopListing | null = null;
 
         if (listing) {
-          const rp: GroupTemplateShopListingRankPrice[] = rankPricesRaw
+          const rp: GroupTemplateShopListingRankPromotion[] = rankPromotionsRaw
             .filter((r) => r.shop_listing_id === listing.id)
-            .map((r) => ({ rankId: r.rank_id, price: r.price }));
+            .map((r) => ({ rankId: r.rank_id, promotionType: r.promotion_type, value: r.value }));
 
           const bp: GroupTemplateShopListingBadgePromotion[] = badgePromotionsRaw
             .filter((b) => b.shop_listing_id === listing.id)
@@ -124,7 +124,7 @@ export class GroupTemplatesExportService {
             basePrice: listing.basePrice,
             stockQuantity: listing.stockQuantity,
             perStudentLimit: listing.perStudentLimit,
-            rankPrices: rp,
+            rankPromotions: rp,
             badgePromotions: bp,
           };
         }

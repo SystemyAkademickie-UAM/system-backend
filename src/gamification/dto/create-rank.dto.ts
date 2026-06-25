@@ -1,4 +1,6 @@
-import { IsArray, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min, Max } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
+import { SHOP_PROMOTION_PERCENT_MAX } from '../../constants/shop-promotion-constants';
+import { PromotionType } from '../../database/entities/badge.entity';
 
 /**
  * DTO for creating a rank within a course group.
@@ -26,21 +28,19 @@ export class CreateRankDto {
   @IsString()
   storyDescription?: string;
 
-  /** Flat currency discount in the store (integer). */
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  storeDiscount?: number;
-
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   uniqueStoreItems?: string[];
 
-  /** Percentage discount (decimal %, 0-100) in the store. Differs from flat `storeDiscount`. */
   @IsOptional()
-  @IsNumber()
+  @IsIn([PromotionType.PERCENT, PromotionType.FIXED])
+  globalDiscountType?: string;
+
+  @IsOptional()
+  @IsInt()
   @Min(0)
-  @Max(100)
-  discount?: number;
+  @ValidateIf((dto: CreateRankDto) => dto.globalDiscountType === PromotionType.PERCENT)
+  @Max(SHOP_PROMOTION_PERCENT_MAX)
+  globalDiscountValue?: number;
 }

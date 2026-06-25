@@ -1,5 +1,6 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { BadgeRarity } from '../../database/entities/badge.entity';
+import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
+import { SHOP_PROMOTION_PERCENT_MAX } from '../../constants/shop-promotion-constants';
+import { BadgeRarity, PromotionType } from '../../database/entities/badge.entity';
 
 /**
  * DTO for updating a badge within a course group.
@@ -40,4 +41,15 @@ export class UpdateBadgeDto {
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
+
+  @IsOptional()
+  @IsIn([PromotionType.PERCENT, PromotionType.FIXED])
+  globalDiscountType?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @ValidateIf((dto: UpdateBadgeDto) => dto.globalDiscountType === PromotionType.PERCENT)
+  @Max(SHOP_PROMOTION_PERCENT_MAX)
+  globalDiscountValue?: number;
 }

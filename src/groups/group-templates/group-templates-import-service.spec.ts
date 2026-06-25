@@ -93,8 +93,8 @@ describe('GroupTemplatesImportService', () => {
             name: 'Item1',
             listing: {
               basePrice: 10,
-              rankPrices: [{ rankId: 200, price: 5 }],
-              badgePromotions: [{ badgeId: 100, promotionType: 'DISCOUNT', value: 2 }],
+              rankPromotions: [{ rankId: 200, promotionType: 'fixed', value: 5 }],
+              badgePromotions: [{ badgeId: 100, promotionType: 'fixed', value: 2 }],
             },
           },
         ],
@@ -153,8 +153,8 @@ describe('GroupTemplatesImportService', () => {
     expect(itemSaveCall[1].categoryId).toBe(savedCatId);
     expect(itemSaveCall[1].groupId).toBe(savedGroupId);
 
-    // Verify Shop Listing Rank Prices raw query used NEW rank ID and NEW listing ID
-    const rankQueryCall = mockManager.query.mock.calls.find((call: any) => call[0].includes('shop_listing_rank_prices'));
+    // Verify Shop Listing Rank Promotions raw query used NEW rank ID and NEW listing ID
+    const rankQueryCall = mockManager.query.mock.calls.find((call: any) => call[0].includes('shop_listing_rank_promotions'));
     expect(rankQueryCall).toBeDefined();
     expect(rankQueryCall[1][0]).toBe(savedListingId);
     expect(rankQueryCall[1][1]).toBe(savedRankId);
