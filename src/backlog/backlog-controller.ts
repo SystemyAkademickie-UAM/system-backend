@@ -1,6 +1,7 @@
 import {
     Controller,
     Get,
+    Patch,
     Param,
     ParseIntPipe,
     Req,
@@ -79,4 +80,24 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
           }
           return result;
     }
+
+  /**
+   * Marks a specific backlog entry as read.
+   */
+  @Patch(':groupId/backlog/:backlogId/read')
+  @ApiOperation({ summary: 'Mark a backlog item as read' })
+  async markAsRead(
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Param('backlogId', ParseIntPipe) backlogId: number,
+    @Req() req: Request,
+  ) {
+    const result = await this.backlogService.markAsRead(req, groupId, backlogId);
+    if ('error' in result) {
+      if (result.error.startsWith('Forbidden:')) {
+        throw new ForbiddenException(result.error);
+      }
+      throw new UnauthorizedException(result.error);
+    }
+    return result;
+  }
 }

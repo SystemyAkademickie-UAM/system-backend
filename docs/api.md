@@ -800,10 +800,35 @@ Retrieves the recent backlog history for the currently logged-in student in a gi
     "type": "SHOP_PURCHASE",
     "date": "2026-06-08T10:00:00.000Z",
     "value": "health_potion",
-    "accountId": 42
+    "accountId": 42,
+    "isRead": false
   }
 ]
 ```
+
+### Mark Backlog Item as Read (Student / Lecturer)
+
+**Endpoint:** `PATCH /api/groups/:groupId/backlog/:backlogId/read`
+
+Marks a specific backlog item as read. Students can only mark their own items in groups they are enrolled in. Lecturers can mark any item in their groups.
+
+**Query Parameters:**
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `auth` | string (optional) | Access token (can also be passed via `maq_session` cookie). |
+
+**Response:** `200 OK` with JSON:
+
+```json
+{ "updated": true }
+```
+
+Returns `{ "updated": false }` when no matching backlog row exists (unknown id, student item owned by another account, etc.). Marking an already-read item is idempotent when the row matches.
+
+**Errors:**
+* `400 Bad Request` — Invalid group ID.
+* `401 Unauthorized` — Missing or invalid authentication.
+* `403 Forbidden` — Not enrolled / not owner / wrong role.
 
 ### Get Group Backlog (Lecturer / Admin)
 
@@ -825,6 +850,19 @@ Requires `SUPER` role or ownership of the group (`teacherAccountId`).
 | `X-Browser-ID` | Browser binding ID for the strong session. |
 
 **Response:** `200 OK` with JSON array of backlog items.
+
+```json
+[
+  {
+    "id": 12,
+    "type": "SHOP_PURCHASE",
+    "date": "2026-06-08T10:00:00.000Z",
+    "value": "health_potion",
+    "accountId": 42,
+    "isRead": false
+  }
+]
+```
 
 ---
 
