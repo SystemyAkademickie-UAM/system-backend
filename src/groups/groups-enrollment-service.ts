@@ -84,7 +84,7 @@ export class GroupsEnrollmentService {
   async enrollStudentById(studentAccountId: number, groupId: number): Promise<EnrollResult> {
     const group = await this.groupRepository.findOne({
       where: { id: groupId },
-      select: ['id', 'startingLives'],
+      select: ['id', 'startingLives', 'lives'],
     });
     if (!group) {
       return { enrollmentId: ENROLL_RESULT_GROUP_NOT_FOUND, groupId };
@@ -101,12 +101,14 @@ export class GroupsEnrollmentService {
       const saved = await this.enrollmentRepository.save(entity);
 
       const initialRankId = await this.ranksService.calculateRankForPoints(groupId, 0);
+      const maxLives = group.lives ?? group.startingLives ?? 3;
+      const configuredStarting = group.startingLives ?? group.lives ?? 3;
       const stats = this.studentStatsRepository.create({
         enrollmentId: saved.id,
         currency: 0,
         totalEarned: 0,
         rankId: initialRankId,
-        lives: group.startingLives ?? 3,
+        lives: Math.min(configuredStarting, maxLives),
       });
       await this.studentStatsRepository.save(stats);
 

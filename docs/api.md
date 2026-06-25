@@ -469,7 +469,7 @@ X-Browser-ID: <BrowserUUID>
 | ----- | ---- | ----------- |
 | `livesEnabled` | boolean | Whether the lives system is active for this group. |
 | `livesMax` | integer \| null | Maximum number of lives per student. |
-| `startingLives` | integer \| null | Configured starting number of lives for new students (stored for reference). |
+| `startingLives` | integer \| null | Configured starting number of lives applied when a student enrolls. |
 | `livesLabel` | string \| null | Custom display name for lives (e.g. "Tarcze"). |
 | `livesIcon` | string \| null | Icon reference for lives. |
 | `livesShopEnabled` | boolean | Whether "extra life" appears as a shop product. |

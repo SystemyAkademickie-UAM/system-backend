@@ -57,7 +57,7 @@ export class UpdateGroupPayloadDto {
   @Min(0)
   lives?: number;
 
-  /** Starting number of lives for new enrollments (must be ≥ 1). */
+  /** Starting number of lives for new enrollments (must not exceed `lives` cap). */
   @Transform(({ value }) => {
     if (value === undefined || value === null) {
       return value;
