@@ -32,7 +32,9 @@ DROP COLUMN IF EXISTS starting_lives;
 /**
  * Adds `starting_lives` to groups and per-student `lives` on enrollments, backfilling from existing group caps.
  */
-export class AddStartingLives1719172800017 implements MigrationInterface {
+export class AddStartingLives0000000000018 implements MigrationInterface {
+  name = 'AddStartingLives0000000000018';
+
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(ADD_COLUMNS_SQL);
     await queryRunner.query(BACKFILL_GROUP_STARTING_LIVES_SQL);
