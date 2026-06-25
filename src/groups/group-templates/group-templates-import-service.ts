@@ -170,6 +170,7 @@ export class GroupTemplatesImportService {
         const stageEntity = manager.create(StageEntity, {
           groupId: newGroupId,
           name: oldStage.name,
+          displayOrder: oldStage.displayOrder ?? null,
         });
         const savedStage = await manager.save(StageEntity, stageEntity);
 

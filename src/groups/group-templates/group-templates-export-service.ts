@@ -92,7 +92,10 @@ export class GroupTemplatesExportService {
       const posts = await manager.find(PostEntity, { where: { groupId } });
 
       // ── Stages + Activities ────────────────────────────────
-      const stages = await manager.find(StageEntity, { where: { groupId } });
+      const stages = await manager.find(StageEntity, {
+        where: { groupId },
+        order: { displayOrder: { direction: 'ASC', nulls: 'LAST' }, id: 'ASC' } as any,
+      });
       const stageIds = stages.map((s) => s.id);
       let activities: ActivityEntity[] = [];
       if (stageIds.length > 0) {
@@ -161,6 +164,7 @@ export class GroupTemplatesExportService {
           id: stage.id,
           groupId: stage.groupId,
           name: stage.name,
+          displayOrder: stage.displayOrder ?? null,
           activities: activities
             .filter((a) => a.stageId === stage.id)
             .map((a) => ({

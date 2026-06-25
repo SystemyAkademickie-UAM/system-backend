@@ -22,4 +22,8 @@ export class StageEntity {
   /** Stage visibility: 0=hidden, 1=visible, 2=unlockable */
   @Column({ name: 'visibility_status', type: 'integer', default: 0 })
   visibilityStatus: number;
+
+  /** Order for rendering in UI tree */
+  @Column({ name: 'display_order', type: 'integer', nullable: true })
+  displayOrder: number | null;
 }

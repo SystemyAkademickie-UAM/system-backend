@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
@@ -28,14 +28,39 @@ export type GetPostsResponseBody = {
     isPublished: boolean;
     createdAt: string | null;
     publishedAt: string | null;
+    publishAt?: string | null;
   }>;
 };
 export type DeletePostResponseBody = { status: number; deleted: boolean };
 export type UpdatePostResponseBody = { status: number; updated: boolean };
 
 @Injectable()
-export class GroupsPostsService {
+export class GroupsPostsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GroupsPostsService.name);
+  private intervalHandle?: NodeJS.Timeout;
+
+  onModuleInit() {
+    this.intervalHandle = setInterval(() => {
+      this.publishScheduledPosts().catch((err) => {
+        this.logger.error(`Publish scheduled posts error: ${String(err)}`);
+      });
+    }, 60000);
+  }
+
+  onModuleDestroy() {
+    if (this.intervalHandle) {
+      clearInterval(this.intervalHandle);
+    }
+  }
+
+  async publishScheduledPosts(): Promise<void> {
+    await this.postRepository
+      .createQueryBuilder()
+      .update(PostEntity)
+      .set({ isPublished: true, publishedAt: () => 'NOW()', publishAt: null })
+      .where('is_published = :isPub AND publish_at <= NOW()', { isPub: false })
+      .execute();
+  }
 
   constructor(
     private readonly sessionService: SessionService,
@@ -77,13 +102,30 @@ export class GroupsPostsService {
 
     try {
       const createdAt = body.createdAt ? new Date(body.createdAt) : new Date();
+      let isPublished = false;
+      let publishedAt: Date | null = null;
+      let publishAt: Date | null = null;
+
+      if (body.publishAt) {
+        const pAt = new Date(body.publishAt);
+        if (pAt <= new Date()) {
+          isPublished = true;
+          publishedAt = new Date();
+          publishAt = null;
+        } else {
+          isPublished = false;
+          publishAt = pAt;
+        }
+      }
+
       const entity = this.postRepository.create({
         groupId,
         title: body.title,
         content: body.content,
-        isPublished: false,
+        isPublished,
         createdAt,
-        publishedAt: null,
+        publishedAt,
+        publishAt,
       });
       const saved = await this.postRepository.save(entity);
       return { status: GROUP_API_JSON_STATUS_OK, post: saved.id };
@@ -148,7 +190,7 @@ export class GroupsPostsService {
       const posts = await this.postRepository.find({
         where: whereClause,
         order: { id: 'DESC' },
-        select: ['id', 'title', 'content', 'isPublished', 'createdAt', 'publishedAt'],
+        select: ['id', 'title', 'content', 'isPublished', 'createdAt', 'publishedAt', 'publishAt'],
       });
       return {
         status: GROUP_API_JSON_STATUS_OK,
@@ -159,6 +201,7 @@ export class GroupsPostsService {
           isPublished: p.isPublished,
           createdAt: p.createdAt ? p.createdAt.toISOString() : null,
           publishedAt: p.publishedAt ? p.publishedAt.toISOString() : null,
+          publishAt: p.publishAt ? p.publishAt.toISOString() : null,
         })),
       };
     } catch (err: unknown) {
@@ -244,6 +287,21 @@ export class GroupsPostsService {
       if (body.isPublished !== undefined) {
         updateData.isPublished = body.isPublished;
         updateData.publishedAt = body.isPublished ? new Date() : null;
+      }
+      if (body.publishAt !== undefined) {
+        if (body.publishAt === null) {
+          updateData.publishAt = null;
+        } else {
+          const pAt = new Date(body.publishAt);
+          if (pAt <= new Date()) {
+            updateData.isPublished = true;
+            updateData.publishedAt = new Date();
+            updateData.publishAt = null;
+          } else {
+            updateData.isPublished = false;
+            updateData.publishAt = pAt;
+          }
+        }
       }
       const result = await this.postRepository.update({ id: postId, groupId }, updateData);
       return {

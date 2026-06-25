@@ -17,4 +17,9 @@ export class UpdatePostDto {
   @IsOptional()
   @IsString()
   auth?: string;
+
+  /** Optional ISO-8601 scheduled publication timestamp or null to unschedule. */
+  @IsOptional()
+  @IsString()
+  publishAt?: string | null;
 }
