@@ -23,6 +23,7 @@ import { GroupTemplatesCrudController } from './group-templates/group-templates-
 import { GroupTemplatesCrudService } from './group-templates/group-templates-crud-service';
 import { GroupTemplatesExportService } from './group-templates/group-templates-export-service';
 import { GroupTemplatesImportService } from './group-templates/group-templates-import-service';
+import { ShopSchedulerService } from './shop-scheduler-service';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { GroupTemplatesImportService } from './group-templates/group-templates-i
     GroupTemplatesExportService,
     GroupTemplatesImportService,
     GroupTemplatesCrudService,
+    ShopSchedulerService,
   ],
 })
 export class GroupsModule {}

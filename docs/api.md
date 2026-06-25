@@ -335,6 +335,8 @@ Retrieves groups the authenticated user belongs to: student enrollments and lect
 | `lecturers` | string | Lecturer full name; empty string when unknown. |
 | `description` | string \| null | Group description. |
 | `shopOpen` | boolean | Indicates whether the group's shop is currently open. |
+| `shopOpensAt` | string \| null | ISO-8601 timestamp when the shop will automatically open. |
+| `rankShowMemberAvatars` | boolean | Indicates if student avatars should be visible in the ranking. |
 
 **Example**
 
@@ -389,6 +391,8 @@ Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATA
 | `group.livesIcon` | string (optional; numeric JSON accepted—coerced) | Maps to `edukacja.grupy.ikona_zycia`. |
 | `group.bannerRef` | string (optional) | Maps to `edukacja.grupy.obrazek_ref`. |
 | `group.entryCode` | string (optional) | Maps to `edukacja.grupy.kod_wstepu`. |
+| `group.shopOpensAt` | string (optional) | ISO-8601 timestamp for scheduled shop opening. Maps to `edukacja.grupy.shop_opens_at`. |
+| `group.rankShowMemberAvatars` | boolean (optional) | Maps to `edukacja.grupy.rank_show_member_avatars`. Default `true`. |
 
 **Errors:** JSON **`group: 0`** means creation failed—check Nest logs (`GroupsService`) for the Postgres **`detail`** (FK/type/null violations).
 
@@ -1032,7 +1036,7 @@ Manage activities within stages. Each activity belongs to a stage and has curren
 | `statusCode` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
 | `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
 | `activity` | integer | For `post`/`modify`: activity DB id (positive); for `remove`: the removed id; for `retrieve`: count of activities returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = stage not found, `-5` = invalid request. |
-| `activities` | array (optional) | For `retrieve`: array of `{ id, stageId, name, currency, educationalDescription, storyDescription }` (DB ids). |
+| `activities` | array (optional) | For `retrieve`: array of `{ id, stageId, name, currency, completionCount, educationalDescription, storyDescription }` (DB ids). |
 
 All responses use this flat JSON shape only (no Nest `message` / `error` fields).
 
@@ -1077,8 +1081,8 @@ Content-Type: application/json
   "method": "retrieve",
   "activity": 2,
   "activities": [
-    { "id": 1, "stageId": 1, "name": "Quiz 1", "currency": 100, "educationalDescription": "Test your knowledge", "storyDescription": "The hero faces a challenge" },
-    { "id": 2, "stageId": 1, "name": "Assignment 1", "currency": 50, "educationalDescription": "Practice problems", "storyDescription": "Training montage" }
+    { "id": 1, "stageId": 1, "name": "Quiz 1", "currency": 100, "completionCount": 0, "educationalDescription": "Test your knowledge", "storyDescription": "The hero faces a challenge" },
+    { "id": 2, "stageId": 1, "name": "Assignment 1", "currency": 50, "completionCount": 0, "educationalDescription": "Practice problems", "storyDescription": "Training montage" }
   ]
 }
 ```

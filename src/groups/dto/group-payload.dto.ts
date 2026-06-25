@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsISO8601, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
 
 function transformOptionalString(value: unknown): unknown {
   if (value === undefined || value === null) {
@@ -85,4 +86,13 @@ export class GroupPayloadDto {
   @IsOptional()
   @IsString()
   imageRef?: string;
+
+  @Transform(({ value }) => transformOptionalString(value))
+  @IsOptional()
+  @IsISO8601()
+  shopOpensAt?: string | null;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  rankShowMemberAvatars?: boolean;
 }
