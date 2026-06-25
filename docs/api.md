@@ -815,11 +815,12 @@ Marks a specific backlog item as read. Students can only mark their own items in
 | `auth` | string (optional) | Access token (can also be passed via `maq_session` cookie). |
 
 **Response:** `200 OK` with JSON:
+
 ```json
-{
-  "updated": true
-}
+{ "updated": true }
 ```
+
+Returns `{ "updated": false }` when no matching backlog row exists (unknown id, student item owned by another account, etc.). Marking an already-read item is idempotent when the row matches.
 
 **Errors:**
 * `400 Bad Request` — Invalid group ID.
