@@ -272,7 +272,7 @@ export class ActivitiesService {
           .groupBy('ab.activity_id')
           .getRawMany();
         for (const row of counts) {
-          countsMap.set(row.activityId, Number(row.count));
+          countsMap.set(Number(row.activityId), Number(row.count));
         }
       }
 

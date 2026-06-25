@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { IsISO8601, IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 
 function transformOptionalString(value: unknown): unknown {
   if (value === undefined) {
@@ -88,7 +88,7 @@ export class UpdateGroupPayloadDto {
 
   @Transform(({ value }) => transformOptionalString(value))
   @IsOptional()
-  @IsString()
+  @IsISO8601()
   shopOpensAt?: string | null;
 
   @IsOptional()

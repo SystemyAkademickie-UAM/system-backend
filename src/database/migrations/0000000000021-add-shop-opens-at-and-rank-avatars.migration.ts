@@ -10,8 +10,8 @@ const DOWN_SQL = `
   ALTER TABLE "education"."groups" DROP COLUMN IF EXISTS "shop_opens_at";
 `.trim();
 
-export class AddShopOpensAtAndRankAvatars0000000000020 implements MigrationInterface {
-  name = 'AddShopOpensAtAndRankAvatars0000000000020';
+export class AddShopOpensAtAndRankAvatars0000000000021 implements MigrationInterface {
+  name = 'AddShopOpensAtAndRankAvatars0000000000021';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(UP_SQL);

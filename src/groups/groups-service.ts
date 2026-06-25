@@ -170,6 +170,19 @@ export class GroupsService {
         throw new BadRequestException('startingLives must not exceed lives (max cap)');
       }
 
+      let initialShopOpen = true;
+      let parsedShopOpensAt: Date | null = null;
+      if (groupPayload.shopOpensAt) {
+        const d = new Date(groupPayload.shopOpensAt);
+        if (d <= new Date()) {
+          initialShopOpen = true;
+          parsedShopOpensAt = null;
+        } else {
+          initialShopOpen = false;
+          parsedShopOpensAt = d;
+        }
+      }
+
       const entity = this.groupRepository.create({
         teacherAccountId: lecturerAccountId,
         name: nameTrimmed,
@@ -181,6 +194,9 @@ export class GroupsService {
         startingLives: finalStartingLives,
         livesIcon: nullableTrimmedString(groupPayload.livesIcon),
         imageRef: nullableTrimmedString(groupPayload.imageRef),
+        shopOpen: initialShopOpen,
+        shopOpensAt: parsedShopOpensAt,
+        rankShowMemberAvatars: groupPayload.rankShowMemberAvatars ?? true,
       });
       const saved = await this.groupRepository.save(entity);
       return {
@@ -284,7 +300,18 @@ export class GroupsService {
       updates.imageRef = nullableTrimmedString(payload.imageRef);
     }
     if (payload.shopOpensAt !== undefined) {
-      updates.shopOpensAt = payload.shopOpensAt === null ? null : new Date(payload.shopOpensAt);
+      if (payload.shopOpensAt === null) {
+        updates.shopOpensAt = null;
+      } else {
+        const d = new Date(payload.shopOpensAt);
+        if (d <= new Date()) {
+          updates.shopOpen = true;
+          updates.shopOpensAt = null;
+        } else {
+          updates.shopOpensAt = d;
+          updates.shopOpen = false;
+        }
+      }
     }
     if (payload.rankShowMemberAvatars !== undefined) {
       updates.rankShowMemberAvatars = payload.rankShowMemberAvatars;
