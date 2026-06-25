@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
 import {
@@ -44,6 +44,7 @@ export class StagesService {
   constructor(
     private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
+    private readonly dataSource: DataSource,
     @InjectRepository(StageEntity)
     private readonly stageRepository: Repository<StageEntity>,
     @InjectRepository(GroupEntity)
@@ -232,15 +233,32 @@ export class StagesService {
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'reorder', stage: STAGE_RESPONSE_NOT_FOUND_ID };
     }
     const internalGroupId = toInternalGroupId(body.groupId);
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
+    if (lecturerAccountId === null) {
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'reorder', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+    }
+    const isOwner = await this.groupRepository.exist({
+      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+    });
+    if (!isOwner) {
+      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'reorder', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+    }
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
     try {
       for (let i = 0; i < body.stageIds.length; i++) {
         const id = body.stageIds[i];
-        await this.stageRepository.update({ id, groupId: internalGroupId }, { displayOrder: i });
+        await queryRunner.manager.update(StageEntity, { id, groupId: internalGroupId }, { displayOrder: i });
       }
+      await queryRunner.commitTransaction();
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'reorder', stage: body.stageIds.length };
     } catch (err) {
+      await queryRunner.rollbackTransaction();
       this.logger.error(`Stage reorder failed: ${err instanceof Error ? err.message : String(err)}`);
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'reorder', stage: STAGE_RESPONSE_NOT_FOUND_ID };
+    } finally {
+      await queryRunner.release();
     }
   }
 }

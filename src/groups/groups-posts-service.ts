@@ -10,6 +10,7 @@ import {
   POST_ERROR_CODE_NOT_AUTHORIZED,
   POST_ERROR_CODE_NOT_CREATED,
 } from '../constants/group-api-constants';
+import { SCHEDULED_POST_PUBLISH_POLL_INTERVAL_MS } from '../constants/scheduled-post-constants';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
@@ -44,7 +45,7 @@ export class GroupsPostsService implements OnModuleInit, OnModuleDestroy {
       this.publishScheduledPosts().catch((err) => {
         this.logger.error(`Publish scheduled posts error: ${String(err)}`);
       });
-    }, 60000);
+    }, SCHEDULED_POST_PUBLISH_POLL_INTERVAL_MS);
   }
 
   onModuleDestroy() {

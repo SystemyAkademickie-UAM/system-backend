@@ -195,8 +195,11 @@ export class StudentManagementService {
           stats.autoRankEnabled = item.autoRankEnabled;
         }
 
-        if (item.rankId !== undefined && !item.autoRankEnabled) {
-          stats.rankId = item.rankId;
+        const manualRankAssignment =
+          item.rankId !== undefined
+          && (item.autoRankEnabled === false || item.autoRankEnabled === undefined);
+        if (manualRankAssignment) {
+          stats.rankId = item.rankId ?? null;
           stats.autoRankEnabled = false;
         } else if (stats.autoRankEnabled) {
           const newRankId = await this.ranksService.calculateRankForPoints(groupId, stats.totalEarned || 0);
