@@ -61,4 +61,10 @@ export class GroupEntity {
 
   @Column({ name: 'shop_open', type: 'boolean', default: true })
   shopOpen: boolean;
+
+  @Column({ name: 'shop_opens_at', type: 'timestamptz', nullable: true })
+  shopOpensAt: Date | null;
+
+  @Column({ name: 'rank_show_member_avatars', type: 'boolean', default: true })
+  rankShowMemberAvatars: boolean;
 }

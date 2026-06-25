@@ -54,6 +54,8 @@ export type UserGroupListItem = {
   livesLabel: string | null;
   livesIcon: string | null;
   livesShopEnabled: boolean;
+  shopOpensAt: string | null;
+  rankShowMemberAvatars: boolean;
 };
 
 export type LivesConfigResponseBody = {
@@ -280,6 +282,12 @@ export class GroupsService {
     }
     if (payload.imageRef !== undefined) {
       updates.imageRef = nullableTrimmedString(payload.imageRef);
+    }
+    if (payload.shopOpensAt !== undefined) {
+      updates.shopOpensAt = payload.shopOpensAt === null ? null : new Date(payload.shopOpensAt);
+    }
+    if (payload.rankShowMemberAvatars !== undefined) {
+      updates.rankShowMemberAvatars = payload.rankShowMemberAvatars;
     }
 
     if (updates.startingLives !== undefined || updates.lives !== undefined) {
@@ -733,6 +741,8 @@ export class GroupsService {
     teacher_name: string | null;
     teacher_surname: string | null;
     shop_open: boolean;
+    shop_opens_at: Date | string | null;
+    rank_show_member_avatars: boolean;
     lives_enabled: boolean;
     lives: number | null;
     starting_lives: number | null;
@@ -761,6 +771,8 @@ export class GroupsService {
       livesLabel: row.lives_label ?? null,
       livesIcon: row.lives_icon ?? null,
       livesShopEnabled: toBool(row.lives_shop_enabled),
+      shopOpensAt: row.shop_opens_at ? new Date(row.shop_opens_at).toISOString() : null,
+      rankShowMemberAvatars: toBool(row.rank_show_member_avatars),
     };
   }
 
@@ -780,6 +792,8 @@ export class GroupsService {
       teacher_name: string | null;
       teacher_surname: string | null;
       shop_open: boolean;
+      shop_opens_at: Date | string | null;
+      rank_show_member_avatars: boolean;
       lives_enabled: boolean;
       lives: number | null;
       starting_lives: number | null;
@@ -802,6 +816,8 @@ export class GroupsService {
         'group.currency AS currency',
         'group.currency_emoji AS currency_emoji',
         'group.shop_open AS shop_open',
+        'group.shop_opens_at AS shop_opens_at',
+        'group.rank_show_member_avatars AS rank_show_member_avatars',
         'group.lives_enabled AS lives_enabled',
         'group.lives AS lives',
         'group.starting_lives AS starting_lives',
@@ -854,6 +870,8 @@ export class GroupsService {
       lives_label: row.lives_label ?? null,
       lives_icon: row.lives_icon ?? null,
       lives_shop_enabled: toBool(row.lives_shop_enabled),
+      shop_opens_at: row.shop_opens_at ? new Date(row.shop_opens_at) : null,
+      rank_show_member_avatars: toBool(row.rank_show_member_avatars),
       is_owner: toBool(row.is_owner),
       is_enrolled: toBool(row.is_enrolled),
     }));

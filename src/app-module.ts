@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, seconds } from '@nestjs/throttler';
 
 import {
@@ -25,6 +26,7 @@ import { BannersModule } from './banners/banners-module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       { ttl: seconds(AUTH_THROTTLE_TTL_SECONDS), limit: AUTH_THROTTLE_DEFAULT_LIMIT },
     ]),

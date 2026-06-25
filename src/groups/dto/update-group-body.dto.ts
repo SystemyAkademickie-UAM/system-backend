@@ -85,6 +85,15 @@ export class UpdateGroupPayloadDto {
   @IsOptional()
   @IsString()
   imageRef?: string;
+
+  @Transform(({ value }) => transformOptionalString(value))
+  @IsOptional()
+  @IsString()
+  shopOpensAt?: string | null;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  rankShowMemberAvatars?: boolean;
 }
 
 export class UpdateGroupBodyDto {

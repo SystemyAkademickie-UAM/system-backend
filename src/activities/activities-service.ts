@@ -31,6 +31,7 @@ export type ActivityResponseBody = {
     stageId: number;
     name: string;
     currency: number;
+    completionCount: number;
     educationalDescription: string;
     storyDescription: string;
   }>;
@@ -261,6 +262,20 @@ export class ActivitiesService {
         activities = activities.filter(a => visibleStageIds.has(a.stageId));
       }
 
+      const countsMap = new Map<number, number>();
+      if (activities.length > 0) {
+        const counts = await this.activityBacklogRepository
+          .createQueryBuilder('ab')
+          .select('ab.activity_id', 'activityId')
+          .addSelect('COUNT(DISTINCT ab.account_id)', 'count')
+          .where('ab.activity_id IN (:...ids)', { ids: activities.map(a => a.id) })
+          .groupBy('ab.activity_id')
+          .getRawMany();
+        for (const row of counts) {
+          countsMap.set(row.activityId, Number(row.count));
+        }
+      }
+
       return {
         statusCode: ACTIVITY_API_JSON_STATUS_OK,
         method: 'retrieve',
@@ -270,6 +285,7 @@ export class ActivitiesService {
           stageId: a.stageId,
           name: a.name,
           currency: a.currency,
+          completionCount: countsMap.get(a.id) ?? 0,
           educationalDescription: a.educationalDescription,
           storyDescription: a.storyDescription,
         })),

@@ -181,6 +181,8 @@ describe('GroupsService', () => {
             livesLabel: null,
             livesIcon: null,
             livesShopEnabled: false,
+            shopOpensAt: null,
+            rankShowMemberAvatars: false,
           },
         ],
       });
