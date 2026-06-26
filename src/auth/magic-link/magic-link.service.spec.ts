@@ -141,6 +141,21 @@ describe('MagicLinkService', () => {
     );
   });
 
+  it('should reject email-only request when email is not provisioned', async () => {
+    magicLinkUserService.resolveEmailMagicLinkTarget.mockRejectedValue(
+      new NotFoundException({ error: 'MAGIC_LINK_ACCOUNT_NOT_REGISTERED' }),
+    );
+    await expect(service.requestMagicLink('unknown@example.com')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(magicLinkUserService.resolveEmailMagicLinkTarget).toHaveBeenCalledWith(
+      'unknown@example.com',
+      null,
+    );
+    expect(magicLinkUserService.resolveEmailMagicLinkTargetForOrganization).not.toHaveBeenCalled();
+    expect(magicLinkEmailService.sendMagicLinkEmail).not.toHaveBeenCalled();
+  });
+
   it('should reject request when email is not provisioned', async () => {
     magicLinkUserService.resolveEmailMagicLinkTargetForOrganization.mockRejectedValue(
       new NotFoundException({ error: 'MAGIC_LINK_ACCOUNT_NOT_REGISTERED' }),
