@@ -57,6 +57,27 @@ describe('MagicLinkUserService', () => {
     });
   }
 
+  it('should resolve organization selected in the login form', async () => {
+    mockUserFound(7);
+    mockEmailOrganizationsForUser([clientOrgId]);
+    const target = await service.resolveEmailMagicLinkTargetForOrganization(
+      'player@example.com',
+      clientOrgId,
+      null,
+    );
+    expect(target).toEqual({ userId: 7, organizationId: clientOrgId });
+  });
+
+  it('should reject when selected organization does not match provisioned email tenant', async () => {
+    mockUserFound(7);
+    mockEmailOrganizationsForUser([clientOrgId]);
+    await expect(
+      service.resolveEmailMagicLinkTargetForOrganization('player@example.com', 99, null),
+    ).rejects.toMatchObject({
+      response: { error: MAGIC_LINK_ACCOUNT_NOT_REGISTERED_ERROR },
+    });
+  });
+
   it('should resolve organization automatically when user has one email tenant', async () => {
     mockUserFound(7);
     mockEmailOrganizationsForUser([clientOrgId]);

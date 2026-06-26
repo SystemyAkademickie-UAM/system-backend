@@ -5,6 +5,7 @@ import { DataSource } from 'typeorm';
 import { GroupEntity } from '../../database/entities/group.entity';
 import { GroupTemplateEntity } from '../../database/entities/group-template.entity';
 import { GroupTemplatesImportService } from './group-templates-import-service';
+import { ShopItemsService } from '../../gamification/shop-items-service';
 
 describe('GroupTemplatesImportService', () => {
   let service: GroupTemplatesImportService;
@@ -31,6 +32,12 @@ describe('GroupTemplatesImportService', () => {
         {
           provide: DataSource,
           useValue: mockDataSource,
+        },
+        {
+          provide: ShopItemsService,
+          useValue: {
+            ensureDefaultExtraLifeItem: jest.fn().mockResolvedValue({ id: 1 }),
+          },
         },
       ],
     }).compile();

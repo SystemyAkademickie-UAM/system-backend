@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 
 import { AvatarEntity } from '../database/entities/avatar.entity';
 import { UserEntity } from '../database/entities/user.entity';
-import { AUTH_USER_NAME_FIELD_MAX_LENGTH } from '../constants/database-entity-constants';
+import { USER_NICKNAME_MAX_LENGTH } from '../constants/user-profile-constants';
 
 export interface RegistrationStatusResponse {
   userId: number;
@@ -25,13 +25,6 @@ export interface UpdateProfileResponse {
 export interface AcceptEulaResponse {
   success: boolean;
   eulaAcceptedAt: string;
-}
-
-function truncateField(value: string, maxLength: number): string {
-  if (value.length <= maxLength) {
-    return value;
-  }
-  return value.slice(0, maxLength);
 }
 
 @Injectable()
@@ -68,9 +61,14 @@ export class RegistrationService {
     if (!user) {
       throw new NotFoundException(`User with id ${userId} not found`);
     }
-    const trimmedNickname = truncateField(nickname.trim(), AUTH_USER_NAME_FIELD_MAX_LENGTH);
+    const trimmedNickname = nickname.trim();
     if (trimmedNickname.length === 0) {
       throw new BadRequestException('Nickname cannot be empty');
+    }
+    if (trimmedNickname.length > USER_NICKNAME_MAX_LENGTH) {
+      throw new BadRequestException(
+        `Nickname must be at most ${USER_NICKNAME_MAX_LENGTH} characters`,
+      );
     }
     await this.assertAvatarExists(avatarId);
     user.nickname = trimmedNickname;

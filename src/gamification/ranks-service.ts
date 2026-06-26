@@ -8,6 +8,7 @@ import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { GroupEntity } from '../database/entities/group.entity';
 import { RankEntity } from '../database/entities/rank.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { BacklogService } from '../backlog/backlog-service';
 import { CreateRankDto } from './dto/create-rank.dto';
 import { UpdateRankDto } from './dto/update-rank.dto';
 import { normalizeRankDiscountDto } from './legacy-global-discount';
@@ -26,6 +27,7 @@ export class RanksService {
     private readonly rankRepository: Repository<RankEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
+    private readonly backlogService: BacklogService,
     private readonly dataSource: DataSource) {}
 
   /**
@@ -157,6 +159,11 @@ export class RanksService {
 
     const saved = await this.rankRepository.save(entity);
     await this.recalculateRanksForGroup(groupId);
+    await this.backlogService.notifyEnrolledStudents(groupId, 'RANK_ADDED', {
+      message: `Dodano nową rangę: ${saved.name}.`,
+      rankId: saved.id,
+      rankName: saved.name,
+    });
     this.logger.log(`Rank "${saved.name}" (id=${saved.id}) created for group ${groupId}`);
     return saved;
   }

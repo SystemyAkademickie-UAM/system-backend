@@ -15,12 +15,16 @@ import { StageEntity } from '../../database/entities/stage.entity';
 
 import type { GroupTemplateData } from './group-template-data.interface';
 import { mapLegacyBadgeDiscount, mapLegacyRankDiscount } from './group-template-legacy-discount';
+import { ShopItemsService } from '../../gamification/shop-items-service';
 
 @Injectable()
 export class GroupTemplatesImportService {
   private readonly logger = new Logger(GroupTemplatesImportService.name);
 
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly shopItemsService: ShopItemsService,
+  ) {}
 
   async createGroupFromTemplate(
     templateId: number,
@@ -57,6 +61,8 @@ export class GroupTemplatesImportService {
       });
       const savedGroup = await manager.save(GroupEntity, groupEntity);
       const newGroupId = savedGroup.id;
+
+      await this.shopItemsService.ensureDefaultExtraLifeItem(newGroupId, manager);
 
       // 3. Create Badges & keep ID mapping
       const badgeIdMap = new Map<number, number>(); // old -> new
@@ -103,6 +109,7 @@ export class GroupTemplatesImportService {
           name: oldCat.name,
           description: oldCat.description,
           displayOrder: oldCat.displayOrder,
+          color: oldCat.color ?? null,
         });
         const savedCat = await manager.save(ItemCategoryEntity, catEntity);
         categoryIdMap.set(oldCat.id, savedCat.id);

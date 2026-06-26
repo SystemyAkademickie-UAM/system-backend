@@ -8,7 +8,7 @@
  *   npm run register:user -- super@maq.local --org-id 1 --super --allow-internal-org
  *   npm run register:user -- gm@example.com --org-id 12 --lecturer --complete-registration
  */
-import 'dotenv/config';
+import './lib/load-env.mjs';
 import { assertEmail, createPgClient, findUserIdByEmail, resolveOrganizationId } from './lib/pg-client.mjs';
 import { assertOrganizationAllowsEmailProvisioning } from './lib/org-provisioning.mjs';
 import {

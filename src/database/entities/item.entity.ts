@@ -43,4 +43,8 @@ export class ItemEntity {
   /** Set automatically by the backend when `isPublished` flips to `true`. */
   @Column({ name: 'published_at', type: 'timestamp', nullable: true })
   publishedAt: Date | null;
+
+  /** Built-in shop product that restores one life after game over. */
+  @Column({ name: 'is_extra_life', type: 'boolean', default: false })
+  isExtraLife: boolean;
 }

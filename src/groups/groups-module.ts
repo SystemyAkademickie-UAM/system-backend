@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthTokenSessionModule } from '../auth/api-token/auth-token-session-module';
 import { EnrollmentCodeEntity } from '../database/entities/enrollment-code.entity';
+import { AccountEntity } from '../database/entities/account.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { GroupTemplateEntity } from '../database/entities/group-template.entity';
@@ -13,6 +14,7 @@ import { GamificationModule } from '../gamification/gamification-module';
 import { UserRolesModule } from '../user-roles/user-roles-module';
 import { GroupsEnrollmentService } from './groups-enrollment-service';
 import { EnrollmentCodesService } from './enrollment-codes-service';
+import { BacklogModule } from '../backlog/backlog-module';
 import { GroupsController } from './groups-controller';
 import { GroupsService } from './groups-service';
 import { GroupsPostsController } from './groups-posts-controller';
@@ -30,6 +32,7 @@ import { ShopSchedulerService } from './shop-scheduler-service';
   imports: [
     TypeOrmModule.forFeature([
       GroupEntity,
+      AccountEntity,
       EnrollmentEntity,
       EnrollmentCodeEntity,
       PostEntity,
@@ -40,6 +43,7 @@ import { ShopSchedulerService } from './shop-scheduler-service';
     AuthTokenSessionModule,
     UserRolesModule,
     GamificationModule,
+    BacklogModule,
   ],
   controllers: [
     GroupsController,

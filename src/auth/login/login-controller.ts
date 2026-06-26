@@ -34,6 +34,7 @@ import {
 } from '../../constants/throttler-constants';
 import { LoginApiService } from './login-api.service';
 import { SelectActiveRoleDto } from './dto/select-active-role.dto';
+import { UpdateLoginProfileDto } from './dto/update-login-profile.dto';
 import { RequestMagicLinkDto } from '../magic-link/dto/request-magic-link.dto';
 import { VerifyMagicLinkDto } from '../magic-link/dto/verify-magic-link.dto';
 import { MagicLinkService } from '../magic-link/magic-link.service';
@@ -45,11 +46,6 @@ import {
   ORGANIZATION_LOGIN_METHOD_EMAIL,
   ORGANIZATION_LOGIN_METHOD_SAML,
 } from '../../constants/organization-constants';
-
-interface UpdateProfileDto {
-  nickname: string;
-  avatarId: number;
-}
 
 /**
  * Login flow: session introspection and in-wizard registration steps.
@@ -120,7 +116,7 @@ export class LoginController {
   @ApiCookieAuth(MAQ_SESSION_COOKIE_NAME)
   async updateProfile(
     @Req() req: Request,
-    @Body() body: UpdateProfileDto) {
+    @Body() body: UpdateLoginProfileDto) {
     const subject = await this.sessionService.resolveSubjectFromRequest(req, undefined);
     if (!subject) {
       throw new ForbiddenException('Not authenticated');
@@ -176,7 +172,7 @@ export class LoginController {
   })
   @ApiOperation({ summary: 'Request email magic link for passwordless login' })
   async requestMagicLink(@Body() body: RequestMagicLinkDto) {
-    return this.magicLinkService.requestMagicLink(body.email);
+    return this.magicLinkService.requestMagicLink(body.email, body.organizationId);
   }
 
   /**

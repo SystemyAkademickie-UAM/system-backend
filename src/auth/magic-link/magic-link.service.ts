@@ -67,12 +67,16 @@ export class MagicLinkService {
     @InjectRepository(MagicLinkTokenEntity)
     private readonly magicLinkTokenRepository: Repository<MagicLinkTokenEntity>) {}
 
-  async requestMagicLink(emailRaw: string): Promise<RequestMagicLinkResponse> {
+  async requestMagicLink(
+    emailRaw: string,
+    organizationId: number,
+  ): Promise<RequestMagicLinkResponse> {
     this.magicLinkEmailService.assertSmtpConfigured();
     await this.assertMagicLinkRoutingConfigured();
     const email = emailRaw.trim().toLowerCase();
-    const target = await this.magicLinkUserService.resolveEmailMagicLinkTarget(
+    const target = await this.magicLinkUserService.resolveEmailMagicLinkTargetForOrganization(
       email,
+      organizationId,
       this.readBootstrapEmail(),
     );
     await this.assertCooldownAllowsRequest(email, target.organizationId);

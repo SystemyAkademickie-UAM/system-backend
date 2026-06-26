@@ -2,8 +2,12 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { EDUCATION_SCHEMA } from '../../constants/database-schema-constants';
+import { AccountEntity } from '../../database/entities/account.entity';
 import { GroupTemplateFavoriteEntity } from '../../database/entities/group-template-favorite.entity';
 import { GroupTemplateEntity } from '../../database/entities/group-template.entity';
+import { UserEntity } from '../../database/entities/user.entity';
+import { formatLecturerDisplay } from '../../utils/lecturer-display.util';
 
 export interface PaginatedGroupTemplates {
   items: GroupTemplateListItem[];
@@ -21,6 +25,10 @@ export interface GroupTemplateListItem {
   baseGroupId: number | null;
   createdAt: string;
   isFavorite: boolean;
+  isOwn?: boolean;
+  creatorNickname?: string;
+  creatorLegalName?: string;
+  creatorDisplayName?: string;
 }
 
 @Injectable()
@@ -35,7 +43,8 @@ export class GroupTemplatesCrudService {
     lecturerAccountId: number,
     scope: 'my' | 'public',
     limit: number,
-    offset: number): Promise<PaginatedGroupTemplates> {
+    offset: number,
+    favoritesOnly: boolean = false): Promise<PaginatedGroupTemplates> {
     const query = this.templatesRepository.createQueryBuilder('t')
       .select([
         't.id',
@@ -51,34 +60,79 @@ export class GroupTemplatesCrudService {
       query.where('t.creator_account_id = :accountId', { accountId: lecturerAccountId });
       query.orderBy('t.created_at', 'DESC');
     } else {
-      query.where('t.is_public = true');
-      query.leftJoin(
-        GroupTemplateFavoriteEntity,
-        'f',
-        'f.template_id = t.id AND f.account_id = :accountId',
-        { accountId: lecturerAccountId },
-      );
-      query.orderBy('CASE WHEN f.id IS NOT NULL THEN 0 ELSE 1 END', 'ASC');
-      query.addOrderBy('t.created_at', 'DESC');
+      query.where('t.is_public = :isPublic', { isPublic: true });
+
+      if (favoritesOnly) {
+        query.andWhere(
+          `EXISTS (
+            SELECT 1 FROM ${EDUCATION_SCHEMA}.group_template_favorites fav
+            WHERE fav.template_id = t.id AND fav.account_id = :accountId
+          )`,
+          { accountId: lecturerAccountId },
+        );
+      }
+
+      query.orderBy('t.created_at', 'DESC');
     }
 
     query.skip(offset).take(limit);
 
     const [entities, total] = await query.getManyAndCount();
     const favoriteIds = scope === 'public'
-      ? await this.loadFavoriteTemplateIds(lecturerAccountId, entities.map((template) => template.id))
+      ? (favoritesOnly
+        ? new Set(entities.map((template) => template.id))
+        : await this.loadFavoriteTemplateIds(lecturerAccountId, entities.map((template) => template.id)))
       : new Set<number>();
 
-    const items = entities.map((template) => ({
-      id: template.id,
-      name: template.name,
-      description: template.description,
-      isPublic: template.isPublic,
-      creatorAccountId: template.creatorAccountId,
-      baseGroupId: template.baseGroupId,
-      createdAt: template.createdAt.toISOString(),
-      isFavorite: favoriteIds.has(template.id),
-    }));
+    const orderedEntities = scope === 'public' && !favoritesOnly
+      ? [...entities].sort((left, right) => {
+        const leftFavorite = favoriteIds.has(left.id);
+        const rightFavorite = favoriteIds.has(right.id);
+        if (leftFavorite !== rightFavorite) {
+          return leftFavorite ? -1 : 1;
+        }
+        return right.createdAt.getTime() - left.createdAt.getTime();
+      })
+      : entities;
+
+    const creatorProfiles = scope === 'public'
+      ? await this.loadCreatorProfilesByAccountIds(
+        orderedEntities.map((template) => template.creatorAccountId),
+      )
+      : new Map<number, {
+        nickname: string;
+        name: string;
+        surname: string;
+        legalName: string;
+        showNickname: boolean;
+      }>();
+
+    const items = orderedEntities.map((template) => {
+      const creator = creatorProfiles.get(template.creatorAccountId);
+      return {
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        isPublic: template.isPublic,
+        creatorAccountId: template.creatorAccountId,
+        baseGroupId: template.baseGroupId,
+        createdAt: template.createdAt.toISOString(),
+        isFavorite: favoriteIds.has(template.id),
+        ...(scope === 'public'
+          ? {
+            isOwn: template.creatorAccountId === lecturerAccountId,
+            creatorNickname: creator?.nickname ?? '',
+            creatorLegalName: creator?.legalName ?? '',
+            creatorDisplayName: formatLecturerDisplay(
+              creator?.nickname,
+              creator?.name,
+              creator?.surname,
+              creator?.showNickname ?? true,
+            ),
+          }
+          : {}),
+      };
+    });
 
     return {
       items,
@@ -205,5 +259,62 @@ export class GroupTemplatesCrudService {
       .getRawMany<{ templateId: number }>();
 
     return new Set(favorites.map((row) => Number(row.templateId)));
+  }
+
+  private async loadCreatorProfilesByAccountIds(
+    accountIds: number[]): Promise<Map<number, {
+      nickname: string;
+      name: string;
+      surname: string;
+      legalName: string;
+      showNickname: boolean;
+    }>> {
+    const uniqueIds = [...new Set(accountIds)];
+    if (uniqueIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.templatesRepository.manager
+      .getRepository(AccountEntity)
+      .createQueryBuilder('account')
+      .innerJoin(UserEntity, 'user', 'user.id = account.user_id')
+      .select('account.id', 'accountId')
+      .addSelect('user.nickname', 'nickname')
+      .addSelect('user.name', 'name')
+      .addSelect('user.surname', 'surname')
+      .addSelect('user.show_nickname', 'showNickname')
+      .where('account.id IN (:...uniqueIds)', { uniqueIds })
+      .getRawMany<{
+        accountId: number | string;
+        nickname: string;
+        name: string;
+        surname: string;
+        showNickname: boolean | string;
+      }>();
+
+    const profiles = new Map<number, {
+      nickname: string;
+      name: string;
+      surname: string;
+      legalName: string;
+      showNickname: boolean;
+    }>();
+    rows.forEach((row) => {
+      const name = String(row.name ?? '').trim();
+      const surname = String(row.surname ?? '').trim();
+      const legalName = [name, surname].filter(Boolean).join(' ').trim();
+      const showNickname = row.showNickname === true
+        || row.showNickname === 't'
+        || String(row.showNickname) === '1';
+      profiles.set(Number(row.accountId), {
+        nickname: String(row.nickname ?? '').trim(),
+        name,
+        surname,
+        legalName,
+        showNickname,
+      });
+    });
+
+    return profiles;
   }
 }

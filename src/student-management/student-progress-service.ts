@@ -17,6 +17,7 @@ import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StageEntity } from '../database/entities/stage.entity';
 import { RanksService } from '../gamification/ranks-service';
+import { BacklogService } from '../backlog/backlog-service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { SetActivityCompletionsDto } from './dto/set-activity-completions.dto';
 import { applyActivityCurrencyDelta } from './student-stats-reward.helper';
@@ -69,7 +70,8 @@ export class StudentProgressService {
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>) {}
+    private readonly groupRepository: Repository<GroupEntity>,
+    private readonly backlogService: BacklogService) {}
 
   /** GET /groups/:groupId/students/:accountId/progress */
   async getStudentProgress(
@@ -269,12 +271,31 @@ export class StudentProgressService {
       date: new Date(),
     });
     await queryRunner.manager.save(ActivityBacklogEntity, entry);
-    await applyActivityCurrencyDelta(
+    const activity = await queryRunner.manager.findOne(ActivityEntity, { where: { id: activityId } });
+    const rankChange = await applyActivityCurrencyDelta(
       queryRunner,
       this.ranksService,
       enrollment.id,
       groupId,
       rewardAmount);
+
+    await this.backlogService.logEvent(groupId, accountId, 'ACTIVITY_COMPLETED', {
+      message: `Zaliczono aktywność${activity?.name ? `: ${activity.name}` : ''} (+${rewardAmount} pkt).`,
+      activityId,
+      activityName: activity?.name ?? null,
+      points: rewardAmount,
+    }, queryRunner.manager);
+
+    if (
+      rankChange.previousRankId !== rankChange.newRankId
+      && rankChange.newRankId != null
+    ) {
+      await this.backlogService.logEvent(groupId, accountId, 'RANK_UP', {
+        message: `Otrzymano wyższą rangę.`,
+        rankId: rankChange.newRankId,
+        previousRankId: rankChange.previousRankId,
+      }, queryRunner.manager);
+    }
   }
 
   private async revokeActivityCompletion(

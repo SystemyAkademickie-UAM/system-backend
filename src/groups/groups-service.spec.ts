@@ -9,6 +9,7 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { EnrollmentCodesService } from './enrollment-codes-service';
 import { GroupsService } from './groups-service';
+import { ShopItemsService } from '../gamification/shop-items-service';
 
 type MockQueryBuilder = {
   leftJoin: jest.Mock;
@@ -57,6 +58,9 @@ describe('GroupsService', () => {
       findLatestActiveCode: jest.fn(),
       createCode: jest.fn(),
     };
+    const mockShopItemsService = {
+      ensureDefaultExtraLifeItem: jest.fn().mockResolvedValue({ id: 1 }),
+    };
     mockQueryBuilder = {
       leftJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
@@ -83,6 +87,7 @@ describe('GroupsService', () => {
         { provide: SessionService, useValue: mockSessionService },
         { provide: UserRolesService, useValue: mockUserRolesService },
         { provide: EnrollmentCodesService, useValue: mockEnrollmentCodesService },
+        { provide: ShopItemsService, useValue: mockShopItemsService },
         { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },
       ],
     }).compile();

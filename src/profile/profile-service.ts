@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import { Repository } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
+import { USER_NICKNAME_MAX_LENGTH } from '../constants/user-profile-constants';
 import { AvatarEntity } from '../database/entities/avatar.entity';
 import { UserEntity } from '../database/entities/user.entity';
 import { UpdateProfileSettingsDto } from './dto/update-profile-settings.dto';
@@ -63,6 +64,11 @@ export class ProfileService {
       if (trimmedNickname === '') {
         throw new ForbiddenException('Pseudonim nie może być pusty');
       }
+      if (trimmedNickname.length > USER_NICKNAME_MAX_LENGTH) {
+        throw new ForbiddenException(
+          `Pseudonim może mieć co najwyżej ${USER_NICKNAME_MAX_LENGTH} znaków`,
+        );
+      }
       user.nickname = trimmedNickname;
     }
 
@@ -74,8 +80,14 @@ export class ProfileService {
       user.avatarId = dto.avatarId;
     }
 
+    if (dto.showNickname !== undefined) {
+      user.showNickname = dto.showNickname;
+    }
+
     const updatedUser = await this.userRepository.save(user);
-    this.logger.log(`Użytkownik id=${user.id} zaktualizował profil (nickname="${user.nickname}", avatarId=${user.avatarId})`);
+    this.logger.log(
+      `Użytkownik id=${user.id} zaktualizował profil (nickname="${user.nickname}", avatarId=${user.avatarId}, showNickname=${user.showNickname})`,
+    );
 
     return updatedUser;
   }

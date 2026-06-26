@@ -18,6 +18,7 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { RanksService } from '../gamification/ranks-service';
+import { BacklogService } from '../backlog/backlog-service';
 import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
 import { JoinGroupQueryDto } from './dto/join-group-query.dto';
 import { EnrollmentCodesService } from './enrollment-codes-service';
@@ -68,6 +69,7 @@ export class GroupsEnrollmentService {
     private readonly userRolesService: UserRolesService,
     private readonly ranksService: RanksService,
     private readonly enrollmentCodesService: EnrollmentCodesService,
+    private readonly backlogService: BacklogService,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(GroupEntity)
@@ -111,6 +113,11 @@ export class GroupsEnrollmentService {
         lives: Math.min(configuredStarting, maxLives),
       });
       await this.studentStatsRepository.save(stats);
+
+      await this.backlogService.logEvent(groupId, studentAccountId, 'STUDENT_JOINED', {
+        message: `Uczeń dołączył do grupy.`,
+        accountId: studentAccountId,
+      });
 
       return { enrollmentId: saved.id, groupId };
     } catch (err: unknown) {

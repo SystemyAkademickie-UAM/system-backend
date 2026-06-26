@@ -7,6 +7,7 @@ import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { ItemCategoryEntity } from '../database/entities/item-category.entity';
+import { ItemCategoryLinkEntity } from '../database/entities/item-category-link.entity';
 import { RankEntity } from '../database/entities/rank.entity';
 import { ItemEntity } from '../database/entities/item.entity';
 import { ShopListingEntity } from '../database/entities/shop-listing.entity';
@@ -40,6 +41,8 @@ import { ShopTemplatesController } from './shop-templates-controller';
       GroupEntity,
       ItemCategoryEntity,
       ItemEntity,
+      ItemCategoryEntity,
+      ItemCategoryLinkEntity,
       ShopListingEntity,
       DefaultItemTemplateEntity,
       EnrollmentEntity,

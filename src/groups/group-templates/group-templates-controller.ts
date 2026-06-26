@@ -1,8 +1,12 @@
-import { Body, Controller, ForbiddenException, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req, BadRequestException } from '@nestjs/common';
 import type { Request } from 'express';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 import { SessionService } from '../../auth/session/session.service';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET, toInternalGroupId } from '../../constants/group-api-constants';
+import { AccountEntity } from '../../database/entities/account.entity';
+import { UserRolesService } from '../../user-roles/user-roles-service';
 import { GroupsService } from '../groups-service';
 import { CreateGroupFromTemplateDto } from '../dto/create-group-from-template.dto';
 import { SaveGroupTemplateDto } from '../dto/save-group-template.dto';
@@ -14,8 +18,12 @@ export class GroupTemplatesController {
   constructor(
     private readonly sessionService: SessionService,
     private readonly groupsService: GroupsService,
+    private readonly userRolesService: UserRolesService,
     private readonly exportService: GroupTemplatesExportService,
-    private readonly importService: GroupTemplatesImportService) {}
+    private readonly importService: GroupTemplatesImportService,
+    @InjectRepository(AccountEntity)
+    private readonly accountRepository: Repository<AccountEntity>,
+  ) {}
 
   @Post(':groupId/save-as-template')
   @HttpCode(HttpStatus.CREATED)
@@ -34,12 +42,43 @@ export class GroupTemplatesController {
       subject.userId,
       internalGroupId);
 
+    const creatorAccountId = await this.resolveTemplateCreatorAccountId(accountId, dto.devCreatorEmail);
+
     return this.exportService.exportGroupToTemplate(
       internalGroupId,
-      accountId,
+      creatorAccountId,
       dto.name,
       dto.description,
       dto.isPublic ?? false);
+  }
+
+  private async resolveTemplateCreatorAccountId(
+    sourceAccountId: number,
+    devCreatorEmail?: string,
+  ): Promise<number> {
+    const normalizedEmail = devCreatorEmail?.trim();
+    if (!normalizedEmail) {
+      return sourceAccountId;
+    }
+    if (process.env.NODE_ENV === 'production') {
+      throw new BadRequestException('devCreatorEmail is not allowed in production');
+    }
+
+    const sourceAccount = await this.accountRepository.findOne({ where: { id: sourceAccountId } });
+    if (sourceAccount === null) {
+      throw new ForbiddenException('Not authorized to manage this group');
+    }
+
+    const resolvedAccountId = await this.userRolesService.findLecturerAccountIdByEmailInOrganization(
+      normalizedEmail,
+      sourceAccount.organizationId,
+    );
+    if (resolvedAccountId === null) {
+      throw new BadRequestException(
+        `Lecturer account not found for ${normalizedEmail} in organization ${sourceAccount.organizationId}`,
+      );
+    }
+    return resolvedAccountId;
   }
 
   @Post('from-template/:templateId')

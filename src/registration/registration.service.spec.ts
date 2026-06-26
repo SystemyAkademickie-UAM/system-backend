@@ -94,6 +94,19 @@ describe('RegistrationService', () => {
     await expect(service.updateProfile(7, '   ', 1)).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('rejects nickname longer than max length', async () => {
+    userRepository.findOne.mockResolvedValue({
+      id: 7,
+      nickname: '',
+      avatarId: 1,
+      profileSubmittedAt: null,
+    });
+
+    await expect(
+      service.updateProfile(7, 'a'.repeat(16), 1),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('rejects unknown avatar id', async () => {
     userRepository.findOne.mockResolvedValue({
       id: 7,

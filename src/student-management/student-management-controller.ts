@@ -20,6 +20,7 @@ import { ReportsService } from './reports-service';
 import { StudentBadgesService } from './student-badges-service';
 import { StudentManagementService } from './student-management-service';
 import { StudentProgressService } from './student-progress-service';
+import { ShopStudentService } from '../gamification/shop-student-service';
 import { BulkUpdateStudentsDto } from './dto/bulk-update-student.dto';
 import { SetActivityCompletionsDto } from './dto/set-activity-completions.dto';
 
@@ -34,7 +35,8 @@ export class StudentManagementController {
     private readonly studentManagementService: StudentManagementService,
     private readonly studentBadgesService: StudentBadgesService,
     private readonly studentProgressService: StudentProgressService,
-    private readonly reportsService: ReportsService) {}
+    private readonly reportsService: ReportsService,
+    private readonly shopStudentService: ShopStudentService) {}
 
   // ── Part 1: Student list table ──────────────────────────────────────
 
@@ -154,6 +156,22 @@ export class StudentManagementController {
       toInternalGroupId(publicGroupId),
       activityId,
       dto);
+  }
+
+  /**
+   * Returns inventory (earned shop items) for the specified student.
+   */
+  @Get(':groupId/students/:accountId/inventory')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get inventory for a specific student in the group' })
+  getStudentInventory(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('accountId', ParseIntPipe) accountId: number,
+    @Req() req: Request) {
+    return this.shopStudentService.getInventoryForAccount(
+      req,
+      toInternalGroupId(publicGroupId),
+      accountId);
   }
 
   /**

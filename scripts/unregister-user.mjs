@@ -6,7 +6,7 @@
  *   npm run unregister:user -- user@example.com
  *   npm run unregister:user -- user@example.com --org-id 12
  */
-import 'dotenv/config';
+import './lib/load-env.mjs';
 import { assertEmail, createPgClient, resolveOrganizationId } from './lib/pg-client.mjs';
 import { unregisterUser, withPgTransaction } from './lib/account-removal.mjs';
 

@@ -37,6 +37,10 @@ export class UserEntity {
   @Column({ type: 'varchar', length: AUTH_USER_LANGUAGE_MAX_LENGTH, nullable: true, default: 'PL' })
   language: string | null;
 
+  /** When false, lecturer name is shown as legal name instead of nickname to others. */
+  @Column({ name: 'show_nickname', type: 'boolean', nullable: false, default: true })
+  showNickname: boolean;
+
   /** Whether the user has completed the registration flow (nickname + avatar). */
   @Column({ name: 'registration_completed', type: 'boolean', nullable: false, default: false })
   registrationCompleted: boolean;

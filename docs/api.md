@@ -219,7 +219,7 @@ After SAML, first-time users complete nickname, avatar, and EULA in the SPA befo
 
 **Endpoint:** `POST /api/login/profile`
 
-**Request body:** `{ "nickname": string, "avatarId": integer }`
+**Request body:** `{ "nickname": string (1–15 chars), "avatarId": integer }`
 
 **Authorization:** **strong** only.
 
@@ -241,7 +241,7 @@ Returns the current user's profile row (nickname, avatar, registration flags, et
 
 **Endpoint:** `PATCH /api/profile/settings`
 
-Updates nickname and/or avatar for the logged-in user.
+Updates nickname and/or avatar for the logged-in user. Nickname: 1–15 characters (non-empty after trim).
 
 ---
 
@@ -1086,6 +1086,7 @@ Group-scoped categories for shop catalog items (`gamification.item_categories`).
 | `auth` | string (optional) | — | Opaque bearer when not using cookie. |
 | `name` | string | required | Category name (unique per group). |
 | `description` | string (optional) | — | Optional description. |
+| `color` | string (optional) | max 32 chars | Hex or CSS color shown in shop UI (e.g. `#42f37d`). |
 | `displayOrder` | integer (optional) | — | Sort order in shop UI. |
 
 **Response:** `201 Created` — persisted category entity.
@@ -1096,7 +1097,7 @@ Group-scoped categories for shop catalog items (`gamification.item_categories`).
 
 **Auth:** Soft token + **lecturer** who **owns** the group.
 
-**Request body:** optional `auth`, `name`, `description`, `displayOrder`.
+**Request body:** optional `auth`, `name`, `description`, `color`, `displayOrder`.
 
 **Response:** `200 OK` — updated category.
 

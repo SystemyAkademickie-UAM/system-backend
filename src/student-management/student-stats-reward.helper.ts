@@ -34,15 +34,18 @@ export async function applyActivityCurrencyDelta(
   ranksService: RanksService,
   enrollmentId: number,
   groupId: number,
-  delta: number): Promise<void> {
+  delta: number): Promise<{ previousRankId: number | null; newRankId: number | null }> {
   if (delta === 0) {
-    return;
+    const stats = await ensureStudentStatsRow(queryRunner, ranksService, enrollmentId, groupId);
+    return { previousRankId: stats.rankId ?? null, newRankId: stats.rankId ?? null };
   }
   const stats = await ensureStudentStatsRow(queryRunner, ranksService, enrollmentId, groupId);
+  const previousRankId = stats.rankId ?? null;
   stats.currency = Math.max(0, (stats.currency ?? 0) + delta);
   stats.totalEarned = Math.max(0, (stats.totalEarned ?? 0) + delta);
   stats.rankId = await ranksService.calculateRankForPoints(groupId, stats.totalEarned);
   await queryRunner.manager.save(StudentStatsEntity, stats);
+  return { previousRankId, newRankId: stats.rankId ?? null };
 }
 
 /**
@@ -53,8 +56,8 @@ export async function applyBadgeGrantDelta(
   ranksService: RanksService,
   enrollmentId: number,
   groupId: number,
-  rewardAmount: number): Promise<void> {
-  await applyActivityCurrencyDelta(queryRunner, ranksService, enrollmentId, groupId, rewardAmount);
+  rewardAmount: number): Promise<{ previousRankId: number | null; newRankId: number | null }> {
+  return applyActivityCurrencyDelta(queryRunner, ranksService, enrollmentId, groupId, rewardAmount);
 }
 
 /**

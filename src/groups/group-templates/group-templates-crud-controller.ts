@@ -39,11 +39,14 @@ export class GroupTemplatesCrudController {
 
     const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
 
+    const scope = query.scope || 'public';
+
     return this.crudService.getTemplates(
       lecturerAccountId,
-      query.scope || 'public',
+      scope,
       query.limit || 20,
-      query.offset || 0);
+      query.offset || 0,
+      scope === 'public' && Boolean(query.favoritesOnly));
   }
 
   @Put(':id/favorite')

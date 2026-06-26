@@ -19,6 +19,7 @@ import {
 } from '../constants/group-generate-code-api-constants';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { AccountEntity } from '../database/entities/account.entity';
+import { AvatarEntity } from '../database/entities/avatar.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserEntity } from '../database/entities/user.entity';
@@ -29,6 +30,9 @@ import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
 import { UpdateLivesConfigDto } from './dto/update-lives-config.dto';
 import { UpdateShopStatusDto } from './dto/update-shop-status.dto';
 import { EnrollmentCodesService } from './enrollment-codes-service';
+import { ShopItemsService } from '../gamification/shop-items-service';
+import { BacklogService } from '../backlog/backlog-service';
+import { formatLecturerDisplay as buildLecturerDisplayLabel } from '../utils/lecturer-display.util';
 
 export type CreateGroupResponseBody = { statusCode: number; group: number };
 
@@ -44,6 +48,7 @@ export type UserGroupListItem = {
   subjectName: string;
   bannerId: string | null;
   lecturers: string;
+  lecturerAvatarUrl: string | null;
   description: string | null;
   currency: string | null;
   currencyEmoji: string | null;
@@ -124,6 +129,8 @@ export class GroupsService {
     private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     private readonly enrollmentCodesService: EnrollmentCodesService,
+    private readonly shopItemsService: ShopItemsService,
+    private readonly backlogService: BacklogService,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>) { }
 
@@ -199,6 +206,7 @@ export class GroupsService {
         rankShowMemberAvatars: groupPayload.rankShowMemberAvatars ?? true,
       });
       const saved = await this.groupRepository.save(entity);
+      await this.shopItemsService.ensureDefaultExtraLifeItem(saved.id);
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
         group: saved.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
@@ -384,6 +392,10 @@ export class GroupsService {
 
     try {
       await this.groupRepository.update({ id: internalGroupId }, { shopOpen: body.shopOpen });
+      await this.backlogService.notifyEnrolledStudents(internalGroupId, 'SHOP_STATUS_CHANGED', {
+        message: body.shopOpen ? 'Sklep grupy został otwarty.' : 'Sklep grupy został zamknięty.',
+        shopOpen: body.shopOpen,
+      });
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
         group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
@@ -467,6 +479,19 @@ export class GroupsService {
 
     try {
       await this.groupRepository.update({ id: internalGroupId }, updates);
+      if (body.livesEnabled !== undefined) {
+        await this.backlogService.notifyEnrolledStudents(internalGroupId, 'LIVES_SYSTEM_CHANGED', {
+          message: body.livesEnabled ? 'System żyć został włączony.' : 'System żyć został wyłączony.',
+          livesEnabled: body.livesEnabled,
+        });
+      } else if (body.livesShopEnabled !== undefined) {
+        await this.backlogService.notifyEnrolledStudents(internalGroupId, 'LIVES_SYSTEM_CHANGED', {
+          message: body.livesShopEnabled
+            ? 'Możliwość kupowania żyć w sklepie została włączona.'
+            : 'Możliwość kupowania żyć w sklepie została wyłączona.',
+          livesShopEnabled: body.livesShopEnabled,
+        });
+      }
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
         group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,
@@ -736,26 +761,6 @@ export class GroupsService {
     };
   }
 
-  private formatLecturerDisplay(
-    nickname: string | null | undefined,
-    name: string | null | undefined,
-    surname: string | null | undefined): string {
-    const nick = nickname ? String(nickname).trim() : '';
-    const legal = [name, surname]
-      .filter(Boolean)
-      .map((part) => String(part).trim())
-      .join(' ')
-      .trim();
-
-    if (nick && legal && nick.toLowerCase() !== legal.toLowerCase()) {
-      return `${nick} (${legal})`;
-    }
-    if (nick) {
-      return nick;
-    }
-    return legal;
-  }
-
   private mapRawGroupRow(row: {
     id: number;
     name: string;
@@ -767,6 +772,8 @@ export class GroupsService {
     teacher_nickname: string | null;
     teacher_name: string | null;
     teacher_surname: string | null;
+    teacher_show_nickname: boolean | null;
+    teacher_avatar_url: string | null;
     shop_open: boolean;
     shop_opens_at: Date | string | null;
     rank_show_member_avatars: boolean;
@@ -777,17 +784,22 @@ export class GroupsService {
     lives_icon: string | null;
     lives_shop_enabled: boolean;
   }): UserGroupListItem {
-    const lecturers = this.formatLecturerDisplay(
+    const toBool = (v: unknown) => v === true || v === ('t' as unknown) || v === (1 as unknown);
+    const lecturers = buildLecturerDisplayLabel(
       row.teacher_nickname,
       row.teacher_name,
-      row.teacher_surname);
-    const toBool = (v: unknown) => v === true || v === ('t' as unknown) || v === (1 as unknown);
+      row.teacher_surname,
+      row.teacher_show_nickname === undefined || row.teacher_show_nickname === null
+        ? true
+        : toBool(row.teacher_show_nickname),
+    );
     return {
       id: row.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
       groupName: row.name,
       subjectName: row.subject_name ?? '',
       bannerId: row.image_ref ?? null,
       lecturers: lecturers || '',
+      lecturerAvatarUrl: row.teacher_avatar_url ?? null,
       description: row.description ?? null,
       currency: row.currency ?? null,
       currencyEmoji: row.currency_emoji ?? null,
@@ -818,6 +830,8 @@ export class GroupsService {
       teacher_nickname: string | null;
       teacher_name: string | null;
       teacher_surname: string | null;
+      teacher_show_nickname: boolean | null;
+      teacher_avatar_url: string | null;
       shop_open: boolean;
       shop_opens_at: Date | string | null;
       rank_show_member_avatars: boolean;
@@ -834,6 +848,7 @@ export class GroupsService {
     const qb = this.groupRepository.createQueryBuilder('group');
     qb.leftJoin(AccountEntity, 'account', 'group.teacher_account_id = account.id')
       .leftJoin(UserEntity, 'user', 'account.user_id = user.id')
+      .leftJoin(AvatarEntity, 'avatar', 'avatar.id = user.avatar_id')
       .select([
         'group.id AS id',
         'group.name AS name',
@@ -854,6 +869,8 @@ export class GroupsService {
         'user.nickname AS teacher_nickname',
         'user.name AS teacher_name',
         'user.surname AS teacher_surname',
+        'user.show_nickname AS teacher_show_nickname',
+        'avatar.image_url AS teacher_avatar_url',
       ]);
     if (studentAccountId !== null) {
       qb.leftJoin(
@@ -890,6 +907,8 @@ export class GroupsService {
       teacher_nickname: row.teacher_nickname ?? null,
       teacher_name: row.teacher_name ?? null,
       teacher_surname: row.teacher_surname ?? null,
+      teacher_show_nickname: toBool(row.teacher_show_nickname),
+      teacher_avatar_url: row.teacher_avatar_url ?? null,
       shop_open: toBool(row.shop_open),
       lives_enabled: toBool(row.lives_enabled),
       lives: row.lives ?? null,

@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class SaveGroupTemplateDto {
   /** Optional when using `maq_auth` cookie (browser clients). */
@@ -20,4 +20,12 @@ export class SaveGroupTemplateDto {
   @IsOptional()
   @IsBoolean()
   isPublic?: boolean;
+
+  /**
+   * Dev-only: assign template ownership to another lecturer in the same organization.
+   * Ignored in production.
+   */
+  @IsOptional()
+  @IsEmail()
+  devCreatorEmail?: string;
 }

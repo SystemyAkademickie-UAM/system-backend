@@ -24,4 +24,9 @@ export class UpdateItemCategoryDto {
   @IsInt()
   @Min(0)
   displayOrder?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  color?: string;
 }

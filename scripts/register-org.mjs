@@ -12,7 +12,7 @@
  *   npm run register:org -- --name "Localhost IdP" --metadata-url "http://127.0.0.1:5000/.../metadata.php"
  *   npm run register:org -- --production --email-only --name "College Y"
  */
-import 'dotenv/config';
+import './lib/load-env.mjs';
 import { createHash, X509Certificate } from 'node:crypto';
 import pg from 'pg';
 import {

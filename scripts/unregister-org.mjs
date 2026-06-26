@@ -7,7 +7,7 @@
  *   node scripts/unregister-org.mjs --id 2
  *   node scripts/unregister-org.mjs --name "Localhost IdP"
  */
-import 'dotenv/config';
+import './lib/load-env.mjs';
 import pg from 'pg';
 import { PRIVATE_ORGANIZATION_ID } from '../src/constants/organization-constants.ts';
 

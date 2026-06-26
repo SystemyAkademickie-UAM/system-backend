@@ -9,6 +9,7 @@ import { BadgeEntity } from '../database/entities/badge.entity';
 import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { RanksService } from '../gamification/ranks-service';
+import { BacklogService } from '../backlog/backlog-service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { applyBadgeGrantDelta, applyBadgeRevokeDelta } from './student-stats-reward.helper';
 
@@ -34,6 +35,7 @@ export class StudentBadgesService {
     private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     private readonly ranksService: RanksService,
+    private readonly backlogService: BacklogService,
     private readonly dataSource: DataSource,
     @InjectRepository(BadgeEntity)
     private readonly badgeRepository: Repository<BadgeEntity>,
@@ -100,12 +102,28 @@ export class StudentBadgesService {
           badgeId,
         });
         await queryRunner.manager.save(EarnedBadgeEntity, earned);
-        await applyBadgeGrantDelta(
+        const rankChange = await applyBadgeGrantDelta(
           queryRunner,
           this.ranksService,
           enrollment.id,
           groupId,
           rewardAmount);
+        await this.backlogService.logEvent(groupId, accountId, 'BADGE_EARNED', {
+          message: `Otrzymano odznakę: ${badge.name}.`,
+          badgeId: badge.id,
+          badgeName: badge.name,
+          rewardAmount,
+        }, queryRunner.manager);
+        if (
+          rankChange.previousRankId !== rankChange.newRankId
+          && rankChange.newRankId != null
+        ) {
+          await this.backlogService.logEvent(groupId, accountId, 'RANK_UP', {
+            message: 'Otrzymano wyższą rangę.',
+            rankId: rankChange.newRankId,
+            previousRankId: rankChange.previousRankId,
+          }, queryRunner.manager);
+        }
         isEarned = true;
         this.logger.log(`Badge ${badgeId} granted to enrollment ${enrollment.id}`);
       }

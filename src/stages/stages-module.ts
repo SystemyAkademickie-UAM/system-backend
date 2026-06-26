@@ -5,6 +5,7 @@ import { AuthTokenSessionModule } from '../auth/api-token/auth-token-session-mod
 import { GroupEntity } from '../database/entities/group.entity';
 import { StageEntity } from '../database/entities/stage.entity';
 import { UserRolesModule } from '../user-roles/user-roles-module';
+import { BacklogModule } from '../backlog/backlog-module';
 import { StagesController } from './stages-controller';
 import { StagesService } from './stages-service';
 
@@ -13,6 +14,7 @@ import { StagesService } from './stages-service';
     TypeOrmModule.forFeature([StageEntity, GroupEntity]),
     AuthTokenSessionModule,
     UserRolesModule,
+    BacklogModule,
   ],
   controllers: [StagesController],
   providers: [StagesService],
