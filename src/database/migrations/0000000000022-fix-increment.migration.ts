@@ -74,8 +74,8 @@ DROP TABLE IF EXISTS education.group_template_favorites;
 /**
  * Combined schema changes for template favorites, category colors/links, extra-life items, and profile nickname visibility.
  */
-export class FixIncrement0000000000023 implements MigrationInterface {
-  name = 'FixIncrement0000000000023';
+export class FixIncrement0000000000022 implements MigrationInterface {
+  name = 'FixIncrement0000000000022';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(UP_SQL);
