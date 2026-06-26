@@ -20,8 +20,8 @@ assertRequiredEnv();
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.useStaticAssets(join(__dirname, '..', 'assets'), { 
-    prefix: '/assets/',
+  app.useStaticAssets(join(__dirname, '..', 'assets'), {
+    prefix: '/api/assets/',
     setHeaders: (res) => {
       res.set('Access-Control-Allow-Origin', '*');
     }
@@ -29,7 +29,7 @@ async function bootstrap(): Promise<void> {
   app.set('trust proxy', 1);
   app.use(
     helmet({
-      // Static assets under /assets are served to the SPA on a different origin (dev: :3000).
+      // Static assets under /api/assets are served to the SPA via the /api proxy (prod) or Vite proxy (dev).
       crossOriginResourcePolicy: { policy: 'cross-origin' },
       // Swagger UI (served same-origin under /api/docs) needs inline script/style; relax CSP accordingly.
       contentSecurityPolicy: {
