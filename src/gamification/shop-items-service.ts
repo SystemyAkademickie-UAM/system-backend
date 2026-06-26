@@ -334,6 +334,10 @@ export class ShopItemsService {
 
       const savedItem = await queryRunner.manager.save(item);
 
+      if (dto.categoryId != null) {
+        await this.syncItemCategoryLinks(queryRunner.manager, savedItem.id, groupId, [dto.categoryId]);
+      }
+
       const listing = this.shopListingRepository.create({
         itemId: savedItem.id,
         basePrice: dto.basePrice ?? template.basePrice,

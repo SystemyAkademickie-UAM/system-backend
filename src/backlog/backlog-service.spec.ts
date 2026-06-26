@@ -406,7 +406,7 @@ describe('BacklogService', () => {
       const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
-      expect(result).toEqual({ error: 'Forbidden: Not enrolled' });
+      expect(result).toEqual({ error: 'Forbidden: You are not enrolled in this group' });
     });
 
     it('should allow lecturer who owns the group to mark any item as read', async () => {
@@ -443,7 +443,7 @@ describe('BacklogService', () => {
       const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
-      expect(result).toEqual({ error: 'Forbidden: Not group owner' });
+      expect(result).toEqual({ error: 'Forbidden: You are not the owner of this group' });
     });
 
     it('should return Forbidden for unknown role', async () => {

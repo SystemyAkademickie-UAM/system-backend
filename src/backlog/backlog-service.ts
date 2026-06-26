@@ -340,7 +340,7 @@ export class BacklogService {
       }
 
       const result = await this.backlogRepository.update(
-        { id: backlogId, groupId: internalGroupId },
+        { id: backlogId, groupId: internalGroupId, accountId: access.studentAccountId },
         { isRead: true },
       );
       return { updated: result.affected ? result.affected > 0 : false };

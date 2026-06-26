@@ -14,6 +14,7 @@ import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StageEntity } from '../database/entities/stage.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { BacklogService } from '../backlog/backlog-service';
 import { StagesService } from './stages-service';
 
 function mockSubject(userId: number): SessionSubject {
@@ -63,6 +64,13 @@ describe('StagesService', () => {
         { provide: DataSource, useValue: dataSource },
         { provide: getRepositoryToken(StageEntity), useValue: { find: jest.fn(), findOne: jest.fn(), save: jest.fn(), delete: jest.fn(), update: jest.fn() } },
         { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },
+        {
+          provide: BacklogService,
+          useValue: {
+            notifyEnrolledStudents: jest.fn().mockResolvedValue(undefined),
+            logEvent: jest.fn().mockResolvedValue({}),
+          },
+        },
       ],
     }).compile();
 

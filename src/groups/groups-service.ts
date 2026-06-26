@@ -205,8 +205,11 @@ export class GroupsService {
         shopOpensAt: parsedShopOpensAt,
         rankShowMemberAvatars: groupPayload.rankShowMemberAvatars ?? true,
       });
-      const saved = await this.groupRepository.save(entity);
-      await this.shopItemsService.ensureDefaultExtraLifeItem(saved.id);
+      const saved = await this.groupRepository.manager.transaction(async (manager) => {
+        const savedGroup = await manager.save(entity);
+        await this.shopItemsService.ensureDefaultExtraLifeItem(savedGroup.id, manager);
+        return savedGroup;
+      });
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
         group: saved.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
