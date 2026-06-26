@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEmail, IsInt, MaxLength, Min } from 'class-validator';
+import { IsEmail, IsInt, IsOptional, MaxLength, Min } from 'class-validator';
 
 import { AUTH_USER_EMAIL_MAX_LENGTH } from '../../../constants/database-entity-constants';
 
@@ -9,8 +9,10 @@ export class RequestMagicLinkDto {
   @MaxLength(AUTH_USER_EMAIL_MAX_LENGTH)
   email: string;
 
+  /** Optional — when omitted, organization is resolved from the provisioned account email. */
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  organizationId: number;
+  organizationId?: number;
 }

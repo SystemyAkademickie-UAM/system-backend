@@ -69,16 +69,20 @@ export class MagicLinkService {
 
   async requestMagicLink(
     emailRaw: string,
-    organizationId: number,
+    organizationId?: number,
   ): Promise<RequestMagicLinkResponse> {
     this.magicLinkEmailService.assertSmtpConfigured();
     await this.assertMagicLinkRoutingConfigured();
     const email = emailRaw.trim().toLowerCase();
-    const target = await this.magicLinkUserService.resolveEmailMagicLinkTargetForOrganization(
-      email,
-      organizationId,
-      this.readBootstrapEmail(),
-    );
+    const bootstrapEmail = this.readBootstrapEmail();
+    const target =
+      organizationId !== undefined && Number.isFinite(organizationId) && organizationId > 0
+        ? await this.magicLinkUserService.resolveEmailMagicLinkTargetForOrganization(
+            email,
+            organizationId,
+            bootstrapEmail,
+          )
+        : await this.magicLinkUserService.resolveEmailMagicLinkTarget(email, bootstrapEmail);
     await this.assertCooldownAllowsRequest(email, target.organizationId);
     const expirySeconds = this.resolveExpirySeconds();
     const plaintext = randomBytes(MAGIC_LINK_TOKEN_RANDOM_BYTE_LENGTH).toString('base64url');
