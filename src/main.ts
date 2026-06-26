@@ -7,6 +7,7 @@ import express from 'express';
 import helmet from 'helmet';
 import passport from 'passport';
 import { AppModule } from './app-module';
+import { ValidationExceptionFilter } from './common/filters/validation-exception.filter';
 import { DEFAULT_CORS_ORIGINS } from './constants/cors-constants';
 import { HTTP_HOST, HTTP_PORT } from './constants/server-constants';
 import { assertRequiredEnv } from './validate-env';
@@ -54,6 +55,7 @@ async function bootstrap(): Promise<void> {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   });
   app.setGlobalPrefix('api');
+  app.useGlobalFilters(new ValidationExceptionFilter());
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   setupSwagger(app);

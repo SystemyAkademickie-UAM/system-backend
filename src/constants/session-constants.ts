@@ -12,16 +12,16 @@ export const SESSION_HMAC_SECRET_MIN_LENGTH = 32;
 
 /**
  * Sliding idle window: a session expires this many seconds after the last authenticated request.
- * Refreshed on activity (see `SessionService`). Default: 24 minutes.
+ * Refreshed on activity (see `SessionService`). Default: 365 days (no practical idle logout).
  * Override with env `SESSION_IDLE_TIMEOUT_SECONDS`.
  */
-export const SESSION_IDLE_TIMEOUT_DEFAULT_SECONDS = 24 * 60;
+export const SESSION_IDLE_TIMEOUT_DEFAULT_SECONDS = 365 * 24 * 60 * 60;
 
 /**
  * Absolute maximum lifetime measured from `created_at`; idle refresh can never extend past this.
- * Default: 8 hours. Override with env `SESSION_ABSOLUTE_MAX_SECONDS`.
+ * Default: 365 days. Override with env `SESSION_ABSOLUTE_MAX_SECONDS`.
  */
-export const SESSION_ABSOLUTE_MAX_DEFAULT_SECONDS = 8 * 60 * 60;
+export const SESSION_ABSOLUTE_MAX_DEFAULT_SECONDS = 365 * 24 * 60 * 60;
 
 /**
  * Minimum gap between idle-expiry refresh writes, to avoid a DB UPDATE on every single request.

@@ -26,6 +26,8 @@ import {
   MAQ_SESSION_COOKIE_NAME,
 } from '../../constants/session-constants';
 import {
+  MAQ_LOGOUT_RETURN_COOKIE_MAX_AGE_MS,
+  MAQ_LOGOUT_RETURN_COOKIE_NAME,
   SAML_PENDING_ORG_COOKIE_MAX_AGE_MS,
   SAML_PENDING_ORG_COOKIE_NAME,
   SAML_SESSION_COOKIE_NAME,
@@ -360,15 +362,20 @@ export class SamlController {
   @Get('logout')
   @ApiOperation({ summary: 'Initiate SAML single logout' })
   async samlLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
+    const postLogoutRedirect = this.samlConfig.resolvePostLogoutRedirect(req.query.postLogoutRedirect);
+    res.cookie(
+      MAQ_LOGOUT_RETURN_COOKIE_NAME,
+      postLogoutRedirect,
+      buildPendingOrgCookieOptions(req, MAQ_LOGOUT_RETURN_COOKIE_MAX_AGE_MS));
     const token = this.sessionService.extractSessionToken(req);
     const sessionRow = token ? await this.sessionService.getSessionRow(token) : null;
     await this.clearBrowserAuthCookiesAndRevokeSession(req, res);
     if (!this.samlConfig.isConfigured() || sessionRow?.organizationId == null) {
-      res.redirect(this.samlConfig.getLogoutUrl());
+      res.redirect(postLogoutRedirect);
       return;
     }
     if (!sessionRow.samlNameId) {
-      res.redirect(this.samlConfig.getLogoutUrl());
+      res.redirect(postLogoutRedirect);
       return;
     }
     const organizationId = sessionRow.organizationId;
@@ -376,11 +383,11 @@ export class SamlController {
     try {
       orgConfig = await this.samlOrganizationConfigService.loadOrganizationSamlConfig(organizationId);
     } catch {
-      res.redirect(this.samlConfig.getLogoutUrl());
+      res.redirect(postLogoutRedirect);
       return;
     }
     if (!orgConfig.logoutUrl) {
-      res.redirect(this.samlConfig.getLogoutUrl());
+      res.redirect(postLogoutRedirect);
       return;
     }
     const strategy = this.registerStrategyForOrganization(orgConfig);
@@ -393,7 +400,7 @@ export class SamlController {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (strategy.logout as any)(req, (err: Error | null, logoutUrl?: string | null) => {
       if (err || !logoutUrl) {
-        res.redirect(this.samlConfig.getLogoutUrl());
+        res.redirect(postLogoutRedirect);
         return;
       }
       res.redirect(logoutUrl);
@@ -413,8 +420,15 @@ export class SamlController {
   }
 
   private async handleSloCallback(req: Request, res: Response): Promise<void> {
+    const storedRedirect = req.cookies?.[MAQ_LOGOUT_RETURN_COOKIE_NAME];
+    const postLogoutRedirect =
+      typeof storedRedirect === 'string' && storedRedirect.startsWith('http')
+        ? storedRedirect
+        : this.samlConfig.getLogoutUrl();
+    const logoutReturnClearOptions = buildClearSamlCookieOptions(req, resolvePendingOrgCookieSameSite(req));
+    res.clearCookie(MAQ_LOGOUT_RETURN_COOKIE_NAME, logoutReturnClearOptions);
     await this.clearBrowserAuthCookiesAndRevokeSession(req, res);
-    res.redirect(this.samlConfig.getLogoutUrl());
+    res.redirect(postLogoutRedirect);
   }
 
   private async clearBrowserAuthCookiesAndRevokeSession(req: Request, res: Response): Promise<void> {

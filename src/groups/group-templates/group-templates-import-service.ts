@@ -14,6 +14,7 @@ import { ShopListingEntity } from '../../database/entities/shop-listing.entity';
 import { StageEntity } from '../../database/entities/stage.entity';
 
 import type { GroupTemplateData } from './group-template-data.interface';
+import { mapLegacyBadgeDiscount, mapLegacyRankDiscount } from './group-template-legacy-discount';
 
 @Injectable()
 export class GroupTemplatesImportService {
@@ -60,6 +61,7 @@ export class GroupTemplatesImportService {
       // 3. Create Badges & keep ID mapping
       const badgeIdMap = new Map<number, number>(); // old -> new
       for (const oldBadge of data.badges || []) {
+        const badgeDiscount = mapLegacyBadgeDiscount(oldBadge);
         const badgeEntity = manager.create(BadgeEntity, {
           groupId: newGroupId,
           name: oldBadge.name,
@@ -68,8 +70,8 @@ export class GroupTemplatesImportService {
           storyDescription: oldBadge.storyDescription,
           rewardAmount: oldBadge.rewardAmount,
           rarity: oldBadge.rarity,
-          globalDiscountType: oldBadge.globalDiscountType ?? null,
-          globalDiscountValue: oldBadge.globalDiscountValue ?? 0,
+          globalDiscountType: badgeDiscount.globalDiscountType,
+          globalDiscountValue: badgeDiscount.globalDiscountValue,
         });
         const savedBadge = await manager.save(BadgeEntity, badgeEntity);
         badgeIdMap.set(oldBadge.id, savedBadge.id);
@@ -78,6 +80,7 @@ export class GroupTemplatesImportService {
       // 4. Create Ranks & keep ID mapping
       const rankIdMap = new Map<number, number>(); // old -> new
       for (const oldRank of data.ranks || []) {
+        const rankDiscount = mapLegacyRankDiscount(oldRank);
         const rankEntity = manager.create(RankEntity, {
           groupId: newGroupId,
           name: oldRank.name,
@@ -85,8 +88,8 @@ export class GroupTemplatesImportService {
           icon: oldRank.icon,
           storyDescription: oldRank.storyDescription,
           uniqueStoreItems: oldRank.uniqueStoreItems, // raw strings, no ID mapping needed usually
-          globalDiscountType: oldRank.globalDiscountType ?? null,
-          globalDiscountValue: oldRank.globalDiscountValue ?? 0,
+          globalDiscountType: rankDiscount.globalDiscountType,
+          globalDiscountValue: rankDiscount.globalDiscountValue,
         });
         const savedRank = await manager.save(RankEntity, rankEntity);
         rankIdMap.set(oldRank.id, savedRank.id);

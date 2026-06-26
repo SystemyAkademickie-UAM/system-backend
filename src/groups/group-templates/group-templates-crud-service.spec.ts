@@ -3,23 +3,35 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { GroupTemplateFavoriteEntity } from '../../database/entities/group-template-favorite.entity';
 import { GroupTemplateEntity } from '../../database/entities/group-template.entity';
 import { GroupTemplatesCrudService } from './group-templates-crud-service';
 
 describe('GroupTemplatesCrudService', () => {
   let service: GroupTemplatesCrudService;
   let repo: Repository<GroupTemplateEntity>;
+  let favoritesRepo: Repository<GroupTemplateFavoriteEntity>;
 
   let mockQueryBuilder: any;
+  let mockFavoritesQueryBuilder: any;
 
   beforeEach(async () => {
     mockQueryBuilder = {
       select: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
       getManyAndCount: jest.fn(),
+    };
+
+    mockFavoritesQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([]),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -32,6 +44,17 @@ describe('GroupTemplatesCrudService', () => {
             findOne: jest.fn(),
             save: jest.fn().mockImplementation((entity: any) => Promise.resolve(entity)),
             delete: jest.fn().mockResolvedValue({ affected: 1 }),
+            create: jest.fn().mockImplementation((entity: any) => entity),
+          },
+        },
+        {
+          provide: getRepositoryToken(GroupTemplateFavoriteEntity),
+          useValue: {
+            createQueryBuilder: jest.fn().mockReturnValue(mockFavoritesQueryBuilder),
+            findOne: jest.fn(),
+            save: jest.fn().mockResolvedValue(undefined),
+            delete: jest.fn().mockResolvedValue({ affected: 1 }),
+            create: jest.fn().mockImplementation((entity: any) => entity),
           },
         },
       ],
@@ -39,6 +62,9 @@ describe('GroupTemplatesCrudService', () => {
 
     service = module.get<GroupTemplatesCrudService>(GroupTemplatesCrudService);
     repo = module.get<Repository<GroupTemplateEntity>>(getRepositoryToken(GroupTemplateEntity));
+    favoritesRepo = module.get<Repository<GroupTemplateFavoriteEntity>>(
+      getRepositoryToken(GroupTemplateFavoriteEntity),
+    );
   });
 
   it('should be defined', () => {
@@ -69,6 +95,19 @@ describe('GroupTemplatesCrudService', () => {
       expect(result.items.length).toBe(1);
       expect(result.limit).toBe(20);
       expect(result.offset).toBe(5);
+    });
+
+    it('should mark favorites for public scope', async () => {
+      mockQueryBuilder.getManyAndCount.mockResolvedValue([
+        [{ id: 1, name: 'T1', createdAt: new Date(), description: null, isPublic: true, creatorAccountId: 2, baseGroupId: null }],
+        1,
+      ]);
+      mockFavoritesQueryBuilder.getRawMany.mockResolvedValue([{ templateId: 1 }]);
+
+      const result = await service.getTemplates(5, 'public', 20, 0);
+
+      expect(mockQueryBuilder.leftJoin).toHaveBeenCalled();
+      expect(result.items[0].isFavorite).toBe(true);
     });
   });
 
@@ -126,6 +165,37 @@ describe('GroupTemplatesCrudService', () => {
 
       await service.deleteTemplate(1, 5);
       expect(deleteSpy).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('setTemplateFavorite', () => {
+    it('should throw NotFoundException when template missing', async () => {
+      jest.spyOn(repo, 'findOne').mockResolvedValue(null);
+      await expect(service.setTemplateFavorite(1, 5, true)).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw ForbiddenException for private template', async () => {
+      jest.spyOn(repo, 'findOne').mockResolvedValue({ id: 1, isPublic: false } as any);
+      await expect(service.setTemplateFavorite(1, 5, true)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should save favorite for public template', async () => {
+      jest.spyOn(repo, 'findOne').mockResolvedValue({ id: 1, isPublic: true } as any);
+      jest.spyOn(favoritesRepo, 'findOne').mockResolvedValue(null);
+      const saveSpy = jest.spyOn(favoritesRepo, 'save');
+
+      await service.setTemplateFavorite(1, 5, true);
+
+      expect(saveSpy).toHaveBeenCalled();
+    });
+
+    it('should delete favorite when unset', async () => {
+      jest.spyOn(repo, 'findOne').mockResolvedValue({ id: 1, isPublic: true } as any);
+      const deleteSpy = jest.spyOn(favoritesRepo, 'delete');
+
+      await service.setTemplateFavorite(1, 5, false);
+
+      expect(deleteSpy).toHaveBeenCalledWith({ accountId: 5, templateId: 1 });
     });
   });
 });

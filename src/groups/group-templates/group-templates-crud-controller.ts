@@ -10,6 +10,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
 } from '@nestjs/common';
@@ -17,7 +18,7 @@ import type { Request } from 'express';
 
 import { SessionService } from '../../auth/session/session.service';
 import { GroupsService } from '../groups-service';
-import { CloneGroupTemplateDto, GetGroupTemplatesQueryDto, UpdateGroupTemplateDto } from '../dto/group-templates-crud.dto';
+import { CloneGroupTemplateDto, GetGroupTemplatesQueryDto, SetGroupTemplateFavoriteDto, UpdateGroupTemplateDto } from '../dto/group-templates-crud.dto';
 import { GroupTemplatesCrudService } from './group-templates-crud-service';
 
 @Controller('group-templates')
@@ -43,6 +44,23 @@ export class GroupTemplatesCrudController {
       query.scope || 'public',
       query.limit || 20,
       query.offset || 0);
+  }
+
+  @Put(':id/favorite')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async setTemplateFavorite(
+    @Param('id', ParseIntPipe) templateId: number,
+    @Body() dto: SetGroupTemplateFavoriteDto,
+    @Req() req: Request,
+  ) {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
+    if (!subject) {
+      throw new ForbiddenException('Missing or invalid session');
+    }
+
+    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
+
+    await this.crudService.setTemplateFavorite(templateId, lecturerAccountId, dto.favorite);
   }
 
   @Get(':id')

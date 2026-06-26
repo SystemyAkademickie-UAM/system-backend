@@ -165,4 +165,27 @@ describe('GroupTemplatesImportService', () => {
     expect(badgeQueryCall[1][0]).toBe(savedListingId);
     expect(badgeQueryCall[1][1]).toBe(savedBadgeId);
   });
+
+  it('should map legacy rank discount fields on import', async () => {
+    mockManager.findOne.mockResolvedValue({
+      id: 1,
+      isPublic: true,
+      creatorAccountId: 1,
+      data: {
+        group: { name: 'Base', subjectName: 'Subj' },
+        ranks: [{
+          id: 200,
+          name: 'Rank1',
+          requiredPoints: 10,
+          discount: 12,
+        }],
+      },
+    });
+
+    await service.createGroupFromTemplate(1, 1, 'My Group');
+
+    const rankSaveCall = mockManager.save.mock.calls.find((call: any) => call[0].name === 'RankEntity');
+    expect(rankSaveCall[1].globalDiscountType).toBe('percent');
+    expect(rankSaveCall[1].globalDiscountValue).toBe(12);
+  });
 });

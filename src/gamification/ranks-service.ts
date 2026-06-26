@@ -10,6 +10,7 @@ import { RankEntity } from '../database/entities/rank.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateRankDto } from './dto/create-rank.dto';
 import { UpdateRankDto } from './dto/update-rank.dto';
+import { normalizeRankDiscountDto } from './legacy-global-discount';
 
 /**
  * Persists rank definitions in `gamification.ranks` for a given course group.
@@ -60,6 +61,8 @@ export class RanksService {
     if (!rank) {
       throw new NotFoundException(`Rank with id ${rankId} not found in group ${groupId}`);
     }
+
+    normalizeRankDiscountDto(dto);
 
     if (dto.name !== undefined) rank.name = dto.name;
     if (dto.icon !== undefined) rank.icon = dto.icon;
@@ -138,6 +141,8 @@ export class RanksService {
     }
 
     await this.assertGroupExists(groupId);
+
+    normalizeRankDiscountDto(dto);
 
     const entity = this.rankRepository.create({
       groupId,

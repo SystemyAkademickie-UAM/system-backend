@@ -62,3 +62,13 @@ export class CloneGroupTemplateDto {
   @MinLength(1)
   name: string;
 }
+
+export class SetGroupTemplateFavoriteDto {
+  /** Optional when using `maq_auth` cookie (browser clients). */
+  @IsOptional()
+  @IsString()
+  auth?: string;
+
+  @IsBoolean()
+  favorite: boolean;
+}

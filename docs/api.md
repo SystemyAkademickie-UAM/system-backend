@@ -43,13 +43,20 @@ Content-Type: application/json
 { "count": 4 }
 ```
 
-Validation errors return `400` with Nest’s default error shape.
+Validation errors return `400` with:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `statusCode` | integer | Always `400` for validation failures. |
+| `message` | string | Human-readable summary (comma-separated when multiple rules fail). |
+| `errors` | string[] (optional) | Individual validation messages. |
+| `error` | string | `"Bad Request"`. |
 
 Clients send the previous value; the response carries the incremented value.
 
 ---
 
-## Admin organizations (super role)
+## Admin organizations (super role) 
 
 Manage institutional SAML configuration stored in **`auth.organizations`** and **`auth.idp_certificates`**. Requires **`super`** role on the caller's **`auth.accounts`** row.
 
@@ -65,10 +72,7 @@ Manage institutional SAML configuration stored in **`auth.organizations`** and *
 | `/api/admin/organizations/:id/certificates/:certId` | `DELETE` | Revoke certificate. |
 | `/api/admin/organizations/:organizationId/administrators` | `GET` | List organization administrators (`administrator` role). |
 | `/api/admin/organizations/:organizationId/administrators` | `POST` | Grant `administrator` role by user email (user must exist after SAML login). Body: `{ "email": "..." }`. |
-| `/api/admin/organizations/:organizationId/administrators/:accountId` | `DELETE` | Revoke organization administrator role (super role). Runs the same dependent-data cleanup as account removal. |
-| `/api/admin/manageable-organizations` | `GET` | List active organizations the caller may manage accounts for (super: all active orgs; org administrator: administered orgs). |
-| `/api/admin/organizations/:organizationId/accounts` | `GET` | List organization accounts with email, nickname, and role (org administrator or super). |
-| `/api/admin/organizations/:organizationId/accounts/:accountId` | `DELETE` | Remove an organization account. Organization administrators may delete student/lecturer accounts in their org when the user has no `administrator` or `super` role. Super administrators may delete any non-`super` account in any org. Lecturers and students receive `403`. Returns `{ "accountId", "userId", "userRemoved" }`; deletes `auth.users` when no memberships remain. |
+| `/api/admin/organizations/:organizationId/administrators/:accountId` | `DELETE` | Revoke organization administrator role. |
 
 **Bootstrap super admin:** set `SUPERADMIN_BOOTSTRAP_EMAIL` in `.env`. On first startup (or first SAML login with that email), when no `super` account exists, the API inserts one row in `auth.accounts`. Optional `SUPERADMIN_BOOTSTRAP_ORGANIZATION_ID` (default: first active organization).
 
@@ -76,11 +80,11 @@ Register organizations via admin API (no migration seed). Example: UAM — `meta
 
 ---
 
-## Session management (auth.sessions)
+## Login (opaque API bearer issuance)
 
-Issues a **plaintext** opaque bearer token. Clients send it back as the **`maq_session`** HTTP-only cookie (browsers, automatic) **or** an **`Authorization: Bearer <token>`** header (non-browser API clients). The token is **never** read from the URL query string. The server persists only **`hex(HMAC-SHA256(SESSION_HMAC_SECRET, plaintext))`** in Postgres **`auth.sessions.token_hmac`** plus **`user_id`**, **`login_method`** (**PostgreSQL `uuid`** — clients MUST send an RFC 4122 UUID in **`X-Browser-ID`**), **`created_at`**, **`expired_at`** — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
+Issues a **plaintext** opaque bearer token. Clients send it back as the **`maq_auth`** HTTP-only cookie (browsers, automatic) **or** an **`Authorization: Bearer <token>`** header (non-browser API clients). The token is **never** read from the URL query string. The server persists only **`hex(HMAC-SHA256(API_TOKEN_HMAC_SECRET, plaintext))`** in Postgres **`autoryzacja.tokens.token_hmac`** plus **`user_id`**, **`browser_uuid`** (**PostgreSQL `uuid`** — clients MUST send an RFC 4122 UUID in **`X-Browser-ID`**), **`created_at`**, **`expired_at`** — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
 
-**Prerequisite (legacy exchange path):** authenticate via **SAML** so the browser holds HTTP-only (no longer used), then call this endpoint to mint **`maq_session`**. When ACS receives a valid **`browserId`** in RelayState, it mints **`maq_session`** directly and the SPA can skip this call.
+**Prerequisite (legacy exchange path):** authenticate via **SAML** so the browser holds HTTP-only **`saml_session`**, then call this endpoint to mint **`maq_auth`**. When ACS receives a valid **`browserId`** in RelayState, it mints **`maq_auth`** directly and the SPA can skip this call.
 
 **Endpoint:** `POST /api/login`
 
@@ -88,7 +92,7 @@ Issues a **plaintext** opaque bearer token. Clients send it back as the **`maq_s
 
 | Header | Description |
 | ------ | ----------- |
-| `X-Browser-ID` | Required RFC 4122 UUID. Binds issuance (and downstream **strong** checks) to `auth.sessions.login_method`. |
+| `X-Browser-ID` | Required RFC 4122 UUID. Binds issuance (and downstream **strong** checks) to `autoryzacja.tokens.browser_uuid`. |
 
 **Request body**
 
@@ -107,19 +111,19 @@ Optional JSON is **reserved for future email/password provisioning** — omit th
 | Missing / invalid `X-Browser-ID` (non-UUID) | `400` | Validation error envelope. |
 | Missing / invalid SSO cookie | `401` | JSON body includes `error` codes `SAML_SESSION_REQUIRED` / `SAML_SESSION_INVALID`. |
 
-Rotate previous rows for `(user_id, login_method)` on each issuance (single active bearer per browser install).
+Rotate previous rows for `(user_id, browser_uuid)` on each issuance (single active bearer per browser install).
 
-Configure **`SESSION_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=production`**), **`SESSION_IDLE_TIMEOUT_SECONDS`** (sliding idle, default 24 min), and **`SESSION_ABSOLUTE_MAX_SECONDS`** (absolute cap, default 8 h).
+Configure **`API_TOKEN_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=production`**), **`API_TOKEN_IDLE_TIMEOUT_SECONDS`** (sliding idle, default 24 min), and **`API_TOKEN_ABSOLUTE_MAX_SECONDS`** (absolute cap, default 8 h).
 
-**Session lifetime:** `maq_session` and (deprecated) are **session cookies** (no `Max-Age`) — dropped on browser close. Server-side `expired_at` is the source of truth: a sliding idle window is refreshed on each authenticated request, never past the absolute cap measured from `created_at`. After idle expiry or the cap, the token is rejected and the user must re-authenticate.
+**Session lifetime:** `maq_auth` and `saml_session` are **session cookies** (no `Max-Age`) — dropped on browser close. Server-side `expired_at` is the source of truth: a sliding idle window is refreshed on each authenticated request, never past the absolute cap measured from `created_at`. After idle expiry or the cap, the token is rejected and the user must re-authenticate.
 
 **Rate limiting:** `POST /api/login`, `POST /api/login/active-role`, and `GET /api/auth/saml/login` are throttled per client IP (`@nestjs/throttler`); exceeding the limit returns `429 Too Many Requests`.
 
 ---
 
-## Login session (maq_session cookie)
+## Login session (API token cookie)
 
-Browser clients that already hold **`maq_session`** (e.g. after SAML ACS mint with RelayState browser id) can verify the session without a live SAML cookie.
+Browser clients that already hold **`maq_auth`** (e.g. after SAML ACS mint with RelayState browser id) can verify the session without a live SAML cookie.
 
 **Endpoint:** `GET /api/login/me`
 
@@ -140,24 +144,24 @@ The `user` object exposes role information:
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `role` | string | **Active** role: the selected role from the session `active_role` when valid, otherwise the highest-privilege role the user holds. |
+| `role` | string | **Active** role: the selected role from the `maq_active_role` cookie when valid, otherwise the highest-privilege role the user holds. |
 | `availableRoles` | string[] | All distinct roles the user holds, ordered highest → lowest privilege (`super`, `administrator`, `lecturer`, `student`). |
 
 When not authenticated, returns `{ "authenticated": false }` (still `200`).
 
-Uses session auth (`maq_session` + matching `X-Browser-ID`) when the header is present; falls back to session auth (`maq_session` cookie only) so the SPA can restore UI session state when the browser id header is missing or mismatched.
+Uses **strong** auth (`maq_auth` + matching `X-Browser-ID`) when the header is present; falls back to **soft** auth (`maq_auth` cookie only) so the SPA can restore UI session state when the browser id header is missing or mismatched.
 
 ---
 
 ## Active role selection
 
-Lets a user with more than one role choose which role is active for the UI. The choice is persisted in the server-side `auth.sessions.active_role` column and reflected by `GET /api/login/me` (`user.role`). Cleared on logout.
+Lets a user with more than one role choose which role is active for the UI. The choice is persisted in the HTTP-only **`maq_active_role`** cookie and reflected by `GET /api/login/me` (`user.role`). Cleared on logout.
 
 **Endpoint:** `POST /api/login/active-role`
 
-**Authorization:** `maq_session` cookie or `Authorization: Bearer` header. No special headers (RFC 4122 UUID bound to the token row).
+**Headers:** `X-Browser-ID` (RFC 4122 UUID bound to the token row).
 
-**Authorization:** session auth when possible; **soft** fallback (`maq_session` cookie only).
+**Authorization:** **strong** token + browser binding when possible; **soft** fallback (`maq_auth` cookie only).
 
 **Request body:**
 
@@ -178,7 +182,7 @@ Lets a user with more than one role choose which role is active for the UI. The 
 
 ## Logout (clear API auth cookies)
 
-Clears HTTP-only **`maq_session`** cookie and revokes the session row for this browser origin. Revokes the current `maq_session` database row when present. Does **not** perform IdP single logout — use **`GET /api/auth/saml/logout`** for institutional SSO sign-out.
+Clears HTTP-only **`maq_auth`**, **`maq_active_role`**, and SAML session cookies for this browser origin. Revokes the current `maq_auth` database row when present. Does **not** perform IdP single logout — use **`GET /api/auth/saml/logout`** for institutional SSO sign-out.
 
 **Endpoint:** `POST /api/logout`
 
@@ -194,13 +198,13 @@ Clears HTTP-only **`maq_session`** cookie and revokes the session row for this b
 
 ## Registration wizard (`/login` UI)
 
-After SAML, first-time users complete nickname, avatar, and EULA in the SPA before accessing `/groups`. All steps require **`maq_session`** (from ACS mint or **`POST /api/login`**) and **`X-Browser-ID`** unless noted.
+After SAML, first-time users complete nickname, avatar, and EULA in the SPA before accessing `/groups`. All steps require **`maq_auth`** (from ACS mint or **`POST /api/login`**) and **`X-Browser-ID`** unless noted.
 
 **Endpoint:** `GET /api/login/registration-status`
 
-**Authorization:** `maq_session` cookie or `Authorization: Bearer` header. No special headers (RFC 4122 UUID).
+**Headers:** `X-Browser-ID` (RFC 4122 UUID).
 
-**Authorization:** session auth when possible; **soft** fallback (`maq_session` cookie only).
+**Authorization:** **strong** token + browser binding when possible; **soft** fallback (`maq_auth` cookie only).
 
 **Response:** `200 OK`
 
@@ -210,23 +214,20 @@ After SAML, first-time users complete nickname, avatar, and EULA in the SPA befo
 | `email` | string | User email from SAML provisioning. |
 | `nickname` | string | Display nickname (empty until profile step). |
 | `avatarId` | integer | Selected avatar id. |
-| `registrationCompleted` | boolean | `true` after EULA acceptance. |
+| `registrationCompleted` | boolean | Profile step done. |
 | `eulaAccepted` | boolean | EULA accepted. |
-| `profileSubmitted` | boolean | Nickname/avatar saved during the wizard (before EULA). |
 
 **Endpoint:** `POST /api/login/profile`
 
 **Request body:** `{ "nickname": string, "avatarId": integer }`
 
-**Authorization:** session auth required.
-
-**Effect:** Persists nickname/avatar and sets `profile_submitted_at` so the wizard can resume at the EULA step.
+**Authorization:** **strong** only.
 
 **Endpoint:** `POST /api/login/accept-eula`
 
 **Request body:** `{}` (optional)
 
-**Authorization:** session auth required.
+**Authorization:** **strong** only.
 
 ---
 
@@ -234,7 +235,7 @@ After SAML, first-time users complete nickname, avatar, and EULA in the SPA befo
 
 **Endpoint:** `GET /api/profile`
 
-**Authorization:** **soft** (`maq_session` cookie, `Authorization: Bearer` header, or body `auth`). No `X-Browser-ID` required.
+**Authorization:** **soft** (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). No `X-Browser-ID` required.
 
 Returns the current user's profile row (nickname, avatar, registration flags, etc.).
 
@@ -311,9 +312,9 @@ Retrieves groups the authenticated user belongs to: student enrollments and lect
 
 | Parameter | Type | Description |
 | --------- | ---- | ----------- |
-| `auth` | string (optional) | Plaintext bearer token (alternative to `maq_session` cookie). |
+| `auth` | string (optional) | Plaintext bearer token (alternative to `maq_auth` cookie). |
 
-**Authorization:** session auth.
+**Authorization:** **strong** token + browser binding.
 
 **Unauthenticated / invalid session:** returns `{ "statusCode": 200, "groups": [] }` — same shape as an authenticated user with zero groups. Check auth separately before treating an empty list as “no memberships”.
 
@@ -335,8 +336,6 @@ Retrieves groups the authenticated user belongs to: student enrollments and lect
 | `lecturers` | string | Lecturer full name; empty string when unknown. |
 | `description` | string \| null | Group description. |
 | `shopOpen` | boolean | Indicates whether the group's shop is currently open. |
-| `shopOpensAt` | string \| null | ISO-8601 timestamp when the shop will automatically open. |
-| `rankShowMemberAvatars` | boolean | Indicates if student avatars should be visible in the ranking. |
 
 **Example**
 
@@ -375,28 +374,25 @@ Requires **PostgreSQL** and matching TypeORM entities (see `.env.example`: `DATA
 
 | Header | Description |
 | ------ | ----------- |
-| `X-Browser-ID` | UUID; must match `auth.sessions.login_method` for this bearer. |
+| `X-Browser-ID` | UUID; must match `autoryzacja.tokens.browser_uuid` for this bearer. |
 
 **Request body (JSON):**
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `auth` | string | Plaintext bearer; server matches `hex(HMAC-SHA256(secret, auth))` against `auth.sessions.token_hmac`. |
+| `auth` | string | Plaintext bearer; server matches `hex(HMAC-SHA256(secret, auth))` against `autoryzacja.tokens.token_hmac`. |
 | `group.name` | string | Group display name (`edukacja.grupy.nazwa`). |
 | `group.description` | string (optional) | Maps to `edukacja.grupy.opis`. |
 | `group.currency` | string (optional) | Maps to `edukacja.grupy.waluta`. |
-| `group.currencyEmoji` | string (optional) | ASCII emoji for the group currency (e.g. "🥕"). |
-| `group.lives` | integer (optional, ≥ 0) | Maps to `edukacja.grupy.zycie`; numeric strings are parsed where sent as strings. |
-| `group.startingLives` | integer (optional, ≥ 0) | Maps to `edukacja.grupy.starting_lives`; configured starting lives value applied at enrollment. |
-| `group.livesIcon` | string (optional; numeric JSON accepted—coerced) | Maps to `edukacja.grupy.ikona_zycia`. |
+| `group.currencyIcon` | string (optional; numeric JSON is accepted—coerced to string) | Maps to `edukacja.grupy.ikona_waluty`. |
+| `group.life` | integer (optional, ≥ 0) | Maps to `edukacja.grupy.zycie`; numeric strings are parsed where sent as strings. |
+| `group.lifeIcon` | string (optional; numeric JSON accepted—coerced) | Maps to `edukacja.grupy.ikona_zycia`. |
 | `group.bannerRef` | string (optional) | Maps to `edukacja.grupy.obrazek_ref`. |
 | `group.entryCode` | string (optional) | Maps to `edukacja.grupy.kod_wstepu`. |
-| `group.shopOpensAt` | string (optional) | ISO-8601 timestamp for scheduled shop opening. Maps to `edukacja.grupy.shop_opens_at`. |
-| `group.rankShowMemberAvatars` | boolean (optional) | Maps to `edukacja.grupy.rank_show_member_avatars`. Default `true`. |
 
 **Errors:** JSON **`group: 0`** means creation failed—check Nest logs (`GroupsService`) for the Postgres **`detail`** (FK/type/null violations).
 
-**Authorization:** **strong** check — plaintext `auth` must map to a non-expired stored HMAC row, and `X-Browser-ID` must match `login_method`. Then **`autoryzacja.konta`** must contain **`rola = lecturer`** for **`id_uzytkownika`** matching the token user. New **`edukacja.grupy`** rows set **`id_konta_prowadzacego`** to that lecturer row's **`autoryzacja.konta.id`**. Other endpoints can reuse **soft** token-only resolution via `resolveSubjectSoft` where browser binding is not required.
+**Authorization:** **strong** check — plaintext `auth` must map to a non-expired stored HMAC row, and `X-Browser-ID` must match `browser_uuid`. Then **`autoryzacja.konta`** must contain **`rola = lecturer`** for **`id_uzytkownika`** matching the token user. New **`edukacja.grupy`** rows set **`id_konta_prowadzacego`** to that lecturer row's **`autoryzacja.konta.id`**. Other endpoints can reuse **soft** token-only resolution via `resolveSubjectSoft` where browser binding is not required.
 
 **Response:** `200 OK` with JSON body:
 
@@ -415,7 +411,7 @@ Host: 127.0.0.1:8080
 Content-Type: application/json
 X-Browser-ID: <BrowserUUID>
 
-{"auth":"<token>","group":{"name":"...","description":"...","currency":"Coin","currencyEmoji":"🥕","lives":3,"startingLives":3,"livesIcon":"13","bannerRef":"<uuid>","entryCode":"<optional>"}}
+{"auth":"<token>","group":{"name":"...","description":"...","currency":"Coin","currencyIcon":"21","life":3,"lifeIcon":"13","bannerRef":"<uuid>","entryCode":"<optional>"}}
 ```
 
 ```json
@@ -434,7 +430,7 @@ X-Browser-ID: <BrowserUUID>
 
 | Header | Description |
 | ------ | ----------- |
-| `X-Browser-ID` | UUID; must match `auth.sessions.login_method` for this bearer. |
+| `X-Browser-ID` | UUID; must match `autoryzacja.tokens.browser_uuid` for this bearer. |
 
 **Request body (JSON):**
 
@@ -443,7 +439,7 @@ X-Browser-ID: <BrowserUUID>
 | `auth` | string (optional) | Plaintext bearer. |
 | `shopOpen` | boolean | Set to `true` to open the shop, `false` to close it. |
 
-**Authorization:** session auth. Caller must have the **lecturer** role and must own the group. Missing or invalid auth yields `401 Unauthorized` or `403 Forbidden`.
+**Authorization:** **strong** token + browser binding. Caller must have the **lecturer** role and must own the group. Missing or invalid auth yields `401 Unauthorized` or `403 Forbidden`.
 
 **Response:** `200 OK` with JSON body:
 
@@ -463,9 +459,9 @@ X-Browser-ID: <BrowserUUID>
 
 | Header | Description |
 | ------ | ----------- |
-| `X-Browser-ID` | UUID; must match `auth.tokens.login_method` for this bearer. |
+| `X-Browser-ID` | UUID; must match `auth.tokens.browser_uuid` for this bearer. |
 
-**Authorization:** session auth. Any authenticated user (lecturer or enrolled student) can read the config.
+**Authorization:** **strong** token + browser binding. Any authenticated user (lecturer or enrolled student) can read the config.
 
 **Response:** `200 OK` with JSON body:
 
@@ -473,7 +469,6 @@ X-Browser-ID: <BrowserUUID>
 | ----- | ---- | ----------- |
 | `livesEnabled` | boolean | Whether the lives system is active for this group. |
 | `livesMax` | integer \| null | Maximum number of lives per student. |
-| `startingLives` | integer \| null | Configured starting number of lives applied when a student enrolls. |
 | `livesLabel` | string \| null | Custom display name for lives (e.g. "Tarcze"). |
 | `livesIcon` | string \| null | Icon reference for lives. |
 | `livesShopEnabled` | boolean | Whether "extra life" appears as a shop product. |
@@ -488,7 +483,7 @@ X-Browser-ID: <BrowserUUID>
 
 | Header | Description |
 | ------ | ----------- |
-| `X-Browser-ID` | UUID; must match `auth.tokens.login_method` for this bearer. |
+| `X-Browser-ID` | UUID; must match `auth.tokens.browser_uuid` for this bearer. |
 
 **Request body (JSON):** All fields are optional; only provided fields are updated.
 
@@ -496,13 +491,12 @@ X-Browser-ID: <BrowserUUID>
 | ----- | ---- | ----------- |
 | `auth` | string (optional) | Plaintext bearer. |
 | `livesEnabled` | boolean (optional) | Enable or disable the lives system. |
-| `lives` | integer (optional, ≥ 0) | Maximum number of lives. |
-| `startingLives` | integer (optional, ≥ 0) | Configured starting number of lives for new students (stored; must not exceed `lives`). |
+| `lives` | integer (optional, ≥ 1) | Maximum number of lives. |
 | `livesLabel` | string (optional) | Custom display name for lives. |
 | `livesIcon` | string (optional) | Icon reference for lives. |
 | `livesShopEnabled` | boolean (optional) | Whether "extra life" appears in shop. |
 
-**Authorization:** session auth. Caller must have the **lecturer** role and must own the group. Missing or invalid auth yields `401 Unauthorized` or `403 Forbidden`.
+**Authorization:** **strong** token + browser binding. Caller must have the **lecturer** role and must own the group. Missing or invalid auth yields `401 Unauthorized` or `403 Forbidden`.
 
 **Response:** `200 OK` with JSON body:
 
@@ -526,7 +520,7 @@ Manages announcements / posts in **`edukacja.posts`** for a given course group. 
 
 | Header | Description |
 | ------ | ----------- |
-| `X-Browser-ID` | UUID; must match `auth.sessions.login_method` for this bearer. |
+| `X-Browser-ID` | UUID; must match `autoryzacja.tokens.browser_uuid` for this bearer. |
 
 **Request body (JSON):**
 
@@ -536,11 +530,10 @@ Manages announcements / posts in **`edukacja.posts`** for a given course group. 
 | `title` | string | Title of the announcement (non-empty). |
 | `content` | string | Body text of the announcement (non-empty). |
 | `createdAt` | string (ISO-8601) | (Optional) Creation date from the frontend. Defaults to server `now()` if omitted. |
-| `publishAt` | string (ISO-8601) | (Optional) Schedule publication. When omitted, post stays unpublished until manually published. When in the past or present, post is published immediately. When in the future, `isPublished` stays `false` until `publishAt` (polled every 60s). |
 
-Posts without `publishAt` are created with `isPublished: false` and `publishedAt: null`. Scheduled posts expose `publishAt` in list responses until published.
+Posts are created with `isPublished: false` and `publishedAt: null`.
 
-**Authorization:** session auth. Caller must have **`autoryzacja.konta`** with **`rola = lecturer`** and must own the group (`edukacja.grupy.teacher_account_id`). Missing lecturer account, invalid token, browser mismatch, or ownership mismatch yields `{ "status": 200, "post": -1 }` (or `-2` for creation error).
+**Authorization:** **strong** token + browser binding. Caller must have **`autoryzacja.konta`** with **`rola = lecturer`** and must own the group (`edukacja.grupy.teacher_account_id`). Missing lecturer account, invalid token, browser mismatch, or ownership mismatch yields `{ "status": 200, "post": -1 }` (or `-2` for creation error).
 
 **Response example:**
 ```json
@@ -557,15 +550,15 @@ Posts without `publishAt` are created with `isPublished: false` and `publishedAt
 
 | Header | Description |
 | ------ | ----------- |
-| `X-Browser-ID` | UUID; must match `auth.sessions.login_method` for this bearer. |
+| `X-Browser-ID` | UUID; must match `autoryzacja.tokens.browser_uuid` for this bearer. |
 
 **Query parameters:**
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `auth` | string | Plaintext bearer (optional if passed via `maq_session` cookie). |
+| `auth` | string | Plaintext bearer (optional if passed via `maq_auth` cookie). |
 
-**Authorization:** session auth. Caller must either be the lecturer owning the group OR a student enrolled in the group (`grywalizacja.zapisy`). Unauthorized callers receive an empty posts array.
+**Authorization:** **strong** token + browser binding. Caller must either be the lecturer owning the group OR a student enrolled in the group (`grywalizacja.zapisy`). Unauthorized callers receive an empty posts array.
 - **Lecturer (group owner):** sees **all** posts (published and unpublished).
 - **Student (enrolled):** sees **only published** posts (`isPublished: true`).
 
@@ -580,8 +573,7 @@ Posts without `publishAt` are created with `isPublished: false` and `publishedAt
       "content": "Zajęcia w czwartek zostają odwołane.",
       "isPublished": true,
       "createdAt": "2026-06-15T20:00:00.000Z",
-      "publishedAt": "2026-06-15T21:30:00.000Z",
-      "publishAt": null
+      "publishedAt": "2026-06-15T21:30:00.000Z"
     }
   ]
 }
@@ -602,7 +594,6 @@ Posts without `publishAt` are created with `isPublished: false` and `publishedAt
 | `title` | string | New title. |
 | `content` | string | New content. |
 | `isPublished` | boolean | Toggle visibility. When set to `true`, backend auto-sets `publishedAt` to current timestamp. When set to `false`, `publishedAt` resets to `null`. |
-| `publishAt` | string (ISO-8601) \| null | Schedule or unschedule publication. Future timestamp keeps the post hidden; past/present publishes immediately. Pass `null` to clear scheduling. |
 | `auth` | string | Plaintext bearer (alternative to cookie). |
 
 **Response example:**
@@ -635,7 +626,7 @@ Inserts a row in **`gamification.enrollments`** linking the caller’s **student
 
 | Header | Description |
 | ------ | ----------- |
-| `X-Browser-ID` | UUID; must match `auth.tokens.login_method` for this bearer. |
+| `X-Browser-ID` | UUID; must match `auth.tokens.browser_uuid` for this bearer. |
 
 **URL parameters:**
 
@@ -647,9 +638,9 @@ Inserts a row in **`gamification.enrollments`** linking the caller’s **student
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `auth` | string (optional) | Plaintext bearer when not using the `maq_session` cookie. |
+| `auth` | string (optional) | Plaintext bearer when not using the `maq_auth` cookie. |
 
-**Authorization:** session auth. Caller must have a **student** account. Missing student account, invalid token, or browser mismatch yields **`enrollmentId: -1`**.
+**Authorization:** **strong** token + browser binding. Caller must have a **student** account. Missing student account, invalid token, or browser mismatch yields **`enrollmentId: -1`**.
 
 **Behaviour:** Resolves the internal group id from the path. If the group row is missing, **`enrollmentId: -2`**. If the student is already enrolled, returns the existing enrollment id (idempotent). DB failures return **`enrollmentId: -3`**.
 
@@ -677,47 +668,11 @@ Cookie: maq_auth=<token>
 
 ---
 
-## Group participants (student & lecturer)
-
-Limited roster for in-group UI (nickname, avatar, name). Does not expose email, currency, or rank stats.
-
-**Endpoint:** `GET /api/groups/:groupId/participants`
-
-**Auth:** Session required. Caller must be the group owner (lecturer) or an enrolled student. Others receive `403 Forbidden`.
-
-**Response:** `200 OK` — JSON array:
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `accountId` | integer | Student account id. |
-| `nickname` | string | Display nickname. |
-| `avatarUrl` | string \| null | Avatar image URL. |
-| `name` | string (optional) | First name. |
-| `surname` | string (optional) | Last name. |
-
----
-
-## Student stats bulk update (lecturer)
-
-**Endpoint:** `PATCH /api/groups/:groupId/students/bulk-update`
-
-**Auth:** Lecturer only.
-
-**Body:** `{ "students": [ { "enrollmentId", "currency?", "totalEarned?", "rankId?", "autoRankEnabled?" } ] }`
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `autoRankEnabled` | boolean (optional) | When `true`, rank is recalculated from `totalEarned`. When `false` or omitted with explicit `rankId`, manual `rankId` is kept and auto-assignment is disabled. |
-
-**Response:** `{ "updated": number }`
-
----
-
 ## Group enrollment codes (lecturer)
 
 CRUD for **`education.enrollment_codes`** — group-scoped invite codes (1–10 characters) with optional expiration and usage limits. Auto-generated codes are 6-character uppercase hex unless the lecturer supplies a custom `code`.
 
-**Authorization:** session auth (`maq_session` cookie, `Authorization: Bearer` header, or body `auth`) plus **lecturer** role; caller must own the group.
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`) plus **lecturer** role; caller must own the group.
 
 | Endpoint | Method | Description |
 | -------- | ------ | ----------- |
@@ -725,7 +680,7 @@ CRUD for **`education.enrollment_codes`** — group-scoped invite codes (1–10 
 | `/api/groups/:groupId/enrollment-codes/:codeId` | `GET` | Single code by id. |
 | `/api/groups/:groupId/enrollment-codes` | `POST` | Create code (`201`). Body: optional `code`, `expiresAt` (ISO-8601 or `null`), `maxUses`, `auth`. |
 | `/api/groups/:groupId/enrollment-codes/:codeId` | `PATCH` | Update `expiresAt`, `maxUses`, `isActive`. Body includes optional `auth`. |
-| `/api/groups/:groupId/enrollment-codes/:codeId` | `DELETE` | Delete code (`204`). Auth via `maq_session` cookie or `Authorization: Bearer` header. |
+| `/api/groups/:groupId/enrollment-codes/:codeId` | `DELETE` | Delete code (`204`). Auth via `maq_auth` cookie or `Authorization: Bearer` header. |
 
 **Code object fields:** `id`, `groupId`, `code`, `expiresAt`, `maxUses`, `useCount`, `isActive`, `createdAt`, `updatedAt`.
 
@@ -749,7 +704,7 @@ Validates an enrollment code and enrolls the student. Lookup is scoped to **`gro
 | Parameter | Type | Rules | Description |
 | --------- | ---- | ----- | ----------- |
 | `code` | string | 1–10 characters | Enrollment code for this group. |
-| `auth` | string (optional) | Plaintext bearer | Auth token (can also be passed via `maq_session` cookie). |
+| `auth` | string (optional) | Plaintext bearer | Auth token (can also be passed via `maq_auth` cookie). |
 
 **Response:** `200 OK` — `enrollmentId > 0` success; negative values: `-1` unauthorized, `-2` group not found, `-4` invalid/expired/exhausted/inactive code.
 
@@ -775,7 +730,7 @@ Retrieves student statistics (lives, currency, icons) scoped to a specific group
 | --------- | ---- | ----------- |
 | `groupId` | integer | Public group ID (includes `GROUP_RESPONSE_GROUP_ID_OFFSET`). |
 
-**Authorization:** session auth. Caller must be enrolled in the specified group.
+**Authorization:** **strong** token + browser binding. Caller must be enrolled in the specified group.
 
 **Response:** `200 OK` with JSON body:
 
@@ -785,7 +740,7 @@ Retrieves student statistics (lives, currency, icons) scoped to a specific group
 | `groupId` | integer | Public group ID requested. |
 | `lives` | integer | Remaining lives in this group (`gamification.enrollments`). |
 | `currency` | string | Currency balance in this group (`gamification.enrollments`). |
-| `currencyEmoji` | string | Group's currency emoji (`education.groups`). |
+| `currencyIcon` | string | Group's currency icon (`education.groups`). |
 | `livesIcon` | string | Group's life icon (`education.groups`). |
 | `shopOpen` | boolean | Indicates whether the group's shop is currently open. |
 
@@ -804,7 +759,7 @@ Cookie: maq_auth=<token>
   "groupId": 100137,
   "lives": 3,
   "currency": "100",
-  "currencyEmoji": "🪙",
+  "currencyIcon": "coin",
   "livesIcon": "heart",
   "shopOpen": true
 }
@@ -825,7 +780,7 @@ Retrieves the recent backlog history for the currently logged-in student in a gi
 **Query Parameters:**
 | Parameter | Type | Description |
 | --------- | ---- | ----------- |
-| `auth` | string (optional) | Access token (can also be passed via `maq_session` cookie). |
+| `auth` | string (optional) | Access token (can also be passed via `maq_auth` cookie). |
 | `take` | integer (optional) | Number of items to retrieve (pagination limit, default 50). |
 | `skip` | integer (optional) | Number of items to skip (pagination offset, default 0). |
 
@@ -843,35 +798,10 @@ Retrieves the recent backlog history for the currently logged-in student in a gi
     "type": "SHOP_PURCHASE",
     "date": "2026-06-08T10:00:00.000Z",
     "value": "health_potion",
-    "accountId": 42,
-    "isRead": false
+    "accountId": 42
   }
 ]
 ```
-
-### Mark Backlog Item as Read (Student / Lecturer)
-
-**Endpoint:** `PATCH /api/groups/:groupId/backlog/:backlogId/read`
-
-Marks a specific backlog item as read. Students can only mark their own items in groups they are enrolled in. Lecturers can mark any item in their groups.
-
-**Query Parameters:**
-| Parameter | Type | Description |
-| --------- | ---- | ----------- |
-| `auth` | string (optional) | Access token (can also be passed via `maq_session` cookie). |
-
-**Response:** `200 OK` with JSON:
-
-```json
-{ "updated": true }
-```
-
-Returns `{ "updated": false }` when no matching backlog row exists (unknown id, student item owned by another account, etc.). Marking an already-read item is idempotent when the row matches.
-
-**Errors:**
-* `400 Bad Request` — Invalid group ID.
-* `401 Unauthorized` — Missing or invalid authentication.
-* `403 Forbidden` — Not enrolled / not owner / wrong role.
 
 ### Get Group Backlog (Lecturer / Admin)
 
@@ -883,7 +813,7 @@ Requires `SUPER` role or ownership of the group (`teacherAccountId`).
 **Query Parameters:**
 | Parameter | Type | Description |
 | --------- | ---- | ----------- |
-| `auth` | string (optional) | Access token (can also be passed via `maq_session` cookie). |
+| `auth` | string (optional) | Access token (can also be passed via `maq_auth` cookie). |
 | `take` | integer (optional) | Number of items to retrieve (pagination limit, default 50). |
 | `skip` | integer (optional) | Number of items to skip (pagination offset, default 0). |
 
@@ -893,19 +823,6 @@ Requires `SUPER` role or ownership of the group (`teacherAccountId`).
 | `X-Browser-ID` | Browser binding ID for the strong session. |
 
 **Response:** `200 OK` with JSON array of backlog items.
-
-```json
-[
-  {
-    "id": 12,
-    "type": "SHOP_PURCHASE",
-    "date": "2026-06-08T10:00:00.000Z",
-    "value": "health_potion",
-    "accountId": 42,
-    "isRead": false
-  }
-]
-```
 
 ---
 
@@ -925,19 +842,17 @@ Manage stages within groups. Each stage belongs to a group and contains activiti
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `auth` | string (optional) | Plaintext bearer token (can also be passed via `maq_session` cookie). |
-| `method` | string | One of: `post`, `modify`, `remove`, `retrieve`, `reorder`. |
+| `auth` | string (optional) | Plaintext bearer token (can also be passed via `maq_auth` cookie). |
+| `method` | string | One of: `post`, `modify`, `remove`, `retrieve`. |
 | `stageId` | integer (optional) | Stage primary key (`education.stages.id`). Required for `modify`/`remove`. |
-| `groupId` | integer (optional) | Public group ID (includes `GROUP_RESPONSE_GROUP_ID_OFFSET = 100000`). Required for `post` and `reorder`. |
+| `groupId` | integer (optional) | Public group ID (includes `GROUP_RESPONSE_GROUP_ID_OFFSET = 100000`). Required for `post`. |
 | `name` | string (optional) | Stage name. Required for `post`. |
 | `visibilityStatus` | integer (optional) | Controls visibility (0 = hidden, 1 = visible). Defaults to 0. |
-| `displayOrder` | integer (optional) | Sort index for UI tree (`modify`). |
-| `stageIds` | integer[] (optional) | Ordered stage ids for `reorder` (must all belong to `groupId`). |
 
 **Authorization:**
-- `post`: session auth (token + browser binding) + lecturer role.
-- `modify`/`remove`/`reorder`: session auth (token only) + lecturer role; `reorder` also requires group ownership.
-- `retrieve`: session auth (any authenticated user).
+- `post`: **strong** auth (token + browser binding) + lecturer role.
+- `modify`/`remove`: **soft** auth (token only) + lecturer role.
+- `retrieve`: **soft** auth (any authenticated user).
 
 **Response:** `200 OK` with JSON body:
 
@@ -945,8 +860,8 @@ Manage stages within groups. Each stage belongs to a group and contains activiti
 | ----- | ---- | ----------- |
 | `statusCode` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
 | `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
-| `stage` | integer | For `post`/`modify`: stage DB id (positive); for `remove`: the removed id; for `retrieve`: count of stages returned; for `reorder`: number of stages reordered. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = invalid request. |
-| `stages` | array (optional) | For `retrieve`: array of `{ id, groupId, name, visibilityStatus, displayOrder }` — `id` is DB id; `groupId` is public (with offset). Stages are ordered by `displayOrder ASC NULLS LAST`, then `id`. |
+| `stage` | integer | For `post`/`modify`: stage DB id (positive); for `remove`: the removed id; for `retrieve`: count of stages returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = invalid request. |
+| `stages` | array (optional) | For `retrieve`: array of `{ id, groupId, name, visibilityStatus }` — `id` is DB id; `groupId` is public (with offset). |
 
 All responses use this flat JSON shape only (no Nest `message` / `error` fields).
 
@@ -1015,7 +930,7 @@ Manage activities within stages. Each activity belongs to a stage and has curren
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `auth` | string (optional) | Plaintext bearer token (can also be passed via `maq_session` cookie). |
+| `auth` | string (optional) | Plaintext bearer token (can also be passed via `maq_auth` cookie). |
 | `method` | string | One of: `post`, `modify`, `remove`, `retrieve`. |
 | `activityId` | integer (optional) | Activity primary key (`education.activities.id`). Required for `modify`/`remove`. |
 | `stageId` | integer (optional) | Stage primary key (`education.stages.id`). Required for `post`. |
@@ -1025,9 +940,9 @@ Manage activities within stages. Each activity belongs to a stage and has curren
 | `storyDescription` | string (optional) | Story/narrative description text. |
 
 **Authorization:**
-- `post`: session auth (token + browser binding) + lecturer role.
-- `modify`/`remove`: session auth (token only) + lecturer role.
-- `retrieve`: session auth (any authenticated user).
+- `post`: **strong** auth (token + browser binding) + lecturer role.
+- `modify`/`remove`: **soft** auth (token only) + lecturer role.
+- `retrieve`: **soft** auth (any authenticated user).
 
 **Response:** `200 OK` with JSON body:
 
@@ -1036,7 +951,7 @@ Manage activities within stages. Each activity belongs to a stage and has curren
 | `statusCode` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
 | `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
 | `activity` | integer | For `post`/`modify`: activity DB id (positive); for `remove`: the removed id; for `retrieve`: count of activities returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = stage not found, `-5` = invalid request. |
-| `activities` | array (optional) | For `retrieve`: array of `{ id, stageId, name, currency, completionCount, educationalDescription, storyDescription }` (DB ids). |
+| `activities` | array (optional) | For `retrieve`: array of `{ id, stageId, name, currency, educationalDescription, storyDescription }` (DB ids). |
 
 All responses use this flat JSON shape only (no Nest `message` / `error` fields).
 
@@ -1081,8 +996,8 @@ Content-Type: application/json
   "method": "retrieve",
   "activity": 2,
   "activities": [
-    { "id": 1, "stageId": 1, "name": "Quiz 1", "currency": 100, "completionCount": 0, "educationalDescription": "Test your knowledge", "storyDescription": "The hero faces a challenge" },
-    { "id": 2, "stageId": 1, "name": "Assignment 1", "currency": 50, "completionCount": 0, "educationalDescription": "Practice problems", "storyDescription": "Training montage" }
+    { "id": 1, "stageId": 1, "name": "Quiz 1", "currency": 100, "educationalDescription": "Test your knowledge", "storyDescription": "The hero faces a challenge" },
+    { "id": 2, "stageId": 1, "name": "Assignment 1", "currency": 50, "educationalDescription": "Practice problems", "storyDescription": "Training montage" }
   ]
 }
 ```
@@ -1093,9 +1008,11 @@ Content-Type: application/json
 
 Creates a badge definition in `gamification.badges` for a course group.
 
+> **Breaking change (migration `ShopDiscountsImprovements0000000000017`):** badge shop discounts use `globalDiscountType` and `globalDiscountValue` instead of legacy `discount` / `storeDiscount` fields (same mapping rules as ranks).
+
 **Endpoint:** `POST /api/groups/:groupId/badges`
 
-**Auth:** **Soft** token resolution — `maq_session` cookie **or** body `auth`; **`X-Browser-ID` is not required**. Caller must have the **lecturer** role.
+**Auth:** **Soft** token resolution — `maq_auth` cookie **or** body `auth`; **`X-Browser-ID` is not required**. Caller must have the **lecturer** role.
 
 **Path parameter:**
 
@@ -1113,9 +1030,9 @@ Creates a badge definition in `gamification.badges` for a course group.
 | `educationalDescription` | string | required | Educational text. |
 | `storyDescription` | string (optional) | — | Narrative text. |
 | `rewardAmount` | integer (optional) | ≥ 0 | Reward points (default `0`). |
-| `isPublished` | boolean (optional) | — | Visibility toggle. When false, students cannot see it. Auto-sets `publishedAt` on true. (default `false`). |
 | `globalDiscountType` | string (optional) | `percent` \| `fixed` | Default shop discount type for this badge. |
-| `globalDiscountValue` | integer (optional) | ≥ 0; ≤ 100 when type is `percent` | Default shop discount amount (percent points or fixed currency). |
+| `globalDiscountValue` | integer (optional) | ≥ 0; ≤ 100 when type is `percent` | Default shop discount amount. |
+| `isPublished` | boolean (optional) | — | Visibility toggle. When false, students cannot see it. Auto-sets `publishedAt` on true. (default `false`). |
 
 **Response:** `201 Created` — persisted badge entity (camelCase fields, including `isPublished` and `publishedAt`).
 
@@ -1154,7 +1071,7 @@ Group-scoped categories for shop catalog items (`gamification.item_categories`).
 
 **Endpoint:** `GET /api/groups/:groupId/item-categories`
 
-**Auth:** **Soft** token resolution — `maq_session` cookie **or** `Authorization: Bearer` header; **`X-Browser-ID` is not required**. Caller must be the **group owner (lecturer)** or an **enrolled student** in that group.
+**Auth:** **Soft** token resolution — `maq_auth` cookie **or** `Authorization: Bearer` header; **`X-Browser-ID` is not required**. Caller must be the **group owner (lecturer)** or an **enrolled student** in that group.
 
 **Response:** `200 OK` — array of categories ordered by `displayOrder`, then `name` (camelCase fields).
 
@@ -1195,9 +1112,11 @@ Deletes the category. Items in the category get `category_id = NULL`. Response: 
 
 Creates a rank definition in `gamification.ranks` for a course group.
 
+> **Breaking change (migration `ShopDiscountsImprovements0000000000017`):** request/response fields `discount` and `storeDiscount` were replaced by `globalDiscountType` (`percent` \| `fixed`) and `globalDiscountValue`. Legacy request fields are still accepted and mapped server-side: `discount: 10` → `globalDiscountType: "percent"`, `globalDiscountValue: 10`; `storeDiscount: 5` → `globalDiscountType: "fixed"`, `globalDiscountValue: 5`.
+
 **Endpoint:** `POST /api/groups/:groupId/ranks`
 
-**Auth:** **Soft** token resolution — `maq_session` cookie **or** body `auth`; **`X-Browser-ID` is not required**. Caller must have the **lecturer** role.
+**Auth:** **Soft** token resolution — `maq_auth` cookie **or** body `auth`; **`X-Browser-ID` is not required**. Caller must have the **lecturer** role.
 
 **Path parameter:**
 
@@ -1217,6 +1136,8 @@ Creates a rank definition in `gamification.ranks` for a course group.
 | `globalDiscountType` | string (optional) | `percent` \| `fixed` | Default shop discount type for this rank. |
 | `globalDiscountValue` | integer (optional) | ≥ 0; ≤ 100 when type is `percent` | Default shop discount amount (percent points or fixed currency). |
 | `uniqueStoreItems` | string[] (optional) | — | Item ids (as strings) unlocked only when the student reaches this rank. |
+| `discount` | number (optional, deprecated) | 0-100 | Accepted for backward compatibility; mapped to `globalDiscountType=percent`. |
+| `storeDiscount` | integer (optional, deprecated) | ≥ 0 | Accepted for backward compatibility; mapped to `globalDiscountType=fixed`. |
 
 **Response:** `201 Created` — persisted rank entity (camelCase fields).
 
@@ -1247,38 +1168,11 @@ Deletes the rank. Students who had this rank get `rank_id = NULL` (“Brak”) b
 
 ---
 
-## Shop items (lecturer / student)
-
-Catalog items live in `gamification.items` with pricing in `gamification.shop_listings`. Per-listing promotions override badge/rank global defaults.
-
-**Endpoint:** `GET /api/groups/:groupId/shop-items`
-
-**Auth:** Soft token + group owner (lecturer) or enrolled student. Students only see published items.
-
-**Student listing fields (on each `listing`):** `basePrice`, `discountedPrice` (server-calculated from earned badges/ranks and listing promotions), `isLocked` (true when the item is rank-gated and not yet unlocked).
-
-**Endpoint:** `POST /api/groups/:groupId/shop-items` · `PATCH /api/groups/:groupId/shop-items/:itemId`
-
-**Auth:** Soft token + lecturer who owns the group.
-
-**Promotion arrays (optional on create/update):**
-
-| Field | Type | Rules | Description |
-| ----- | ---- | ----- | ----------- |
-| `badgePromotions` | array | optional | `{ id: badgeId, promotionType: "percent"\|"fixed", value: int }` — badge must belong to the group. |
-| `rankPromotions` | array | optional | `{ id: rankId, promotionType: "percent"\|"fixed", value: int }` — rank must belong to the group; `value` ≤ 100 when type is `percent`. |
-
-**Endpoint:** `POST /api/groups/:groupId/shop-items/:itemId/buy`
-
-**Auth:** Soft token + enrolled student. Purchase price is recalculated server-side (`discountedPrice`); rank-locked items return `403 Forbidden`.
-
----
-
 ## CSV Reports (lecturer)
 
 Downloads CSV files tracking student activity completions. The endpoints return `text/csv; charset=utf-8` with a UTF-8 BOM (`\uFEFF`) to ensure Excel on Windows opens them correctly, and uses semicolons (`;`) for the Polish locale.
 
-**Auth:** **Soft** token resolution — `maq_session` cookie **or** `Authorization: Bearer` header; **`X-Browser-ID` is not required**. Caller must be a **lecturer** who **owns** the group.
+**Auth:** **Soft** token resolution — `maq_auth` cookie **or** `Authorization: Bearer` header; **`X-Browser-ID` is not required**. Caller must be a **lecturer** who **owns** the group.
 
 **Errors:**
 - `403 Forbidden`: Token missing/invalid, caller is not a lecturer, or caller is not the group owner.
@@ -1415,9 +1309,9 @@ Local dev IdP: see [docs/saml-local-idp.md](./saml-local-idp.md). UAM production
 
 **GET `/api/auth/saml/metadata`** — SP metadata XML (`200`, `application/xml`).
 
-**GET `/api/auth/saml/login?organizationId=<id>&browserId=<uuid>`** — requires organization picker choice; optional **`browserId`** (RFC 4122 UUID) is embedded in **RelayState** so ACS can mint **`maq_session`** bound to the same browser install as the SPA. Sets pending-org cookie (`SameSite=None; Secure` on HTTPS so it survives the cross-site IdP POST to ACS); **`302`** to org's IdP SSO URL.
+**GET `/api/auth/saml/login?organizationId=<id>&browserId=<uuid>`** — requires organization picker choice; optional **`browserId`** (RFC 4122 UUID) is embedded in **RelayState** so ACS can mint **`maq_auth`** bound to the same browser install as the SPA. Sets pending-org cookie (`SameSite=None; Secure` on HTTPS so it survives the cross-site IdP POST to ACS); **`302`** to org's IdP SSO URL.
 
-**POST `/api/auth/saml/acs`** — ACS; provisions `auth.users` + `auth.accounts` for pending org. Resolves organization from **RelayState** (primary) or pending-org cookie (fallback). When RelayState carries a valid **`browserId`**, mints **`maq_session`** (HTTP-only cookie) for that browser without requiring a separate **`POST /api/login`**. Redirects to **`SAML_LOGIN_SUCCESS_URL`** (prefer `{SPA origin}/login` for the registration wizard).
+**POST `/api/auth/saml/acs`** — ACS; provisions `auth.users` + `auth.accounts` for pending org. Resolves organization from **RelayState** (primary) or pending-org cookie (fallback). When RelayState carries a valid **`browserId`**, mints **`maq_auth`** (HTTP-only cookie) for that browser without requiring a separate **`POST /api/login`**. Redirects to **`SAML_LOGIN_SUCCESS_URL`** (prefer `{SPA origin}/login` for the registration wizard).
 
 **GET `/api/auth/saml/me`** — session smoke check from cookie.
 
@@ -1441,7 +1335,7 @@ Save a group's full configuration (settings, badges, ranks, shop items with pric
 
 **Endpoint:** `POST /api/groups/:groupId/save-as-template`
 
-**Authorization:** session auth (`maq_session` cookie, `Authorization: Bearer` header, or body `auth`). Caller must have the **lecturer** role and must own the group (`education.groups.teacher_account_id`).
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must have the **lecturer** role and must own the group (`education.groups.teacher_account_id`).
 
 **URL parameters:**
 
@@ -1453,7 +1347,7 @@ Save a group's full configuration (settings, badges, ranks, shop items with pric
 
 | Field | Type | Rules | Description |
 | ----- | ---- | ----- | ----------- |
-| `auth` | string (optional) | | Plaintext bearer when not using the `maq_session` cookie. |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
 | `name` | string | Non-empty, min 1 char | Display name for the template. |
 | `description` | string (optional) | | Description of the template. |
 | `isPublic` | boolean (optional) | Default `false` | When `true`, the template is visible to other lecturers in the gallery. |
@@ -1468,7 +1362,7 @@ Save a group's full configuration (settings, badges, ranks, shop items with pric
 | `isPublic` | boolean | Visibility flag. |
 | `creatorAccountId` | integer | Lecturer account id that created the template. |
 | `baseGroupId` | integer \| null | Source group id. |
-| `data` | object (JSONB) | Full snapshot — group settings, badges, ranks, item categories, items with shop listings (incl. rank promotions & badge promotions), posts, stages with activities. |
+| `data` | object (JSONB) | Full snapshot — group settings, badges, ranks, item categories, items with shop listings (incl. rank prices & badge promotions), posts, stages with activities. |
 | `createdAt` | string (ISO-8601) | Creation timestamp. |
 
 **Errors:**
@@ -1507,7 +1401,7 @@ Cookie: maq_auth=<token>
 
 **Endpoint:** `POST /api/groups/from-template/:templateId`
 
-**Authorization:** session auth (`maq_session` cookie, `Authorization: Bearer` header, or body `auth`). Caller must have the **lecturer** role. The caller becomes the owner of the newly created group.
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must have the **lecturer** role. The caller becomes the owner of the newly created group.
 
 Lecturers may only import templates if they have access to them:
 - **Public templates** (`isPublic: true`): Any lecturer can import.
@@ -1523,7 +1417,7 @@ Lecturers may only import templates if they have access to them:
 
 | Field | Type | Rules | Description |
 | ----- | ---- | ----- | ----------- |
-| `auth` | string (optional) | | Plaintext bearer when not using the `maq_session` cookie. |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
 | `name` | string | Non-empty, min 1 char | Display name for the newly created group. |
 | `subjectName` | string (optional) | | Overrides the subject name from the template. If omitted, the template's value is used. |
 
@@ -1546,7 +1440,7 @@ Lecturers may only import templates if they have access to them:
 
 **Endpoint:** `GET /api/group-templates`
 
-**Authorization:** session auth (`maq_session` cookie, `Authorization: Bearer` header, or query `auth`). Caller must have the **lecturer** role.
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or query `auth`). Caller must have the **lecturer** role.
 
 Retrieves a paginated list of templates without the heavy `data` payload.
 
@@ -1554,7 +1448,7 @@ Retrieves a paginated list of templates without the heavy `data` payload.
 
 | Parameter | Type | Default | Description |
 | --------- | ---- | ------- | ----------- |
-| `auth` | string (optional) | | Plaintext bearer when not using the `maq_session` cookie. |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
 | `scope` | string (optional) | `public` | `public` to list all public templates. `my` to list all templates created by the caller (both public and private). |
 | `limit` | integer (optional)| `20` | Max results to return (1-100). |
 | `offset` | integer (optional)| `0` | Number of results to skip. |
@@ -1571,7 +1465,8 @@ Retrieves a paginated list of templates without the heavy `data` payload.
       "isPublic": true,
       "creatorAccountId": 5,
       "baseGroupId": 100010,
-      "createdAt": "2026-06-15T20:00:00.000Z"
+      "createdAt": "2026-06-15T20:00:00.000Z",
+      "isFavorite": true
     }
   ],
   "total": 1,
@@ -1580,11 +1475,32 @@ Retrieves a paginated list of templates without the heavy `data` payload.
 }
 ```
 
+For `scope=public`, results are sorted with the caller's favorites first, then `createdAt DESC`. `isFavorite` is always `false` for `scope=my`.
+
+### Set template favorite
+
+**Endpoint:** `PUT /api/group-templates/:templateId/favorite`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must have the **lecturer** role.
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
+| `favorite` | boolean | required | `true` to mark as favorite, `false` to remove. |
+
+**Response:** `204 No Content`
+
+**Errors:**
+- `403 Forbidden` if template is private (favorites only apply to public gallery templates).
+- `404 Not Found` if template does not exist.
+
 ### Get template details
 
 **Endpoint:** `GET /api/group-templates/:templateId`
 
-**Authorization:** session auth (`maq_session` cookie, `Authorization: Bearer` header, or query `auth`). Caller must have the **lecturer** role. 
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or query `auth`). Caller must have the **lecturer** role. 
 
 Provides full template information, including the `data` snapshot. Fails with `403 Forbidden` if the template is private and the caller is not the creator.
 
@@ -1592,13 +1508,13 @@ Provides full template information, including the `data` snapshot. Fails with `4
 
 **Endpoint:** `PATCH /api/group-templates/:templateId`
 
-**Authorization:** session auth (`maq_session` cookie, `Authorization: Bearer` header, or body `auth`). Caller must be the **lecturer** who created the template.
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must be the **lecturer** who created the template.
 
 **Request body (JSON):**
 
 | Field | Type | Rules | Description |
 | ----- | ---- | ----- | ----------- |
-| `auth` | string (optional) | | Plaintext bearer when not using the `maq_session` cookie. |
+| `auth` | string (optional) | | Plaintext bearer when not using the `maq_auth` cookie. |
 | `name` | string (optional) | Min 1 char | Update the template name. |
 | `description` | string (optional) | | Update the template description. |
 | `isPublic` | boolean (optional)| | Update visibility. |
@@ -1611,7 +1527,7 @@ Provides full template information, including the `data` snapshot. Fails with `4
 
 **Endpoint:** `DELETE /api/group-templates/:templateId`
 
-**Authorization:** session auth (`maq_session` cookie, `Authorization: Bearer` header, or body `auth`). Caller must be the **lecturer** who created the template.
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`). Caller must be the **lecturer** who created the template.
 
 Permanently deletes the template from the database. Does not affect any groups already created from this template, nor does it delete associated files like banners from the drive.
 

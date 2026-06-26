@@ -6,6 +6,7 @@ import { EnrollmentCodeEntity } from '../database/entities/enrollment-code.entit
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { GroupTemplateEntity } from '../database/entities/group-template.entity';
+import { GroupTemplateFavoriteEntity } from '../database/entities/group-template-favorite.entity';
 import { PostEntity } from '../database/entities/post.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { GamificationModule } from '../gamification/gamification-module';
@@ -34,6 +35,7 @@ import { ShopSchedulerService } from './shop-scheduler-service';
       PostEntity,
       StudentStatsEntity,
       GroupTemplateEntity,
+      GroupTemplateFavoriteEntity,
     ]),
     AuthTokenSessionModule,
     UserRolesModule,
