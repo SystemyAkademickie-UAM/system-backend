@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { ROLE_PRIORITY_ORDER } from '../constants/role-name-constants';
+import { ROLE_PRIORITY_ORDER, LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+import { UserEntity } from '../database/entities/user.entity';
 import { AccountEntity } from '../database/entities/account.entity';
 
 /**
@@ -33,6 +34,29 @@ export class UserRolesService {
       select: ['id'],
     });
     return row?.id ?? null;
+  }
+
+  /**
+   * @returns lecturer `auth.accounts.id` for the given email within an organization.
+   */
+  async findLecturerAccountIdByEmailInOrganization(
+    emailRaw: string,
+    organizationId: number,
+  ): Promise<number | null> {
+    const email = emailRaw.trim().toLowerCase();
+    const row = await this.accountRepository
+      .createQueryBuilder('account')
+      .innerJoin(UserEntity, 'user', 'user.id = account.user_id')
+      .select('account.id', 'id')
+      .where('LOWER(user.email) = :email', { email })
+      .andWhere('account.organization_id = :organizationId', { organizationId })
+      .andWhere('account.role = :role', { role: LECTURER_ROLE_NAME })
+      .getRawOne<{ id: number | string }>();
+    if (row === undefined) {
+      return null;
+    }
+    const accountId = Number(row.id);
+    return Number.isFinite(accountId) ? accountId : null;
   }
 
   /**

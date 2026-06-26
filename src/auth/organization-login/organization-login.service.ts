@@ -68,20 +68,18 @@ export class OrganizationLoginService {
   }
 
   private async listEmailOrganizations(): Promise<OrganizationLoginListItem[]> {
-    const rows = await this.organizationRepository.find({
-      where: {
-        isActive: true,
-        loginMethod: ORGANIZATION_LOGIN_METHOD_EMAIL,
-      },
-      order: { id: 'ASC' },
-    });
-    return rows
-      .filter((row) => row.id !== PRIVATE_ORGANIZATION_ID)
-      .map((row) => ({
-        id: row.id,
-        name: row.name,
-        loginMethod: row.loginMethod,
-      }));
+    const rows = await this.organizationRepository
+      .createQueryBuilder('org')
+      .select(['org.id', 'org.name', 'org.loginMethod'])
+      .where('org.is_active = true')
+      .andWhere('org.id <> :privateOrgId', { privateOrgId: PRIVATE_ORGANIZATION_ID })
+      .orderBy('org.id', 'ASC')
+      .getMany();
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      loginMethod: row.loginMethod,
+    }));
   }
 
   private async assertSamlOrganization(organizationId: number): Promise<OrganizationEntity> {

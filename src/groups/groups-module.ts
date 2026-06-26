@@ -3,15 +3,18 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthTokenSessionModule } from '../auth/api-token/auth-token-session-module';
 import { EnrollmentCodeEntity } from '../database/entities/enrollment-code.entity';
+import { AccountEntity } from '../database/entities/account.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { GroupTemplateEntity } from '../database/entities/group-template.entity';
+import { GroupTemplateFavoriteEntity } from '../database/entities/group-template-favorite.entity';
 import { PostEntity } from '../database/entities/post.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { GamificationModule } from '../gamification/gamification-module';
 import { UserRolesModule } from '../user-roles/user-roles-module';
 import { GroupsEnrollmentService } from './groups-enrollment-service';
 import { EnrollmentCodesService } from './enrollment-codes-service';
+import { BacklogModule } from '../backlog/backlog-module';
 import { GroupsController } from './groups-controller';
 import { GroupsService } from './groups-service';
 import { GroupsPostsController } from './groups-posts-controller';
@@ -29,15 +32,18 @@ import { ShopSchedulerService } from './shop-scheduler-service';
   imports: [
     TypeOrmModule.forFeature([
       GroupEntity,
+      AccountEntity,
       EnrollmentEntity,
       EnrollmentCodeEntity,
       PostEntity,
       StudentStatsEntity,
       GroupTemplateEntity,
+      GroupTemplateFavoriteEntity,
     ]),
     AuthTokenSessionModule,
     UserRolesModule,
     GamificationModule,
+    BacklogModule,
   ],
   controllers: [
     GroupsController,

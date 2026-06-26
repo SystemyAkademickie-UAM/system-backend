@@ -156,6 +156,9 @@ export class AccountRemovalService {
       await queryRunner.query(`DELETE FROM gamification.enrollments WHERE id = $1`, [enrollment.id]);
     }
     await queryRunner.query(`DELETE FROM analytics.backlog WHERE account_id = $1`, [accountId]);
+    await queryRunner.query(`DELETE FROM education.group_template_favorites WHERE account_id = $1`, [
+      accountId,
+    ]);
     await queryRunner.query(`DELETE FROM education.group_templates WHERE creator_account_id = $1`, [
       accountId,
     ]);

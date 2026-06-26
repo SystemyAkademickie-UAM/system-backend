@@ -8,8 +8,8 @@ import {
   LEGACY_MAQ_AUTH_COOKIE_NAME,
   MAQ_SESSION_COOKIE_NAME,
 } from '../../constants/session-constants';
-import { SAML_SESSION_COOKIE_NAME } from '../../constants/saml-constants';
-import { buildSamlSessionCookieOptions } from '../saml/saml-cookie-options.util';
+import { SAML_PENDING_ORG_COOKIE_NAME, SAML_SESSION_COOKIE_NAME } from '../../constants/saml-constants';
+import { buildSamlSessionCookieOptions, buildClearSamlCookieOptions, resolvePendingOrgCookieSameSite } from '../saml/saml-cookie-options.util';
 import { UserEntity } from '../../database/entities/user.entity';
 import { UserRolesService } from '../../user-roles/user-roles-service';
 import { SessionService } from '../session/session.service';
@@ -75,11 +75,16 @@ export class LoginApiService {
   }
 
   /** Clears all auth cookies (new and legacy) for browser clients. */
-  clearAuthCookies(res: Response): { success: true } {
-    res.clearCookie(MAQ_SESSION_COOKIE_NAME, { path: '/' });
-    res.clearCookie(LEGACY_MAQ_AUTH_COOKIE_NAME, { path: '/' });
-    res.clearCookie(LEGACY_MAQ_ACTIVE_ROLE_COOKIE_NAME, { path: '/' });
-    res.clearCookie(SAML_SESSION_COOKIE_NAME, { path: '/' });
+  clearAuthCookies(req: Request, res: Response): { success: true } {
+    const sessionClearOptions = buildClearSamlCookieOptions(req, 'lax');
+    const pendingOrgClearOptions = buildClearSamlCookieOptions(
+      req,
+      resolvePendingOrgCookieSameSite(req));
+    res.clearCookie(MAQ_SESSION_COOKIE_NAME, sessionClearOptions);
+    res.clearCookie(LEGACY_MAQ_AUTH_COOKIE_NAME, sessionClearOptions);
+    res.clearCookie(LEGACY_MAQ_ACTIVE_ROLE_COOKIE_NAME, sessionClearOptions);
+    res.clearCookie(SAML_SESSION_COOKIE_NAME, sessionClearOptions);
+    res.clearCookie(SAML_PENDING_ORG_COOKIE_NAME, pendingOrgClearOptions);
     return { success: true };
   }
 
@@ -89,7 +94,7 @@ export class LoginApiService {
     if (token !== '') {
       await this.sessionIssuanceService.revokeSession(token);
     }
-    return this.clearAuthCookies(res);
+    return this.clearAuthCookies(req, res);
   }
 
   /**

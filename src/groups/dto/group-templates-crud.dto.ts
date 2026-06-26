@@ -28,6 +28,23 @@ export class GetGroupTemplatesQueryDto {
   @IsInt()
   @Min(0)
   offset?: number = 0;
+
+  /** When `scope=public`, return only templates favorited by the caller. */
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    if (value === true || value === 'true') {
+      return true;
+    }
+    if (value === false || value === 'false') {
+      return false;
+    }
+    return undefined;
+  })
+  @IsBoolean()
+  favoritesOnly?: boolean;
 }
 
 export class UpdateGroupTemplateDto {
@@ -61,4 +78,14 @@ export class CloneGroupTemplateDto {
   @IsString()
   @MinLength(1)
   name: string;
+}
+
+export class SetGroupTemplateFavoriteDto {
+  /** Optional when using `maq_auth` cookie (browser clients). */
+  @IsOptional()
+  @IsString()
+  auth?: string;
+
+  @IsBoolean()
+  favorite: boolean;
 }

@@ -9,6 +9,7 @@ import { BadgeEntity, BadgeRarity } from '../database/entities/badge.entity';
 import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { BacklogService } from '../backlog/backlog-service';
 import { RanksService } from './ranks-service';
 import { applyBadgeRevokeDelta } from '../student-management/student-stats-reward.helper';
 import { CreateBadgeDto } from './dto/create-badge.dto';
@@ -30,6 +31,7 @@ export class BadgesService {
     private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     private readonly ranksService: RanksService,
+    private readonly backlogService: BacklogService,
     private readonly dataSource: DataSource,
     @InjectRepository(BadgeEntity)
     private readonly badgeRepository: Repository<BadgeEntity>,
@@ -162,6 +164,11 @@ export class BadgesService {
       globalDiscountValue: dto.globalDiscountValue ?? 0,
     });
     const saved = await this.badgeRepository.save(entity);
+    await this.backlogService.notifyEnrolledStudents(groupId, 'BADGE_ADDED', {
+      message: `Dodano nową odznakę: ${saved.name}.`,
+      badgeId: saved.id,
+      badgeName: saved.name,
+    });
     this.logger.log(`Badge "${saved.name}" (id=${saved.id}) created for group ${groupId}`);
     return saved;
   }

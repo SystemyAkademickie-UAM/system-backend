@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager } from 'typeorm';
+import { Repository, EntityManager, In } from 'typeorm';
 import type { Request } from 'express';
 
 import { BacklogEntity } from '../database/entities/backlog.entity';
@@ -9,12 +9,17 @@ import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { SessionService } from '../auth/session/session.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import {
-        ADMINISTRATOR_ROLE_NAME,
-        LECTURER_ROLE_NAME,
-        STUDENT_ROLE_NAME,
-        SUPER_ROLE_NAME,
+  ADMINISTRATOR_ROLE_NAME,
+  LECTURER_ROLE_NAME,
+  STUDENT_ROLE_NAME,
+  SUPER_ROLE_NAME,
 } from '../constants/role-name-constants';
 import { toInternalGroupId } from '../constants/group-api-constants';
+import {
+  BacklogEventType,
+  BacklogPayload,
+  serializeBacklogPayload,
+} from './backlog-payload';
 
 export interface BacklogItemResponse {
   id: number;
@@ -25,15 +30,26 @@ export interface BacklogItemResponse {
   isRead: boolean;
 }
 
-export type BacklogEventType = 
-  | 'SHOP_PURCHASE'
-  | 'STAGE_COMPLETED'
-  | 'ITEM_USED'
-  | 'RANK_UP'
-  | 'BADGE_EARNED'
-  | 'CURRENCY_ADDED'
-  | 'LIVES_CHANGED'
-  | 'OTHER';
+export type { BacklogEventType };
+
+const LECTURER_ACTIVITY_TYPES: BacklogEventType[] = [
+  'STUDENT_JOINED',
+  'SHOP_PURCHASE',
+  'ITEM_USED',
+];
+
+const STUDENT_NOTIFICATION_TYPES: BacklogEventType[] = [
+  'STAGE_ADDED',
+  'BADGE_ADDED',
+  'RANK_ADDED',
+  'SHOP_ITEM_ADDED',
+  'LIVES_SYSTEM_CHANGED',
+  'SHOP_STATUS_CHANGED',
+  'POST_ADDED',
+  'RANK_UP',
+  'BADGE_EARNED',
+  'ACTIVITY_COMPLETED',
+];
 
 @Injectable()
 export class BacklogService {
@@ -47,24 +63,43 @@ export class BacklogService {
     private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService) {}
 
-  /**
-   * Internal method to log events to the backlog.
-   * Used by other domains (like Gamification or Shop) to record activity.
-   */
   async logEvent(
     internalGroupId: number,
     accountId: number,
     type: BacklogEventType,
-    value: string | null = null,
+    value: BacklogPayload | string | null = null,
     manager?: EntityManager): Promise<BacklogEntity> {
     const repo = manager ? manager.getRepository(BacklogEntity) : this.backlogRepository;
     const entry = repo.create({
       groupId: internalGroupId,
       accountId,
       type,
-      value,
+      value: serializeBacklogPayload(value),
     });
     return repo.save(entry);
+  }
+
+  async notifyEnrolledStudents(
+    internalGroupId: number,
+    type: BacklogEventType,
+    payload: BacklogPayload,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const enrollmentRepo = manager
+      ? manager.getRepository(EnrollmentEntity)
+      : this.enrollmentRepository;
+    const enrollments = await enrollmentRepo.find({
+      where: { groupId: internalGroupId },
+      select: ['studentAccountId'],
+    });
+
+    const value = serializeBacklogPayload(payload);
+    for (const enrollment of enrollments) {
+      if (enrollment.studentAccountId == null) {
+        continue;
+      }
+      await this.logEvent(internalGroupId, enrollment.studentAccountId, type, value, manager);
+    }
   }
 
   async getStudentBacklog(
@@ -73,6 +108,38 @@ export class BacklogService {
     take: number,
     skip: number,
   ): Promise<BacklogItemResponse[] | { error: string }> {
+    const access = await this.assertEnrolledStudent(req, publicGroupId);
+    if ('error' in access) {
+      return access;
+    }
+
+    return this.fetchGroupEntries(
+      access.internalGroupId,
+      take,
+      skip,
+      STUDENT_NOTIFICATION_TYPES,
+      access.studentAccountId,
+    );
+  }
+
+  async getGroupBacklog(
+    req: Request,
+    publicGroupId: number,
+    take: number,
+    skip: number,
+  ): Promise<BacklogItemResponse[] | { error: string }> {
+    const access = await this.assertLecturerGroupAccess(req, publicGroupId);
+    if ('error' in access) {
+      return access;
+    }
+
+    return this.fetchGroupEntries(access.internalGroupId, take, skip, LECTURER_ACTIVITY_TYPES);
+  }
+
+  async getUnreadCount(
+    req: Request,
+    publicGroupId: number,
+  ): Promise<{ count: number } | { error: string }> {
     const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return { error: 'Unauthorized' };
@@ -82,6 +149,265 @@ export class BacklogService {
     if (!primaryRole) {
       return { error: 'Forbidden: No role found' };
     }
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+
+    if (primaryRole === STUDENT_ROLE_NAME) {
+      const access = await this.assertEnrolledStudent(req, publicGroupId);
+      if ('error' in access) {
+        return access;
+      }
+
+      const count = await this.backlogRepository.count({
+        where: {
+          groupId: internalGroupId,
+          isRead: false,
+          type: In(STUDENT_NOTIFICATION_TYPES),
+          accountId: access.studentAccountId,
+        },
+      });
+
+      return { count };
+    }
+
+    const access = await this.assertLecturerGroupAccess(req, publicGroupId);
+    if ('error' in access) {
+      return access;
+    }
+
+    const count = await this.backlogRepository.count({
+      where: {
+        groupId: internalGroupId,
+        isRead: false,
+        type: In(LECTURER_ACTIVITY_TYPES),
+      },
+    });
+
+    return { count };
+  }
+
+  async getBacklogCount(
+    req: Request,
+    publicGroupId: number,
+  ): Promise<{ count: number } | { error: string }> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      return { error: 'Unauthorized' };
+    }
+
+    const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
+    if (!primaryRole) {
+      return { error: 'Forbidden: No role found' };
+    }
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+
+    if (primaryRole === STUDENT_ROLE_NAME) {
+      const access = await this.assertEnrolledStudent(req, publicGroupId);
+      if ('error' in access) {
+        return access;
+      }
+
+      const count = await this.backlogRepository.count({
+        where: this.buildListFilter(
+          internalGroupId,
+          STUDENT_NOTIFICATION_TYPES,
+          access.studentAccountId,
+        ),
+      });
+
+      return { count };
+    }
+
+    const access = await this.assertLecturerGroupAccess(req, publicGroupId);
+    if ('error' in access) {
+      return access;
+    }
+
+    const count = await this.backlogRepository.count({
+      where: this.buildListFilter(internalGroupId, LECTURER_ACTIVITY_TYPES),
+    });
+
+    return { count };
+  }
+
+  async markAllAsRead(
+    req: Request,
+    publicGroupId: number,
+  ): Promise<{ updated: number } | { error: string }> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      return { error: 'Unauthorized' };
+    }
+
+    const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
+    if (!primaryRole) {
+      return { error: 'Forbidden: No role found' };
+    }
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+
+    if (primaryRole === STUDENT_ROLE_NAME) {
+      const access = await this.assertEnrolledStudent(req, publicGroupId);
+      if ('error' in access) {
+        return access;
+      }
+
+      const result = await this.backlogRepository.update(
+        {
+          ...this.buildListFilter(
+            internalGroupId,
+            STUDENT_NOTIFICATION_TYPES,
+            access.studentAccountId,
+          ),
+          isRead: false,
+        },
+        { isRead: true },
+      );
+
+      return { updated: result.affected ?? 0 };
+    }
+
+    if (
+      primaryRole === LECTURER_ROLE_NAME
+      || primaryRole === ADMINISTRATOR_ROLE_NAME
+      || primaryRole === SUPER_ROLE_NAME
+    ) {
+      const access = await this.assertLecturerGroupAccess(req, publicGroupId);
+      if ('error' in access) {
+        return access;
+      }
+
+      const result = await this.backlogRepository.update(
+        {
+          ...this.buildListFilter(internalGroupId, LECTURER_ACTIVITY_TYPES),
+          isRead: false,
+        },
+        { isRead: true },
+      );
+
+      return { updated: result.affected ?? 0 };
+    }
+
+    return { error: 'Forbidden: Role not authorized' };
+  }
+
+  async markAsRead(
+    req: Request,
+    publicGroupId: number,
+    backlogId: number,
+  ): Promise<{ updated: boolean } | { error: string }> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) return { error: 'Unauthorized' };
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+
+    const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
+    if (!primaryRole) return { error: 'Forbidden: No role found' };
+
+    if (primaryRole === SUPER_ROLE_NAME) {
+      const result = await this.backlogRepository.update(
+        { id: backlogId, groupId: internalGroupId },
+        { isRead: true },
+      );
+      return { updated: result.affected ? result.affected > 0 : false };
+    }
+
+    if (primaryRole === STUDENT_ROLE_NAME) {
+      const access = await this.assertEnrolledStudent(req, publicGroupId);
+      if ('error' in access) {
+        return access;
+      }
+
+      const result = await this.backlogRepository.update(
+        { id: backlogId, groupId: internalGroupId, accountId: access.studentAccountId },
+        { isRead: true },
+      );
+      return { updated: result.affected ? result.affected > 0 : false };
+    }
+
+    if (primaryRole === LECTURER_ROLE_NAME || primaryRole === ADMINISTRATOR_ROLE_NAME) {
+      const access = await this.assertLecturerGroupAccess(req, publicGroupId);
+      if ('error' in access) {
+        return access;
+      }
+
+      const result = await this.backlogRepository.update(
+        { id: backlogId, groupId: internalGroupId },
+        { isRead: true },
+      );
+      return { updated: result.affected ? result.affected > 0 : false };
+    }
+
+    return { error: 'Forbidden: Role not authorized' };
+  }
+
+  private buildListFilter(
+    internalGroupId: number,
+    types?: BacklogEventType[],
+    accountId?: number,
+  ) {
+    return {
+      groupId: internalGroupId,
+      ...(types && types.length > 0 ? { type: In(types) } : {}),
+      ...(accountId != null ? { accountId } : {}),
+    };
+  }
+
+  private async fetchGroupEntries(
+    internalGroupId: number,
+    take: number,
+    skip: number,
+    types?: BacklogEventType[],
+    accountId?: number,
+  ): Promise<BacklogItemResponse[]> {
+    const entries = await this.backlogRepository.find({
+      where: this.buildListFilter(internalGroupId, types, accountId),
+      order: { date: 'DESC' },
+      take,
+      skip,
+    });
+
+    return entries.map((entry) => ({
+      id: entry.id,
+      type: entry.type ?? 'UNKNOWN',
+      date: entry.date?.toISOString() ?? new Date().toISOString(),
+      value: entry.value,
+      accountId: entry.accountId ?? 0,
+      isRead: entry.isRead ?? false,
+    }));
+  }
+
+  private async assertEnrolledStudent(
+    req: Request,
+    publicGroupId: number,
+  ): Promise<{ internalGroupId: number; studentAccountId: number } | { error: string }> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      return { error: 'Unauthorized' };
+    }
+
+    const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
     if (primaryRole !== STUDENT_ROLE_NAME) {
       return { error: 'Forbidden: Requires privilege' };
     }
@@ -110,34 +436,13 @@ export class BacklogService {
       return { error: 'Forbidden: You are not enrolled in this group' };
     }
 
-    const entries = await this.backlogRepository.find({
-      where: {
-        groupId: internalGroupId,
-        accountId: studentAccountId,
-      },
-      order: {
-        date: 'DESC',
-      },
-      take,
-      skip,
-    });
-
-    return entries.map((entry) => ({
-      id: entry.id,
-      type: entry.type ?? 'UNKNOWN',
-      date: entry.date?.toISOString() ?? new Date().toISOString(),
-      value: entry.value,
-      accountId: entry.accountId ?? 0,
-      isRead: entry.isRead ?? false,
-    }));
+    return { internalGroupId, studentAccountId };
   }
 
-  async getGroupBacklog(
+  private async assertLecturerGroupAccess(
     req: Request,
     publicGroupId: number,
-    take: number,
-    skip: number,
-  ): Promise<BacklogItemResponse[] | { error: string }> {
+  ): Promise<{ internalGroupId: number } | { error: string }> {
     const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       return { error: 'Unauthorized' };
@@ -147,6 +452,7 @@ export class BacklogService {
     if (!primaryRole) {
       return { error: 'Forbidden: No role found' };
     }
+
     const hasPrivileges =
       primaryRole === SUPER_ROLE_NAME ||
       primaryRole === ADMINISTRATOR_ROLE_NAME ||
@@ -181,82 +487,6 @@ export class BacklogService {
       }
     }
 
-    const entries = await this.backlogRepository.find({
-      where: {
-        groupId: internalGroupId,
-      },
-      order: {
-        date: 'DESC',
-      },
-      take,
-      skip,
-    });
-
-    return entries.map((entry) => ({
-      id: entry.id,
-      type: entry.type ?? 'UNKNOWN',
-      date: entry.date?.toISOString() ?? new Date().toISOString(),
-      value: entry.value,
-      accountId: entry.accountId ?? 0,
-      isRead: entry.isRead ?? false,
-    }));
-  }
-
-  async markAsRead(
-    req: Request,
-    publicGroupId: number,
-    backlogId: number,
-  ): Promise<{ updated: boolean } | { error: string }> {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req);
-    if (!subject) return { error: 'Unauthorized' };
-
-    let internalGroupId: number;
-    try {
-      internalGroupId = toInternalGroupId(publicGroupId);
-    } catch {
-      throw new BadRequestException('Invalid group ID');
-    }
-
-    const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
-    if (!primaryRole) return { error: 'Forbidden: No role found' };
-
-    if (primaryRole === SUPER_ROLE_NAME) {
-      const result = await this.backlogRepository.update(
-        { id: backlogId, groupId: internalGroupId },
-        { isRead: true },
-      );
-      return { updated: result.affected ? result.affected > 0 : false };
-    }
-
-    const accountId = await this.userRolesService.findAccountIdForRole(subject.userId, primaryRole);
-    if (!accountId) return { error: 'Forbidden: Account not found' };
-
-    if (primaryRole === STUDENT_ROLE_NAME) {
-      const isEnrolled = await this.enrollmentRepository.exist({
-        where: { groupId: internalGroupId, studentAccountId: accountId },
-      });
-      if (!isEnrolled) return { error: 'Forbidden: Not enrolled' };
-
-      const result = await this.backlogRepository.update(
-        { id: backlogId, groupId: internalGroupId, accountId },
-        { isRead: true },
-      );
-      return { updated: result.affected ? result.affected > 0 : false };
-    }
-
-    if (primaryRole === LECTURER_ROLE_NAME || primaryRole === ADMINISTRATOR_ROLE_NAME) {
-      const isOwner = await this.groupRepository.exist({
-        where: { id: internalGroupId, teacherAccountId: accountId },
-      });
-      if (!isOwner) return { error: 'Forbidden: Not group owner' };
-
-      const result = await this.backlogRepository.update(
-        { id: backlogId, groupId: internalGroupId },
-        { isRead: true },
-      );
-      return { updated: result.affected ? result.affected > 0 : false };
-    }
-
-    return { error: 'Forbidden: Role not authorized' };
+    return { internalGroupId };
   }
 }

@@ -9,6 +9,8 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { EnrollmentCodesService } from './enrollment-codes-service';
 import { GroupsService } from './groups-service';
+import { ShopItemsService } from '../gamification/shop-items-service';
+import { BacklogService } from '../backlog/backlog-service';
 
 type MockQueryBuilder = {
   leftJoin: jest.Mock;
@@ -57,6 +59,13 @@ describe('GroupsService', () => {
       findLatestActiveCode: jest.fn(),
       createCode: jest.fn(),
     };
+    const mockShopItemsService = {
+      ensureDefaultExtraLifeItem: jest.fn().mockResolvedValue({ id: 1 }),
+    };
+    const mockBacklogService = {
+      notifyEnrolledStudents: jest.fn().mockResolvedValue(undefined),
+      logEvent: jest.fn().mockResolvedValue({}),
+    };
     mockQueryBuilder = {
       leftJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
@@ -83,6 +92,8 @@ describe('GroupsService', () => {
         { provide: SessionService, useValue: mockSessionService },
         { provide: UserRolesService, useValue: mockUserRolesService },
         { provide: EnrollmentCodesService, useValue: mockEnrollmentCodesService },
+        { provide: ShopItemsService, useValue: mockShopItemsService },
+        { provide: BacklogService, useValue: mockBacklogService },
         { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },
       ],
     }).compile();
@@ -171,6 +182,7 @@ describe('GroupsService', () => {
             subjectName: '',
             bannerId: 'img_uuid',
             lecturers: 'John Doe',
+            lecturerAvatarUrl: null,
             description: 'Basic math',
             currency: 'coins',
             currencyEmoji: '🪙',
@@ -257,7 +269,7 @@ describe('GroupsService', () => {
       mockQueryBuilder.getRawMany.mockResolvedValue([]);
       await service.getGroupsCatalog(mockRequest);
       expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith('lecturerId', 40);
-      expect(mockQueryBuilder.leftJoin).toHaveBeenCalledTimes(3);
+      expect(mockQueryBuilder.leftJoin).toHaveBeenCalledTimes(4);
     });
 
     it('should use empty string fallback if lecturer name is missing', async () => {

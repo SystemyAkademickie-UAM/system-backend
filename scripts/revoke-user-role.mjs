@@ -7,7 +7,7 @@
  *   npm run revoke:user-role -- user@example.com --org-id 12 --student
  *   npm run revoke:user-role -- admin@example.com --org-id 5 --administrator
  */
-import 'dotenv/config';
+import './lib/load-env.mjs';
 import { assertEmail, createPgClient, resolveOrganizationId } from './lib/pg-client.mjs';
 import {
   assertInternalOrgAllowed,

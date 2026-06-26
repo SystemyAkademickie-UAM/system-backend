@@ -18,6 +18,7 @@ import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { StageEntity } from '../database/entities/stage.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { BacklogService } from '../backlog/backlog-service';
 import { parseStageRequest, type ParsedStageRequest } from './stage-request-parser';
 
 export type StageResponseBody = {
@@ -48,7 +49,8 @@ export class StagesService {
     @InjectRepository(StageEntity)
     private readonly stageRepository: Repository<StageEntity>,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>) {}
+    private readonly groupRepository: Repository<GroupEntity>,
+    private readonly backlogService: BacklogService) {}
 
   async handleStage(
     req: Request,
@@ -104,6 +106,11 @@ export class StagesService {
         visibilityStatus: body.visibilityStatus ?? 0, // Default to hidden (0) if not provided
       });
       const saved = await this.stageRepository.save(entity);
+      await this.backlogService.notifyEnrolledStudents(internalGroupId, 'STAGE_ADDED', {
+        message: `Dodano nowy etap: ${saved.name}.`,
+        stageId: saved.id,
+        stageName: saved.name,
+      });
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'post', stage: saved.id };
     } catch (err) {
       this.logger.error(`Stage creation failed: ${err instanceof Error ? err.message : String(err)}`);

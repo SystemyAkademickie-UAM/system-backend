@@ -59,6 +59,26 @@ export class SamlConfigService {
     return this.config.get<string>('SAML_LOGOUT_URL') || this.getLoginSuccessUrl();
   }
 
+  /**
+   * Builds a post-logout redirect URL from a relative SPA path (e.g. `/welcome?loggedOut=1`).
+   * Falls back to {@link getLogoutUrl} when the path is invalid.
+   */
+  resolvePostLogoutRedirect(relativePath: unknown): string {
+    if (typeof relativePath !== 'string') {
+      return this.getLogoutUrl();
+    }
+    const trimmed = relativePath.trim();
+    if (trimmed === '' || !trimmed.startsWith('/') || trimmed.startsWith('//')) {
+      return this.getLogoutUrl();
+    }
+    try {
+      const successUrl = new URL(this.getLoginSuccessUrl());
+      return `${successUrl.origin}${trimmed}`;
+    } catch {
+      return this.getLogoutUrl();
+    }
+  }
+
   getSloCallbackUrl(): string {
     const baseUrl = this.getAcsUrl().replace('/acs', '/slo');
     return this.config.get<string>('SAML_SLO_CALLBACK_URL') || baseUrl;

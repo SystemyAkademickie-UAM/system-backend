@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { In } from 'typeorm';
 import type { Request } from 'express';
 
 import { BacklogService } from './backlog-service';
@@ -205,7 +206,7 @@ describe('BacklogService', () => {
       enrollmentRepository.exist.mockResolvedValue(true);
 
       const mockEntries = [
-        { id: 1, groupId: internalGroupId, accountId: studentAccountId, type: 'SHOP_PURCHASE', date: mockDate, value: 'item_1' },
+        { id: 1, groupId: internalGroupId, accountId: studentAccountId, type: 'STAGE_ADDED', date: mockDate, value: '{"message":"Nowy etap"}' },
       ];
       backlogRepository.find.mockResolvedValue(mockEntries);
 
@@ -214,13 +215,28 @@ describe('BacklogService', () => {
 
       // Assert
       expect(backlogRepository.find).toHaveBeenCalledWith({
-        where: { groupId: internalGroupId, accountId: studentAccountId },
+        where: {
+          groupId: internalGroupId,
+          type: In([
+            'STAGE_ADDED',
+            'BADGE_ADDED',
+            'RANK_ADDED',
+            'SHOP_ITEM_ADDED',
+            'LIVES_SYSTEM_CHANGED',
+            'SHOP_STATUS_CHANGED',
+            'POST_ADDED',
+            'RANK_UP',
+            'BADGE_EARNED',
+            'ACTIVITY_COMPLETED',
+          ]),
+          accountId: studentAccountId,
+        },
         order: { date: 'DESC' },
         take: 50,
         skip: 0,
       });
       expect(result).toEqual([
-        { id: 1, type: 'SHOP_PURCHASE', date: mockDate.toISOString(), value: 'item_1', accountId: studentAccountId, isRead: false },
+        { id: 1, type: 'STAGE_ADDED', date: mockDate.toISOString(), value: '{"message":"Nowy etap"}', accountId: studentAccountId, isRead: false },
       ]);
     });
   });
@@ -390,7 +406,7 @@ describe('BacklogService', () => {
       const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
-      expect(result).toEqual({ error: 'Forbidden: Not enrolled' });
+      expect(result).toEqual({ error: 'Forbidden: You are not enrolled in this group' });
     });
 
     it('should allow lecturer who owns the group to mark any item as read', async () => {
@@ -427,7 +443,7 @@ describe('BacklogService', () => {
       const result = await service.markAsRead({} as Request, publicGroupId, backlogId);
 
       // Assert
-      expect(result).toEqual({ error: 'Forbidden: Not group owner' });
+      expect(result).toEqual({ error: 'Forbidden: You are not the owner of this group' });
     });
 
     it('should return Forbidden for unknown role', async () => {

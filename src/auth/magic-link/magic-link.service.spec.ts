@@ -26,6 +26,7 @@ describe('MagicLinkService', () => {
   let loginApiService: { establishSession: jest.Mock };
   let magicLinkUserService: {
     resolveEmailMagicLinkTarget: jest.Mock;
+    resolveEmailMagicLinkTargetForOrganization: jest.Mock;
     resolveEligibleUserIdForMagicLink: jest.Mock;
   };
   let superAdminBootstrapService: { tryGrantBootstrapSuperOnLogin: jest.Mock };
@@ -72,6 +73,9 @@ describe('MagicLinkService', () => {
     };
     magicLinkUserService = {
       resolveEmailMagicLinkTarget: jest.fn().mockResolvedValue({ userId: 42, organizationId: clientOrgId }),
+      resolveEmailMagicLinkTargetForOrganization: jest
+        .fn()
+        .mockResolvedValue({ userId: 42, organizationId: clientOrgId }),
       resolveEligibleUserIdForMagicLink: jest.fn().mockResolvedValue(42),
     };
     superAdminBootstrapService = {
@@ -111,10 +115,11 @@ describe('MagicLinkService', () => {
 
   it('should send magic link email after resolving organization from email', async () => {
     magicLinkTokenRepository.findOne.mockResolvedValue(null);
-    const result = await service.requestMagicLink('player@example.com');
+    const result = await service.requestMagicLink('player@example.com', clientOrgId);
     expect(result.sent).toBe(true);
-    expect(magicLinkUserService.resolveEmailMagicLinkTarget).toHaveBeenCalledWith(
+    expect(magicLinkUserService.resolveEmailMagicLinkTargetForOrganization).toHaveBeenCalledWith(
       'player@example.com',
+      clientOrgId,
       null,
     );
     expect(magicLinkTokenRepository.save).toHaveBeenCalledWith(
@@ -123,11 +128,11 @@ describe('MagicLinkService', () => {
   });
 
   it('should reject request when email is not provisioned', async () => {
-    magicLinkUserService.resolveEmailMagicLinkTarget.mockRejectedValue(
+    magicLinkUserService.resolveEmailMagicLinkTargetForOrganization.mockRejectedValue(
       new NotFoundException({ error: 'MAGIC_LINK_ACCOUNT_NOT_REGISTERED' }),
     );
     await expect(
-      service.requestMagicLink('unknown@example.com'),
+      service.requestMagicLink('unknown@example.com', clientOrgId),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(magicLinkEmailService.sendMagicLinkEmail).not.toHaveBeenCalled();
   });
@@ -140,7 +145,7 @@ describe('MagicLinkService', () => {
       createdAt: new Date(),
     });
     await expect(
-      service.requestMagicLink('player@example.com'),
+      service.requestMagicLink('player@example.com', clientOrgId),
     ).rejects.toBeInstanceOf(HttpException);
   });
 

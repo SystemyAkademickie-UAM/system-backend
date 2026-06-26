@@ -23,4 +23,7 @@ export class ItemCategoryEntity {
 
   @Column({ name: 'display_order', type: 'integer', nullable: true })
   displayOrder: number | null;
+
+  @Column({ name: 'color', type: 'varchar', length: 32, nullable: true })
+  color: string | null;
 }

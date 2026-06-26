@@ -16,6 +16,7 @@ import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { PostEntity } from '../database/entities/post.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { BacklogService } from '../backlog/backlog-service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 
@@ -71,7 +72,8 @@ export class GroupsPostsService implements OnModuleInit, OnModuleDestroy {
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(PostEntity)
-    private readonly postRepository: Repository<PostEntity>) {}
+    private readonly postRepository: Repository<PostEntity>,
+    private readonly backlogService: BacklogService) {}
 
   async createPost(
     req: Request,
@@ -129,6 +131,13 @@ export class GroupsPostsService implements OnModuleInit, OnModuleDestroy {
         publishAt,
       });
       const saved = await this.postRepository.save(entity);
+      if (isPublished) {
+        await this.backlogService.notifyEnrolledStudents(groupId, 'POST_ADDED', {
+          message: `Opublikowano nowy wpis: ${saved.title}.`,
+          postId: saved.id,
+          postTitle: saved.title,
+        });
+      }
       return { status: GROUP_API_JSON_STATUS_OK, post: saved.id };
     } catch (err: unknown) {
       this.logger.error(`Post creation failed: ${String(err)}`);

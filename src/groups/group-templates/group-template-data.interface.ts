@@ -64,6 +64,7 @@ export interface GroupTemplateItemCategory {
   name: string;
   description: string | null;
   displayOrder: number | null;
+  color: string | null;
 }
 
 export interface GroupTemplateShopListingRankPromotion {

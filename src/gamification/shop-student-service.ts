@@ -12,7 +12,7 @@ import { EarnedItemEntity } from '../database/entities/earned-item.entity';
 import { BacklogService } from '../backlog/backlog-service';
 import { SessionService } from '../auth/session/session.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
-import { STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { STUDENT_ROLE_NAME, LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 
 import { ShopListingBadgePromotionEntity } from '../database/entities/shop-listing-badge-promotion.entity';
 import { ShopListingRankPromotionEntity } from '../database/entities/shop-listing-rank-promotion.entity';
@@ -76,6 +76,8 @@ export class ShopStudentService {
         throw new NotFoundException('Item not found in this group catalog');
       }
 
+      const isExtraLife = item.isExtraLife === true;
+
       const listing = await manager.findOne(ShopListingEntity, {
         where: { itemId: item.id },
       });
@@ -100,6 +102,19 @@ export class ShopStudentService {
       }
       const currentCurrency = stats.currency || 0;
 
+      if (isExtraLife) {
+        const livesEnabled = group.livesEnabled === true || (group.livesEnabled as unknown) === 't' || (group.livesEnabled as unknown) === 1;
+        const livesShopEnabled = group.livesShopEnabled === true || (group.livesShopEnabled as unknown) === 't' || (group.livesShopEnabled as unknown) === 1;
+        if (!livesEnabled || !livesShopEnabled) {
+          throw new ForbiddenException('Kupowanie dodatkowego życia jest wyłączone.');
+        }
+
+        const currentLives = stats.lives ?? 0;
+        if (currentLives > 0) {
+          throw new BadRequestException('Dodatkowe życie można kupić tylko po utracie wszystkich żyć.');
+        }
+      }
+
 // Sprawdzenie czy przedmiot jest zablokowany lub ma zniżkę
       const earnedBadgeRows = await manager.find(EarnedBadgeEntity, { where: { enrollmentId: enrollment.id } });
       let earnedBadges: BadgeEntity[] = [];
@@ -113,7 +128,7 @@ export class ShopStudentService {
       const eligibleRanks = allRanks.filter(r => r.requiredPoints <= (stats.totalEarned ?? 0));
       
       const isLocked = DiscountCalculator.isItemLocked(item.id, allRanks, (stats.totalEarned ?? 0));
-      if (isLocked) {
+      if (!isExtraLife && isLocked) {
         throw new ForbiddenException('Przedmiot jest zablokowany. Zdobądź wyższą rangę, aby go odblokować.');
       }
       
@@ -145,7 +160,7 @@ export class ShopStudentService {
       });
       const currentOwnedQuantity = earnedItem ? earnedItem.quantity : 0;
 
-      if (listing.perStudentLimit !== null && listing.perStudentLimit !== undefined) {
+      if (!isExtraLife && listing.perStudentLimit !== null && listing.perStudentLimit !== undefined) {
         if (currentOwnedQuantity >= listing.perStudentLimit) {
           throw new BadRequestException(`Osiągnięto limit zakupu tego przedmiotu na studenta (${listing.perStudentLimit}).`);
         }
@@ -153,6 +168,10 @@ export class ShopStudentService {
 
       // 7. ZATWIERDZANIE ZAKUPU
       stats.currency = currentCurrency - price;
+      if (isExtraLife) {
+        const maxLives = group.lives ?? group.startingLives ?? 3;
+        stats.lives = Math.min(maxLives, 1);
+      }
       await manager.save(StudentStatsEntity, stats);
 
       if (listing.stockQuantity !== null && listing.stockQuantity !== undefined) {
@@ -160,24 +179,34 @@ export class ShopStudentService {
         await manager.save(ShopListingEntity, listing);
       }
 
-      if (earnedItem) {
-        earnedItem.quantity += 1;
-      } else {
-        earnedItem = manager.create(EarnedItemEntity, {
-          enrollmentId: enrollment.id,
-          itemId: item.id,
-          quantity: 1,
-        });
+      if (!isExtraLife) {
+        if (earnedItem) {
+          earnedItem.quantity += 1;
+        } else {
+          earnedItem = manager.create(EarnedItemEntity, {
+            enrollmentId: enrollment.id,
+            itemId: item.id,
+            quantity: 1,
+          });
+        }
+        await manager.save(EarnedItemEntity, earnedItem);
       }
-      await manager.save(EarnedItemEntity, earnedItem);
 
       // Zaloguj zdarzenie w backlogu
       await this.backlogService.logEvent(
         internalGroupId,
         studentAccountId,
-        'SHOP_PURCHASE',
-        `Kupiono przedmiot ze sklepu: ${item.name} za kwotę ${price}.`,
-        manager
+        isExtraLife ? 'SHOP_PURCHASE' : 'SHOP_PURCHASE',
+        {
+          message: isExtraLife
+            ? `Kupiono dodatkowe życie za kwotę ${price}.`
+            : `Kupiono przedmiot ze sklepu: ${item.name} za kwotę ${price}.`,
+          itemId: item.id,
+          itemName: item.name,
+          price,
+          isExtraLife,
+        },
+        manager,
       );
 
       return { success: true, message: 'Item purchased successfully' };
@@ -195,6 +224,41 @@ export class ShopStudentService {
     });
     if (!enrollment) {
       throw new ForbiddenException('Student is not enrolled in this group');
+    }
+
+    const earnedItems = await this.dataSource
+      .getRepository(EarnedItemEntity)
+      .createQueryBuilder('earned')
+      .innerJoinAndMapOne('earned.item', ItemEntity, 'item', 'item.id = earned.item_id')
+      .where('earned.enrollment_id = :enrollmentId', { enrollmentId: enrollment.id })
+      .andWhere('earned.quantity > 0')
+      .getMany();
+
+    return earnedItems;
+  }
+
+  async getInventoryForAccount(
+    req: Request,
+    internalGroupId: number,
+    studentAccountId: number): Promise<any[]> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      throw new ForbiddenException('Unauthorized');
+    }
+
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    if (!lecturerAccountId) {
+      throw new ForbiddenException('Forbidden: lecturer access required');
+    }
+
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: { groupId: internalGroupId, studentAccountId },
+    });
+    if (!enrollment) {
+      throw new NotFoundException('Student is not enrolled in this group');
     }
 
     const earnedItems = await this.dataSource
@@ -250,8 +314,12 @@ export class ShopStudentService {
         internalGroupId,
         studentAccountId,
         'ITEM_USED',
-        `Użyto przedmiotu: ${item.name}.`,
-        manager
+        {
+          message: `Użyto przedmiotu: ${item.name}.`,
+          itemId: item.id,
+          itemName: item.name,
+        },
+        manager,
       );
 
       return { success: true, message: 'Item used successfully' };

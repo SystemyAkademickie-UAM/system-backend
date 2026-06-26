@@ -7,6 +7,7 @@ import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { PostEntity } from '../database/entities/post.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { BacklogService } from '../backlog/backlog-service';
 import { GroupsPostsService } from './groups-posts-service';
 
 function mockSubject(userId: number): SessionSubject {
@@ -54,6 +55,13 @@ describe('GroupsPostsService', () => {
         { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },
         { provide: getRepositoryToken(EnrollmentEntity), useValue: enrollmentRepository },
         { provide: getRepositoryToken(PostEntity), useValue: postRepository },
+        {
+          provide: BacklogService,
+          useValue: {
+            notifyEnrolledStudents: jest.fn().mockResolvedValue(undefined),
+            logEvent: jest.fn().mockResolvedValue({}),
+          },
+        },
       ],
     }).compile();
 

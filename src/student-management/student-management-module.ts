@@ -12,6 +12,7 @@ import { StageEntity } from '../database/entities/stage.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserRolesModule } from '../user-roles/user-roles-module';
 import { GamificationModule } from '../gamification/gamification-module';
+import { BacklogModule } from '../backlog/backlog-module';
 import { ReportsService } from './reports-service';
 import { StudentBadgesService } from './student-badges-service';
 import { StudentManagementController } from './student-management-controller';
@@ -37,6 +38,7 @@ import { StudentProgressService } from './student-progress-service';
     AuthTokenSessionModule,
     UserRolesModule,
     GamificationModule,
+    BacklogModule,
   ],
   controllers: [StudentManagementController],
   providers: [StudentManagementService, StudentBadgesService, StudentProgressService, ReportsService],

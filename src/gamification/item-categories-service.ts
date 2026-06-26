@@ -58,6 +58,7 @@ export class ItemCategoriesService {
       name: dto.name.trim(),
       description: dto.description ?? null,
       displayOrder: dto.displayOrder ?? null,
+      color: dto.color ?? null,
     });
     try {
       const saved = await this.itemCategoryRepository.save(entity);
@@ -87,6 +88,9 @@ export class ItemCategoriesService {
     }
     if (dto.displayOrder !== undefined) {
       category.displayOrder = dto.displayOrder;
+    }
+    if (dto.color !== undefined) {
+      category.color = dto.color;
     }
     try {
       const saved = await this.itemCategoryRepository.save(category);

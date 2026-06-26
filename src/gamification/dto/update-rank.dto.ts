@@ -1,4 +1,5 @@
-import { IsArray, IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
 import { SHOP_PROMOTION_PERCENT_MAX } from '../../constants/shop-promotion-constants';
 import { PromotionType } from '../../database/entities/badge.entity';
 
@@ -44,4 +45,18 @@ export class UpdateRankDto {
   @ValidateIf((dto: UpdateRankDto) => dto.globalDiscountType === PromotionType.PERCENT)
   @Max(SHOP_PROMOTION_PERCENT_MAX)
   globalDiscountValue?: number;
+
+  /** @deprecated Use globalDiscountType=percent and globalDiscountValue. Accepted for backward compatibility. */
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined || value === null ? undefined : Number(value)))
+  @IsNumber()
+  @Min(0)
+  discount?: number;
+
+  /** @deprecated Use globalDiscountType=fixed and globalDiscountValue. Accepted for backward compatibility. */
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined || value === null ? undefined : Number(value)))
+  @IsNumber()
+  @Min(0)
+  storeDiscount?: number;
 }

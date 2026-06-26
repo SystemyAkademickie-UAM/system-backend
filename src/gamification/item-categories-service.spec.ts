@@ -85,6 +85,7 @@ describe('ItemCategoriesService', () => {
       name: 'Boosts',
       description: null,
       displayOrder: null,
+      color: null,
     });
     expect(actualCategory.id).toBe(5);
   });

@@ -7,13 +7,21 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 
 import { SessionService, type SessionSubject } from '../auth/session/session.service';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import {
+  EXTRA_LIFE_DEFAULT_BASE_PRICE,
+  EXTRA_LIFE_DEFAULT_EDUCATIONAL_DESCRIPTION,
+  EXTRA_LIFE_DEFAULT_STORY_DESCRIPTION,
+  EXTRA_LIFE_ITEM_NAME,
+} from '../constants/extra-life-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { ItemEntity } from '../database/entities/item.entity';
+import { ItemCategoryEntity } from '../database/entities/item-category.entity';
+import { ItemCategoryLinkEntity } from '../database/entities/item-category-link.entity';
 import { ShopListingEntity } from '../database/entities/shop-listing.entity';
 import { DefaultItemTemplateEntity } from '../database/entities/default-item-template.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
@@ -29,6 +37,7 @@ import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { DiscountCalculator } from './discount-calculator';
 
 import { CreateShopItemFromTemplateDto } from './dto/create-shop-item-from-template.dto';
+import { BacklogService } from '../backlog/backlog-service';
 
 @Injectable()
 export class ShopItemsService {
@@ -39,6 +48,10 @@ export class ShopItemsService {
     private readonly userRolesService: UserRolesService,
     @InjectRepository(ItemEntity)
     private readonly itemRepository: Repository<ItemEntity>,
+    @InjectRepository(ItemCategoryEntity)
+    private readonly itemCategoryRepository: Repository<ItemCategoryEntity>,
+    @InjectRepository(ItemCategoryLinkEntity)
+    private readonly itemCategoryLinkRepository: Repository<ItemCategoryLinkEntity>,
     @InjectRepository(ShopListingEntity)
     private readonly shopListingRepository: Repository<ShopListingEntity>,
     @InjectRepository(ShopListingBadgePromotionEntity)
@@ -59,6 +72,7 @@ export class ShopItemsService {
     private readonly groupRepository: Repository<GroupEntity>,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
+    private readonly backlogService: BacklogService,
     private readonly dataSource: DataSource) {}
 
   async getItemsForGroup(req: Request, groupId: number, queryAuth?: string) {
@@ -98,24 +112,48 @@ export class ShopItemsService {
 
     let allBadgePromos: ShopListingBadgePromotionEntity[] = [];
     let allRankPromos: ShopListingRankPromotionEntity[] = [];
-    if (!isLecturer && listings.length > 0) {
-      allBadgePromos = await this.shopListingBadgePromotionRepository.find({ where: { shopListingId: In(listings.map(l => l.id)) } });
-      allRankPromos = await this.shopListingRankPromotionRepository.find({ where: { shopListingId: In(listings.map(l => l.id)) } });
+    if (listings.length > 0) {
+      allBadgePromos = await this.shopListingBadgePromotionRepository.find({
+        where: { shopListingId: In(listings.map((listing) => listing.id)) },
+      });
+      allRankPromos = await this.shopListingRankPromotionRepository.find({
+        where: { shopListingId: In(listings.map((listing) => listing.id)) },
+      });
     }
 
+    const categoryIdsByItemId = await this.loadCategoryIdsByItemIds(items.map((item) => item.id));
+
     return items.map((item) => {
+      const categoryIds = categoryIdsByItemId.get(item.id) ?? (
+        item.categoryId != null ? [item.categoryId] : []
+      );
       const listing = listings.find((l) => l.itemId === item.id);
       if (!listing) {
-        return { ...item, listing: null };
+        return { ...item, categoryIds, listing: null };
       }
+
+      const badgePromotions = allBadgePromos.filter((promo) => promo.shopListingId === listing.id);
+      const rankPromotions = allRankPromos.filter((promo) => promo.shopListingId === listing.id);
 
       if (isLecturer) {
-        return { ...item, listing };
+        return {
+          ...item,
+          categoryIds,
+          listing: {
+            ...listing,
+            badgePromotions,
+            rankPromotions,
+          },
+        };
       }
 
-      const badgePromotions = allBadgePromos.filter(p => p.shopListingId === listing.id);
-      const rankPromotions = allRankPromos.filter(p => p.shopListingId === listing.id);
-
+      const rankDiscountedPrice = DiscountCalculator.calculateDiscountedPrice(
+        listing.basePrice,
+        [],
+        eligibleRanks,
+        badgePromotions,
+        rankPromotions
+      );
       const discountedPrice = DiscountCalculator.calculateDiscountedPrice(
         listing.basePrice,
         earnedBadges,
@@ -127,13 +165,52 @@ export class ShopItemsService {
 
       return {
         ...item,
+        categoryIds,
         listing: {
           ...listing,
+          rankDiscountedPrice,
           discountedPrice,
           isLocked
         }
       };
     });
+  }
+
+  /**
+   * Ensures the built-in extra-life shop item exists for a group.
+   * Called when a group is created so the product is always the first catalog entry.
+   */
+  async ensureDefaultExtraLifeItem(groupId: number, manager?: EntityManager): Promise<ItemEntity> {
+    const itemRepo = manager ? manager.getRepository(ItemEntity) : this.itemRepository;
+    const listingRepo = manager ? manager.getRepository(ShopListingEntity) : this.shopListingRepository;
+
+    const existing = await itemRepo.findOne({ where: { groupId, isExtraLife: true } });
+    if (existing) {
+      return existing;
+    }
+
+    const item = itemRepo.create({
+      groupId,
+      name: EXTRA_LIFE_ITEM_NAME,
+      storyDescription: EXTRA_LIFE_DEFAULT_STORY_DESCRIPTION,
+      educationalDescription: EXTRA_LIFE_DEFAULT_EDUCATIONAL_DESCRIPTION,
+      imageRef: null,
+      categoryId: null,
+      isPublished: true,
+      isExtraLife: true,
+    });
+    const savedItem = await itemRepo.save(item);
+
+    const listing = listingRepo.create({
+      itemId: savedItem.id,
+      basePrice: EXTRA_LIFE_DEFAULT_BASE_PRICE,
+      stockQuantity: null,
+      perStudentLimit: null,
+    });
+    await listingRepo.save(listing);
+
+    this.logger.log(`Default extra-life item (id=${savedItem.id}) created for group ${groupId}`);
+    return savedItem;
   }
 
   async createItem(req: Request, groupId: number, dto: CreateShopItemDto) {
@@ -159,17 +236,19 @@ export class ShopItemsService {
     await queryRunner.startTransaction();
 
     try {
+      const categoryIds = await this.resolveCategoryIds(groupId, dto.categoryIds, dto.categoryId);
       const item = this.itemRepository.create({
         groupId,
         name: dto.name.trim(),
         storyDescription: dto.storyDescription ?? null,
         educationalDescription: dto.educationalDescription ?? null,
         imageRef: dto.imageRef ?? null,
-        categoryId: dto.categoryId ?? null,
+        categoryId: categoryIds[0] ?? null,
         isPublished: true,
       });
 
       const savedItem = await queryRunner.manager.save(item);
+      await this.syncItemCategoryLinks(queryRunner.manager, savedItem.id, groupId, categoryIds);
 
       const listing = this.shopListingRepository.create({
         itemId: savedItem.id,
@@ -206,8 +285,17 @@ export class ShopItemsService {
       await queryRunner.commitTransaction();
       this.logger.log(`Shop item "${savedItem.name}" (id=${savedItem.id}) created for group ${groupId}`);
 
+      if (!savedItem.isExtraLife) {
+        await this.backlogService.notifyEnrolledStudents(groupId, 'SHOP_ITEM_ADDED', {
+          message: `Dodano nowy produkt do sklepu: ${savedItem.name}.`,
+          itemId: savedItem.id,
+          itemName: savedItem.name,
+        });
+      }
+
       return {
         ...savedItem,
+        categoryIds,
         listing: {
           ...savedListing,
           badgePromotions,
@@ -245,6 +333,10 @@ export class ShopItemsService {
       });
 
       const savedItem = await queryRunner.manager.save(item);
+
+      if (dto.categoryId != null) {
+        await this.syncItemCategoryLinks(queryRunner.manager, savedItem.id, groupId, [dto.categoryId]);
+      }
 
       const listing = this.shopListingRepository.create({
         itemId: savedItem.id,
@@ -304,7 +396,16 @@ export class ShopItemsService {
       if (dto.storyDescription !== undefined) item.storyDescription = dto.storyDescription;
       if (dto.educationalDescription !== undefined) item.educationalDescription = dto.educationalDescription;
       if (dto.imageRef !== undefined) item.imageRef = dto.imageRef;
-      if (dto.categoryId !== undefined) item.categoryId = dto.categoryId;
+      if (dto.categoryId !== undefined || dto.categoryIds !== undefined) {
+        const categoryIds = await this.resolveCategoryIds(
+          groupId,
+          dto.categoryIds,
+          dto.categoryId === null ? undefined : dto.categoryId,
+          dto.categoryId === null && dto.categoryIds === undefined,
+        );
+        item.categoryId = categoryIds[0] ?? null;
+        await this.syncItemCategoryLinks(queryRunner.manager, item.id, groupId, categoryIds);
+      }
       if (dto.isPublished !== undefined) {
         item.isPublished = dto.isPublished;
         item.publishedAt = dto.isPublished ? new Date() : null;
@@ -356,6 +457,7 @@ export class ShopItemsService {
 
       return {
         ...savedItem,
+        categoryIds: await this.getCategoryIdsForItem(savedItem.id, savedItem.categoryId),
         listing: savedListing ? {
            ...savedListing,
            badgePromotions,
@@ -378,10 +480,92 @@ export class ShopItemsService {
       throw new NotFoundException(`Item with id ${itemId} not found in group ${groupId}`);
     }
 
+    if (item.isExtraLife) {
+      throw new BadRequestException('Produkt „Dodatkowe życie” nie może zostać usunięty.');
+    }
+
     await this.itemRepository.remove(item);
     this.logger.log(`Shop item (id=${itemId}) deleted from group ${groupId}`);
 
     return { deleted: true };
+  }
+
+  private async loadCategoryIdsByItemIds(itemIds: number[]): Promise<Map<number, number[]>> {
+    const map = new Map<number, number[]>();
+    if (itemIds.length === 0) {
+      return map;
+    }
+
+    const links = await this.itemCategoryLinkRepository.find({
+      where: { itemId: In(itemIds) },
+      order: { displayOrder: 'ASC', categoryId: 'ASC' },
+    });
+
+    for (const link of links) {
+      const current = map.get(link.itemId) ?? [];
+      current.push(link.categoryId);
+      map.set(link.itemId, current);
+    }
+
+    return map;
+  }
+
+  private async getCategoryIdsForItem(itemId: number, fallbackCategoryId: number | null): Promise<number[]> {
+    const links = await this.itemCategoryLinkRepository.find({
+      where: { itemId },
+      order: { displayOrder: 'ASC', categoryId: 'ASC' },
+    });
+    if (links.length > 0) {
+      return links.map((link) => link.categoryId);
+    }
+    return fallbackCategoryId != null ? [fallbackCategoryId] : [];
+  }
+
+  private async resolveCategoryIds(
+    groupId: number,
+    categoryIds?: number[],
+    categoryId?: number,
+    clearCategories = false,
+  ): Promise<number[]> {
+    if (clearCategories && categoryIds === undefined) {
+      return [];
+    }
+
+    const resolved = categoryIds?.length
+      ? [...new Set(categoryIds)]
+      : (categoryId != null ? [categoryId] : []);
+
+    if (resolved.length === 0) {
+      return [];
+    }
+
+    const validCount = await this.itemCategoryRepository.count({
+      where: { id: In(resolved), groupId },
+    });
+    if (validCount !== resolved.length) {
+      throw new BadRequestException('One or more categories do not belong to this group');
+    }
+
+    return resolved;
+  }
+
+  private async syncItemCategoryLinks(
+    manager: EntityManager,
+    itemId: number,
+    groupId: number,
+    categoryIds: number[],
+  ): Promise<void> {
+    const validatedIds = await this.resolveCategoryIds(groupId, categoryIds);
+    await manager.delete(ItemCategoryLinkEntity, { itemId });
+
+    for (let index = 0; index < validatedIds.length; index += 1) {
+      const link = manager.create(ItemCategoryLinkEntity, {
+        itemId,
+        categoryId: validatedIds[index],
+        displayOrder: index,
+      });
+      await manager.save(link);
+    }
   }
 
   private async resolveSubject(req: Request, queryAuth?: string): Promise<SessionSubject> {
