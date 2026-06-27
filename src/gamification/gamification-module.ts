@@ -17,6 +17,7 @@ import { ShopListingBadgePromotionEntity } from '../database/entities/shop-listi
 import { ShopListingRankPromotionEntity } from '../database/entities/shop-listing-rank-promotion.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserRolesModule } from '../user-roles/user-roles-module';
+import { GroupAuthorizationModule } from '../groups/group-authorization.module';
 import { BadgesService } from './badges-service';
 import { ItemCategoriesService } from './item-categories-service';
 import { RanksService } from './ranks-service';
@@ -53,6 +54,7 @@ import { ShopTemplatesController } from './shop-templates-controller';
     ]),
     AuthTokenSessionModule,
     UserRolesModule,
+    GroupAuthorizationModule,
     BacklogModule,
   ],
   controllers: [IconsController, ShopTemplatesController],
