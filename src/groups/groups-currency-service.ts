@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
@@ -14,6 +14,7 @@ import {
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { GroupAuthorizationService } from './group-authorization.service';
 import { UpdateCurrencyDto } from './dto/update-currency.dto';
 
 export type GetCurrencyResponseBody = {
@@ -51,7 +52,8 @@ export class GroupsCurrencyService {
     private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>) {}
+    private readonly groupRepository: Repository<GroupEntity>,
+    private readonly groupAuthorizationService: GroupAuthorizationService) {}
 
   /**
    * Returns the current currency settings for a group owned by the lecturer.
@@ -102,23 +104,26 @@ export class GroupsCurrencyService {
     if (!subject) {
       return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
     }
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      LECTURER_ROLE_NAME);
-    if (lecturerAccountId === null) {
-      return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
-    }
+
     let internalGroupId: number;
     try {
       internalGroupId = toInternalGroupId(publicGroupId);
     } catch {
       return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_CREATED_ID);
     }
-    const group = await this.groupRepository.findOne({
-      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
-    });
+
+    try {
+      await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, internalGroupId, body.auth);
+    } catch (err: unknown) {
+      if (err instanceof ForbiddenException) {
+        return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
+      }
+      throw err;
+    }
+
+    const group = await this.groupRepository.findOne({ where: { id: internalGroupId } });
     if (!group) {
-      return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
+      return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_CREATED_ID);
     }
     const updates: Partial<GroupEntity> = {};
     if (body.currency !== undefined) {

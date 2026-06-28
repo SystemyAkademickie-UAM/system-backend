@@ -18,6 +18,7 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { StageEntity } from '../database/entities/stage.entity';
 import { RanksService } from '../gamification/ranks-service';
 import { BacklogService } from '../backlog/backlog-service';
+import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { SetActivityCompletionsDto } from './dto/set-activity-completions.dto';
 import { applyActivityCurrencyDelta } from './student-stats-reward.helper';
@@ -71,14 +72,15 @@ export class StudentProgressService {
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
-    private readonly backlogService: BacklogService) {}
+    private readonly backlogService: BacklogService,
+    private readonly groupAuthorizationService: GroupAuthorizationService) {}
 
   /** GET /groups/:groupId/students/:accountId/progress */
   async getStudentProgress(
     req: Request,
     groupId: number,
     accountId: number): Promise<{ stages: ProgressStageItem[] }> {
-    await this.assertLecturer(req);
+    await this.assertLecturerOwnsGroup(req, groupId);
     await this.assertGroupExists(groupId);
     await this.assertEnrollmentExists(groupId, accountId);
     const stages = await this.stageRepository.find({
@@ -125,7 +127,7 @@ export class StudentProgressService {
     req: Request,
     groupId: number,
     activityId: number): Promise<ActivityCompletionsResponse> {
-    await this.assertLecturer(req);
+    await this.assertLecturerOwnsGroup(req, groupId);
     await this.assertGroupExists(groupId);
     await this.findActivityInGroupOrFail(groupId, activityId);
     const rows = await this.activityBacklogRepository.find({
@@ -147,7 +149,7 @@ export class StudentProgressService {
     groupId: number,
     activityId: number,
     dto: SetActivityCompletionsDto): Promise<SetActivityCompletionsResponse> {
-    await this.assertLecturer(req);
+    await this.assertLecturerOwnsGroup(req, groupId);
     await this.assertGroupExists(groupId);
     const activity = await this.findActivityInGroupOrFail(groupId, activityId);
     const targetAccountIds = [...new Set(dto.accountIds)];
@@ -213,7 +215,7 @@ export class StudentProgressService {
     groupId: number,
     accountId: number,
     activityId: number): Promise<{ isCompleted: boolean }> {
-    await this.assertLecturer(req);
+    await this.assertLecturerOwnsGroup(req, groupId);
     await this.assertGroupExists(groupId);
     const enrollment = await this.findEnrollmentOrFail(groupId, accountId);
     const activity = await this.findActivityInGroupOrFail(groupId, activityId);
@@ -379,14 +381,7 @@ export class StudentProgressService {
     }
   }
 
-  private async assertLecturer(req: Request): Promise<void> {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req);
-    if (!subject) {
-      throw new ForbiddenException('Not authorized');
-    }
-    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
-    if (!isLecturer) {
-      throw new ForbiddenException('Not authorized');
-    }
+  private async assertLecturerOwnsGroup(req: Request, groupId: number): Promise<void> {
+    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, groupId);
   }
 }

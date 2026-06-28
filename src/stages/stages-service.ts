@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository, DataSource } from 'typeorm';
@@ -18,6 +18,7 @@ import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { StageEntity } from '../database/entities/stage.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { BacklogService } from '../backlog/backlog-service';
 import { parseStageRequest, type ParsedStageRequest } from './stage-request-parser';
 
@@ -50,7 +51,8 @@ export class StagesService {
     private readonly stageRepository: Repository<StageEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
-    private readonly backlogService: BacklogService) {}
+    private readonly backlogService: BacklogService,
+    private readonly groupAuthorizationService: GroupAuthorizationService) {}
 
   async handleStage(
     req: Request,
@@ -100,6 +102,7 @@ export class StagesService {
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'post', stage: STAGE_RESPONSE_NOT_CREATED_ID };
     }
     try {
+      await this.groupAuthorizationService.assertLecturerOwnsGroup(subject.userId, internalGroupId);
       const entity = this.stageRepository.create({
         groupId: internalGroupId,
         name: body.name.trim(),
@@ -113,6 +116,9 @@ export class StagesService {
       });
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'post', stage: saved.id };
     } catch (err) {
+      if (err instanceof ForbiddenException) {
+        return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'post', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+      }
       this.logger.error(`Stage creation failed: ${err instanceof Error ? err.message : String(err)}`);
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'post', stage: STAGE_RESPONSE_NOT_CREATED_ID };
     }
@@ -137,6 +143,7 @@ export class StagesService {
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: STAGE_RESPONSE_NOT_FOUND_ID };
     }
     try {
+      await this.groupAuthorizationService.assertLecturerOwnsGroup(subject.userId, existing.groupId);
       if (body.name !== undefined) {
         existing.name = body.name.trim();
       }
@@ -152,6 +159,9 @@ export class StagesService {
       await this.stageRepository.save(existing);
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: existing.id };
     } catch (err) {
+      if (err instanceof ForbiddenException) {
+        return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'modify', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+      }
       this.logger.error(`Stage modification failed: ${err instanceof Error ? err.message : String(err)}`);
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'modify', stage: STAGE_RESPONSE_NOT_FOUND_ID };
     }
@@ -171,13 +181,21 @@ export class StagesService {
     if (!body.stageId) {
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
     }
+    const existing = await this.stageRepository.findOne({ where: { id: body.stageId } });
+    if (!existing) {
+      return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
+    }
     try {
+      await this.groupAuthorizationService.assertLecturerOwnsGroup(subject.userId, existing.groupId);
       const result = await this.stageRepository.delete({ id: body.stageId });
       if (result.affected === 0) {
         return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
       }
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: body.stageId };
     } catch (err) {
+      if (err instanceof ForbiddenException) {
+        return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'remove', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+      }
       this.logger.error(`Stage removal failed: ${err instanceof Error ? err.message : String(err)}`);
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
     }
@@ -192,8 +210,23 @@ export class StagesService {
     }
     
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
-    const filterHidden = !isLecturer;
-    const visibilityCondition = filterHidden ? { visibilityStatus: 1 } : {};
+    let showHiddenStages = false;
+    if (isLecturer && body.groupId) {
+      showHiddenStages = await this.groupAuthorizationService.isLecturerOwner(
+        subject.userId,
+        toInternalGroupId(body.groupId));
+    } else if (isLecturer && body.stageId) {
+      const stageForAccess = await this.stageRepository.findOne({
+        where: { id: body.stageId },
+        select: ['groupId'],
+      });
+      if (stageForAccess) {
+        showHiddenStages = await this.groupAuthorizationService.isLecturerOwner(
+          subject.userId,
+          stageForAccess.groupId);
+      }
+    }
+    const visibilityCondition = showHiddenStages ? {} : { visibilityStatus: 1 };
 
     try {
       let stages: StageEntity[];
@@ -244,11 +277,13 @@ export class StagesService {
     if (lecturerAccountId === null) {
       return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'reorder', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
     }
-    const isOwner = await this.groupRepository.exist({
-      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
-    });
-    if (!isOwner) {
-      return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'reorder', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+    try {
+      await this.groupAuthorizationService.assertLecturerOwnsGroup(subject.userId, internalGroupId);
+    } catch (err) {
+      if (err instanceof ForbiddenException) {
+        return { statusCode: STAGE_API_JSON_STATUS_FORBIDDEN, method: 'reorder', stage: STAGE_RESPONSE_NOT_AUTHORIZED_ID };
+      }
+      throw err;
     }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

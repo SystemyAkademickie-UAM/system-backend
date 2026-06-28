@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { In, Repository } from 'typeorm';
@@ -20,6 +20,7 @@ import { ActivityEntity } from '../database/entities/activity.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StageEntity } from '../database/entities/stage.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { parseActivityRequest, type ParsedActivityRequest } from './activity-request-parser';
 
 export type ActivityResponseBody = {
@@ -51,7 +52,8 @@ export class ActivitiesService {
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
     @InjectRepository(ActivityBacklogEntity)
-    private readonly activityBacklogRepository: Repository<ActivityBacklogEntity>) {}
+    private readonly activityBacklogRepository: Repository<ActivityBacklogEntity>,
+    private readonly groupAuthorizationService: GroupAuthorizationService) {}
 
   async handleActivity(req: Request, body: unknown): Promise<ActivityResponseBody> {
     const parsed = parseActivityRequest(body);
@@ -94,7 +96,12 @@ export class ActivitiesService {
     if (!stageExists) {
       return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: ACTIVITY_RESPONSE_STAGE_NOT_FOUND_ID };
     }
+    const stage = await this.stageRepository.findOne({ where: { id: body.stageId }, select: ['id', 'groupId'] });
+    if (!stage) {
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: ACTIVITY_RESPONSE_STAGE_NOT_FOUND_ID };
+    }
     try {
+      await this.groupAuthorizationService.assertLecturerOwnsGroup(subject.userId, stage.groupId);
       const entity = this.activityRepository.create({
         stageId: body.stageId,
         name: body.name.trim(),
@@ -105,6 +112,9 @@ export class ActivitiesService {
       const saved = await this.activityRepository.save(entity);
       return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: saved.id };
     } catch (err) {
+      if (err instanceof ForbiddenException) {
+        return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'post', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
+      }
       this.logger.error(`Activity creation failed: ${err instanceof Error ? err.message : String(err)}`);
       return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: ACTIVITY_RESPONSE_NOT_CREATED_ID };
     }
@@ -128,7 +138,12 @@ export class ActivitiesService {
     if (!existing) {
       return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
     }
+    const stage = await this.stageRepository.findOne({ where: { id: existing.stageId }, select: ['id', 'groupId'] });
+    if (!stage) {
+      return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
+    }
     try {
+      await this.groupAuthorizationService.assertLecturerOwnsGroup(subject.userId, stage.groupId);
       if (body.name !== undefined) {
         existing.name = body.name.trim();
       }
@@ -147,6 +162,9 @@ export class ActivitiesService {
       await this.activityRepository.save(existing);
       return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: existing.id };
     } catch (err) {
+      if (err instanceof ForbiddenException) {
+        return { statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID };
+      }
       this.logger.error(`Activity modification failed: ${err instanceof Error ? err.message : String(err)}`);
       return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: ACTIVITY_RESPONSE_NOT_FOUND_ID };
     }
@@ -194,23 +212,17 @@ export class ActivitiesService {
         activity: ACTIVITY_RESPONSE_NOT_FOUND_ID,
       };
     }
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      LECTURER_ROLE_NAME);
-    if (lecturerAccountId === null) {
-      return {
-        statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN,
-        method: 'remove',
-        activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID,
-      };
-    }
-    const group = await this.groupRepository.findOne({ where: { id: stage.groupId } });
-    if (!group || group.teacherAccountId !== lecturerAccountId) {
-      return {
-        statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN,
-        method: 'remove',
-        activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID,
-      };
+    try {
+      await this.groupAuthorizationService.assertLecturerOwnsGroup(subject.userId, stage.groupId);
+    } catch (err) {
+      if (err instanceof ForbiddenException) {
+        return {
+          statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN,
+          method: 'remove',
+          activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID,
+        };
+      }
+      throw err;
     }
     try {
       await this.activityBacklogRepository.delete({ activityId: body.activityId });

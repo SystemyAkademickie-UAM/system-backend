@@ -10,6 +10,7 @@ import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { RanksService } from '../gamification/ranks-service';
 import { BacklogService } from '../backlog/backlog-service';
+import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { applyBadgeGrantDelta, applyBadgeRevokeDelta } from './student-stats-reward.helper';
 
@@ -42,11 +43,12 @@ export class StudentBadgesService {
     @InjectRepository(EarnedBadgeEntity)
     private readonly earnedBadgeRepository: Repository<EarnedBadgeEntity>,
     @InjectRepository(EnrollmentEntity)
-    private readonly enrollmentRepository: Repository<EnrollmentEntity>) {}
+    private readonly enrollmentRepository: Repository<EnrollmentEntity>,
+    private readonly groupAuthorizationService: GroupAuthorizationService) {}
 
   /** GET /groups/:groupId/students/:accountId/badges */
   async getStudentBadges(req: Request, groupId: number, accountId: number): Promise<{ badges: StudentBadgeItem[] }> {
-    await this.assertLecturer(req);
+    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, groupId);
     const enrollment = await this.findEnrollmentOrFail(groupId, accountId);
     const badges = await this.badgeRepository.find({ where: { groupId } });
     const earnedBadges = await this.earnedBadgeRepository.find({
@@ -71,7 +73,7 @@ export class StudentBadgesService {
     groupId: number,
     accountId: number,
     badgeId: number): Promise<{ isEarned: boolean }> {
-    await this.assertLecturer(req);
+    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, groupId);
     const enrollment = await this.findEnrollmentOrFail(groupId, accountId);
     const badge = await this.badgeRepository.findOne({ where: { id: badgeId, groupId } });
     if (!badge) {
@@ -147,16 +149,5 @@ export class StudentBadgesService {
         `Student with accountId ${accountId} is not enrolled in group ${groupId}`);
     }
     return enrollment;
-  }
-
-  private async assertLecturer(req: Request): Promise<void> {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req);
-    if (!subject) {
-      throw new ForbiddenException('Not authorized');
-    }
-    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
-    if (!isLecturer) {
-      throw new ForbiddenException('Not authorized');
-    }
   }
 }

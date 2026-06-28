@@ -12,6 +12,7 @@ import { PostEntity } from '../database/entities/post.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { GamificationModule } from '../gamification/gamification-module';
 import { UserRolesModule } from '../user-roles/user-roles-module';
+import { GroupAuthorizationModule } from './group-authorization.module';
 import { GroupsEnrollmentService } from './groups-enrollment-service';
 import { EnrollmentCodesService } from './enrollment-codes-service';
 import { BacklogModule } from '../backlog/backlog-module';
@@ -42,6 +43,7 @@ import { ShopSchedulerService } from './shop-scheduler-service';
     ]),
     AuthTokenSessionModule,
     UserRolesModule,
+    GroupAuthorizationModule,
     GamificationModule,
     BacklogModule,
   ],
