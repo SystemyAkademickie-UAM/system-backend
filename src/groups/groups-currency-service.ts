@@ -102,19 +102,28 @@ export class GroupsCurrencyService {
   ): Promise<UpdateCurrencyResponseBody> {
     const subject = await this.sessionService.resolveSubjectFromRequest(req, body.auth);
     if (!subject) {
-      throw new ForbiddenException('Not authorized to manage this group');
+      return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
     }
 
     let internalGroupId: number;
     try {
       internalGroupId = toInternalGroupId(publicGroupId);
     } catch {
-      throw new ForbiddenException('Not authorized to manage this group');
+      return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_CREATED_ID);
     }
-    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, internalGroupId, body.auth);
+
+    try {
+      await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, internalGroupId, body.auth);
+    } catch (err: unknown) {
+      if (err instanceof ForbiddenException) {
+        return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID);
+      }
+      throw err;
+    }
+
     const group = await this.groupRepository.findOne({ where: { id: internalGroupId } });
     if (!group) {
-      throw new ForbiddenException('Not authorized to manage this group');
+      return this.buildUpdateCurrencyError(GROUP_RESPONSE_GROUP_NOT_CREATED_ID);
     }
     const updates: Partial<GroupEntity> = {};
     if (body.currency !== undefined) {
