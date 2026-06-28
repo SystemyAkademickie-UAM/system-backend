@@ -9,6 +9,7 @@ import { BadgeEntity, BadgeRarity } from '../database/entities/badge.entity';
 import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { BacklogService } from '../backlog/backlog-service';
 import { RanksService } from './ranks-service';
 import { applyBadgeRevokeDelta } from '../student-management/student-stats-reward.helper';
@@ -38,7 +39,8 @@ export class BadgesService {
     @InjectRepository(EarnedBadgeEntity)
     private readonly earnedBadgeRepository: Repository<EarnedBadgeEntity>,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>) {}
+    private readonly groupRepository: Repository<GroupEntity>,
+    private readonly groupAuthorizationService: GroupAuthorizationService) {}
 
   async getBadgesForGroup(req: Request, groupId: number, queryAuth?: string): Promise<BadgeEntity[]> {
     const subject = await this.sessionService.resolveSubjectFromRequest(req, queryAuth);
@@ -46,10 +48,10 @@ export class BadgesService {
       throw new ForbiddenException('Not authorized');
     }
     await this.assertGroupExists(groupId);
-    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
+    const isOwner = await this.groupAuthorizationService.isLecturerOwner(subject.userId, groupId);
 
-    const whereClause: any = { groupId };
-    if (!isLecturer) {
+    const whereClause: { groupId: number; isPublished?: boolean } = { groupId };
+    if (!isOwner) {
       whereClause.isPublished = true;
     }
 
@@ -60,14 +62,7 @@ export class BadgesService {
   }
 
   async updateBadge(req: Request, groupId: number, badgeId: number, dto: UpdateBadgeDto): Promise<BadgeEntity> {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
-    if (!subject) {
-      throw new ForbiddenException('Not authorized');
-    }
-    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
-    if (!isLecturer) {
-      throw new ForbiddenException('Not authorized');
-    }
+    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, groupId, dto.auth);
     const badge = await this.badgeRepository.findOne({ where: { id: badgeId, groupId } });
     if (!badge) {
       throw new NotFoundException(`Badge with id ${badgeId} not found in group ${groupId}`);
@@ -97,14 +92,7 @@ export class BadgesService {
     groupId: number,
     badgeId: number,
     bodyAuth?: string): Promise<DeleteBadgeResponse> {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req, bodyAuth);
-    if (!subject) {
-      throw new ForbiddenException('Not authorized');
-    }
-    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
-    if (!isLecturer) {
-      throw new ForbiddenException('Not authorized');
-    }
+    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, groupId, bodyAuth);
     const badge = await this.badgeRepository.findOne({ where: { id: badgeId, groupId } });
     if (!badge) {
       throw new NotFoundException(`Badge with id ${badgeId} not found in group ${groupId}`);
@@ -143,14 +131,7 @@ export class BadgesService {
   }
 
   async createBadge(req: Request, groupId: number, dto: CreateBadgeDto): Promise<BadgeEntity> {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
-    if (!subject) {
-      throw new ForbiddenException('Not authorized');
-    }
-    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
-    if (!isLecturer) {
-      throw new ForbiddenException('Not authorized');
-    }
+    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, groupId, dto.auth);
     await this.assertGroupExists(groupId);
     const entity = this.badgeRepository.create({
       groupId,

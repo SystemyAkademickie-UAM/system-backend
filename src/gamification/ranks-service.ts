@@ -8,6 +8,7 @@ import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 import { GroupEntity } from '../database/entities/group.entity';
 import { RankEntity } from '../database/entities/rank.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
+import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { BacklogService } from '../backlog/backlog-service';
 import { CreateRankDto } from './dto/create-rank.dto';
 import { UpdateRankDto } from './dto/update-rank.dto';
@@ -28,7 +29,8 @@ export class RanksService {
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
     private readonly backlogService: BacklogService,
-    private readonly dataSource: DataSource) {}
+    private readonly dataSource: DataSource,
+    private readonly groupAuthorizationService: GroupAuthorizationService) {}
 
   /**
    * Returns all ranks for a group, ordered by requiredPoints ascending.
@@ -50,14 +52,7 @@ export class RanksService {
    * Updates an existing rank.
    */
   async updateRank(req: Request, groupId: number, rankId: number, dto: UpdateRankDto): Promise<RankEntity> {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
-    if (!subject) {
-      throw new UnauthorizedException('Not authorized');
-    }
-    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
-    if (!isLecturer) {
-      throw new ForbiddenException('Not authorized');
-    }
+    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, groupId, dto.auth);
 
     const rank = await this.rankRepository.findOne({ where: { id: rankId, groupId } });
     if (!rank) {
@@ -84,14 +79,7 @@ export class RanksService {
    * Deletes a rank from a group.
    */
   async deleteRank(req: Request, groupId: number, rankId: number, bodyAuth?: string): Promise<{ deleted: boolean }> {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req, bodyAuth);
-    if (!subject) {
-      throw new UnauthorizedException('Not authorized');
-    }
-    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
-    if (!isLecturer) {
-      throw new ForbiddenException('Not authorized');
-    }
+    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, groupId, bodyAuth);
 
     const rank = await this.rankRepository.findOne({ where: { id: rankId, groupId } });
     if (!rank) {
@@ -133,14 +121,7 @@ export class RanksService {
    * @returns The persisted rank entity
    */
   async createRank(req: Request, groupId: number, dto: CreateRankDto): Promise<RankEntity> {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req, dto.auth);
-    if (!subject) {
-      throw new UnauthorizedException('Not authorized');
-    }
-    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
-    if (!isLecturer) {
-      throw new ForbiddenException('Not authorized');
-    }
+    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, groupId, dto.auth);
 
     await this.assertGroupExists(groupId);
 

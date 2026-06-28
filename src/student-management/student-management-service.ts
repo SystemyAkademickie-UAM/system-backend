@@ -11,6 +11,7 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { RanksService } from '../gamification/ranks-service';
+import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { BulkUpdateStudentsDto } from './dto/bulk-update-student.dto';
 
 /**
@@ -61,14 +62,15 @@ export class StudentManagementService {
     private readonly studentStatsRepository: Repository<StudentStatsEntity>,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
-    private readonly ranksService: RanksService) {}
+    private readonly ranksService: RanksService,
+    private readonly groupAuthorizationService: GroupAuthorizationService) {}
 
   /**
    * GET /groups/:groupId/students
    * Cross-schema JOIN via raw SQL for optimal performance.
    */
   async getStudents(req: Request, groupId: number): Promise<StudentListItem[]> {
-    await this.assertLecturer(req);
+    await this.assertLecturerOwnsGroup(req, groupId);
     await this.assertGroupExists(groupId);
 
     const rows = await this.dataSource.query<StudentListItem[]>(
@@ -147,7 +149,7 @@ export class StudentManagementService {
    * Updates student_stats rows inside a transaction.
    */
   async bulkUpdate(req: Request, groupId: number, dto: BulkUpdateStudentsDto): Promise<{ updated: number }> {
-    await this.assertLecturer(req);
+    await this.assertLecturerOwnsGroup(req, groupId);
     await this.assertGroupExists(groupId);
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -231,7 +233,7 @@ export class StudentManagementService {
    * Transactional removal: earned_badges → student_stats → activity_backlog → enrollment.
    */
   async removeStudent(req: Request, groupId: number, accountId: number): Promise<{ removed: boolean }> {
-    await this.assertLecturer(req);
+    await this.assertLecturerOwnsGroup(req, groupId);
 
     const enrollment = await this.enrollmentRepository.findOne({
       where: { groupId, studentAccountId: accountId },
@@ -276,7 +278,7 @@ export class StudentManagementService {
    * Increases student lives by 1.
    */
   async incrementLives(req: Request, groupId: number, accountId: number): Promise<{ lives: number }> {
-    await this.assertLecturer(req);
+    await this.assertLecturerOwnsGroup(req, groupId);
     await this.assertGroupExists(groupId);
 
     const enrollment = await this.enrollmentRepository.findOne({
@@ -319,7 +321,7 @@ export class StudentManagementService {
    * Decreases student lives by 1 (minimum 0).
    */
   async decrementLives(req: Request, groupId: number, accountId: number): Promise<{ lives: number }> {
-    await this.assertLecturer(req);
+    await this.assertLecturerOwnsGroup(req, groupId);
     await this.assertGroupExists(groupId);
 
     const enrollment = await this.enrollmentRepository.findOne({
@@ -360,15 +362,8 @@ export class StudentManagementService {
 
   // ── Shared auth & validation helpers ────────────────────────────────
 
-  private async assertLecturer(req: Request): Promise<void> {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req);
-    if (!subject) {
-      throw new UnauthorizedException('Not authorized');
-    }
-    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
-    if (!isLecturer) {
-      throw new ForbiddenException('Not authorized');
-    }
+  private async assertLecturerOwnsGroup(req: Request, groupId: number): Promise<void> {
+    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, groupId);
   }
 
   private async assertGroupExists(groupId: number): Promise<void> {

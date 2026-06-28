@@ -11,6 +11,7 @@ import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { RanksService } from '../gamification/ranks-service';
+import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { StudentManagementService } from './student-management-service';
 
@@ -28,6 +29,7 @@ describe('StudentManagementService', () => {
   let studentStatsRepository: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
   let dataSource: { query: jest.Mock; createQueryRunner: jest.Mock };
   let ranksService: { calculateRankForPoints: jest.Mock };
+  let groupAuthorizationService: { assertLecturerOwnsGroupFromRequest: jest.Mock };
   let mockQueryRunner: {
     connect: jest.Mock;
     startTransaction: jest.Mock;
@@ -70,6 +72,9 @@ describe('StudentManagementService', () => {
     };
     backlogService = { logEvent: jest.fn().mockResolvedValue({}) };
     ranksService = { calculateRankForPoints: jest.fn().mockResolvedValue(99) };
+    groupAuthorizationService = {
+      assertLecturerOwnsGroupFromRequest: jest.fn().mockResolvedValue(10),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -82,6 +87,7 @@ describe('StudentManagementService', () => {
         { provide: BacklogService, useValue: backlogService },
         { provide: DataSource, useValue: dataSource },
         { provide: RanksService, useValue: ranksService },
+        { provide: GroupAuthorizationService, useValue: groupAuthorizationService },
         { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },
         { provide: getRepositoryToken(EnrollmentEntity), useValue: enrollmentRepository },
         { provide: getRepositoryToken(StudentStatsEntity), useValue: studentStatsRepository },
@@ -128,7 +134,7 @@ describe('StudentManagementService', () => {
   describe('bulkUpdate', () => {
     beforeEach(() => {
       sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
-      userRolesService.userHasRole.mockResolvedValue(true);
+      groupAuthorizationService.assertLecturerOwnsGroupFromRequest.mockResolvedValue(10);
       mockQueryRunner.manager.findOne.mockImplementation(async (entity, options) => {
         if (entity === EnrollmentEntity) {
           return { id: options.where.enrollmentId, groupId, studentAccountId: 1 };
@@ -175,12 +181,23 @@ describe('StudentManagementService', () => {
       expect(savedStats[0].rankId).toBe(99);
       expect(savedStats[0].autoRankEnabled).toBe(true);
     });
+
+    it('should throw ForbiddenException when lecturer does not own the group', async () => {
+      groupAuthorizationService.assertLecturerOwnsGroupFromRequest.mockRejectedValue(
+        new ForbiddenException('Not authorized to manage this group'),
+      );
+
+      await expect(
+        service.bulkUpdate(mockRequest, groupId, {
+          students: [{ enrollmentId: 1, rankId: 7 }],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('lives management', () => {
     beforeEach(() => {
-      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
-      userRolesService.userHasRole.mockResolvedValue(true);
+      groupAuthorizationService.assertLecturerOwnsGroupFromRequest.mockResolvedValue(10);
       enrollmentRepository.findOne.mockResolvedValue({ id: 10, groupId, studentAccountId: 20 });
     });
 

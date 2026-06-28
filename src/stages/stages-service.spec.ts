@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import type { Request } from 'express';
@@ -15,6 +16,7 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { StageEntity } from '../database/entities/stage.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { BacklogService } from '../backlog/backlog-service';
+import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { StagesService } from './stages-service';
 
 function mockSubject(userId: number): SessionSubject {
@@ -26,6 +28,7 @@ describe('StagesService', () => {
   let sessionService: jest.Mocked<SessionService>;
   let userRolesService: jest.Mocked<UserRolesService>;
   let groupRepository: { exist: jest.Mock };
+  let groupAuthorizationService: { assertLecturerOwnsGroup: jest.Mock; isLecturerOwner: jest.Mock };
   let mockManager: { update: jest.Mock };
   let mockQueryRunner: {
     connect: jest.Mock;
@@ -52,6 +55,10 @@ describe('StagesService', () => {
     };
     dataSource = { createQueryRunner: jest.fn(() => mockQueryRunner) };
     groupRepository = { exist: jest.fn() };
+    groupAuthorizationService = {
+      assertLecturerOwnsGroup: jest.fn().mockResolvedValue(10),
+      isLecturerOwner: jest.fn().mockResolvedValue(false),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -71,6 +78,7 @@ describe('StagesService', () => {
             logEvent: jest.fn().mockResolvedValue({}),
           },
         },
+        { provide: GroupAuthorizationService, useValue: groupAuthorizationService },
       ],
     }).compile();
 
@@ -84,7 +92,9 @@ describe('StagesService', () => {
       sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.userHasRole.mockResolvedValue(true);
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
-      groupRepository.exist.mockResolvedValue(false);
+      groupAuthorizationService.assertLecturerOwnsGroup.mockRejectedValue(
+        new ForbiddenException('Not authorized to manage this group'),
+      );
 
       const actualResult = await service.handleStage(mockRequest, {
         auth: 'token',
@@ -107,7 +117,7 @@ describe('StagesService', () => {
       userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) =>
         role === LECTURER_ROLE_NAME ? 10 : null,
       );
-      groupRepository.exist.mockResolvedValue(true);
+      groupAuthorizationService.assertLecturerOwnsGroup.mockResolvedValue(10);
 
       const actualResult = await service.handleStage(mockRequest, {
         auth: 'token',
