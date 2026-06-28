@@ -88,6 +88,32 @@ export class StudentManagementController {
     return this.studentManagementService.removeStudent(req, toInternalGroupId(publicGroupId), accountId);
   }
 
+  /**
+   * Increases student lives by 1 (+1).
+   */
+  @Post(':groupId/students/:accountId/lives/increment')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Increase student lives by 1' })
+  incrementLives(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('accountId', ParseIntPipe) accountId: number,
+    @Req() req: Request) {
+    return this.studentManagementService.incrementLives(req, toInternalGroupId(publicGroupId), accountId);
+  }
+
+  /**
+   * Decreases student lives by 1 (-1).
+   */
+  @Post(':groupId/students/:accountId/lives/decrement')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Decrease student lives by 1' })
+  decrementLives(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('accountId', ParseIntPipe) accountId: number,
+    @Req() req: Request) {
+    return this.studentManagementService.decrementLives(req, toInternalGroupId(publicGroupId), accountId);
+  }
+
   // ── Part 2: Badge management pop-up ─────────────────────────────────
 
   /**

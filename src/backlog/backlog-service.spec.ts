@@ -228,6 +228,7 @@ describe('BacklogService', () => {
             'RANK_UP',
             'BADGE_EARNED',
             'ACTIVITY_COMPLETED',
+            'LIVES_CHANGED',
           ]),
           accountId: studentAccountId,
         },

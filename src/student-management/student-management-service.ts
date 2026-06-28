@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
+import { BacklogService } from '../backlog/backlog-service';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
@@ -29,6 +30,7 @@ export interface StudentListItem {
   currency: number;
   totalEarned: number;
   autoRankEnabled: boolean;
+  lives: number;
 }
 
 /**
@@ -52,6 +54,7 @@ export class StudentManagementService {
   constructor(
     private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
+    private readonly backlogService: BacklogService,
     private readonly dataSource: DataSource,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
@@ -83,7 +86,8 @@ export class StudentManagementService {
          ss.rank_id      AS "rankId",
          COALESCE(ss.currency, 0)     AS "currency",
          COALESCE(ss.total_earned, 0) AS "totalEarned",
-         COALESCE(ss.auto_rank_enabled, true) AS "autoRankEnabled"
+         COALESCE(ss.auto_rank_enabled, true) AS "autoRankEnabled",
+         COALESCE(ss.lives, 3)        AS "lives"
        FROM gamification.enrollments e
        JOIN auth.accounts a  ON a.id = e.student_account_id
        JOIN auth.users u     ON u.id = a.user_id
@@ -268,6 +272,92 @@ export class StudentManagementService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  /**
+   * Increases student lives by 1.
+   */
+  async incrementLives(req: Request, groupId: number, accountId: number): Promise<{ lives: number }> {
+    await this.assertLecturerOwnsGroup(req, groupId);
+    await this.assertGroupExists(groupId);
+
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: { groupId, studentAccountId: accountId },
+    });
+    if (!enrollment) {
+      throw new NotFoundException(`Student with accountId ${accountId} is not enrolled in group ${groupId}`);
+    }
+
+    let stats = await this.studentStatsRepository.findOne({
+      where: { enrollmentId: enrollment.id },
+    });
+    if (!stats) {
+      stats = this.studentStatsRepository.create({
+        enrollmentId: enrollment.id,
+        currency: 0,
+        totalEarned: 0,
+        rankId: null,
+        autoRankEnabled: true,
+        lives: 3,
+      });
+    }
+
+    const currentLives = stats.lives ?? 3;
+    const newLives = currentLives + 1;
+    stats.lives = newLives;
+    await this.studentStatsRepository.save(stats);
+
+    await this.backlogService.logEvent(groupId, accountId, 'LIVES_CHANGED', {
+      message: `Prowadzący zwiększył liczbę Twoich szans (żyć) o 1. Aktualna liczba szans: ${newLives}.`,
+      lives: newLives,
+      delta: 1,
+    });
+
+    this.logger.log(`Student (account=${accountId}) lives incremented to ${newLives} in group ${groupId}`);
+    return { lives: newLives };
+  }
+
+  /**
+   * Decreases student lives by 1 (minimum 0).
+   */
+  async decrementLives(req: Request, groupId: number, accountId: number): Promise<{ lives: number }> {
+    await this.assertLecturerOwnsGroup(req, groupId);
+    await this.assertGroupExists(groupId);
+
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: { groupId, studentAccountId: accountId },
+    });
+    if (!enrollment) {
+      throw new NotFoundException(`Student with accountId ${accountId} is not enrolled in group ${groupId}`);
+    }
+
+    let stats = await this.studentStatsRepository.findOne({
+      where: { enrollmentId: enrollment.id },
+    });
+    if (!stats) {
+      stats = this.studentStatsRepository.create({
+        enrollmentId: enrollment.id,
+        currency: 0,
+        totalEarned: 0,
+        rankId: null,
+        autoRankEnabled: true,
+        lives: 3,
+      });
+    }
+
+    const currentLives = stats.lives ?? 3;
+    const newLives = Math.max(0, currentLives - 1);
+    stats.lives = newLives;
+    await this.studentStatsRepository.save(stats);
+
+    await this.backlogService.logEvent(groupId, accountId, 'LIVES_CHANGED', {
+      message: `Prowadzący zmniejszył liczbę Twoich szans (żyć) o 1. Aktualna liczba szans: ${newLives}.`,
+      lives: newLives,
+      delta: -1,
+    });
+
+    this.logger.log(`Student (account=${accountId}) lives decremented to ${newLives} in group ${groupId}`);
+    return { lives: newLives };
   }
 
   // ── Shared auth & validation helpers ────────────────────────────────
