@@ -8,6 +8,7 @@ import { ActivityEntity } from '../database/entities/activity.entity';
 import { StageEntity } from '../database/entities/stage.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { ActivityBacklogEntity } from '../database/entities/activity-backlog.entity';
+import { GroupAuthorizationService } from '../groups/group-authorization.service';
 
 describe('ActivitiesService', () => {
   let service: ActivitiesService;
@@ -57,6 +58,13 @@ describe('ActivitiesService', () => {
         { provide: getRepositoryToken(StageEntity), useValue: stageRepository },
         { provide: getRepositoryToken(GroupEntity), useValue: {} },
         { provide: getRepositoryToken(ActivityBacklogEntity), useValue: activityBacklogRepository },
+        {
+          provide: GroupAuthorizationService,
+          useValue: {
+            assertLecturerOwnsGroup: jest.fn().mockResolvedValue(10),
+            isLecturerOwner: jest.fn().mockResolvedValue(true),
+          },
+        },
       ],
     }).compile();
 
