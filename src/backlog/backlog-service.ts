@@ -49,6 +49,7 @@ const STUDENT_NOTIFICATION_TYPES: BacklogEventType[] = [
   'RANK_UP',
   'BADGE_EARNED',
   'ACTIVITY_COMPLETED',
+  'LIVES_CHANGED',
 ];
 
 @Injectable()

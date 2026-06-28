@@ -5,6 +5,7 @@ import type { Request } from 'express';
 import { DataSource } from 'typeorm';
 
 import { SessionService, type SessionSubject } from '../auth/session/session.service';
+import { BacklogService } from '../backlog/backlog-service';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
@@ -21,8 +22,10 @@ describe('StudentManagementService', () => {
   let service: StudentManagementService;
   let sessionService: jest.Mocked<SessionService>;
   let userRolesService: jest.Mocked<UserRolesService>;
+  let backlogService: { logEvent: jest.Mock };
   let groupRepository: { exist: jest.Mock };
   let enrollmentRepository: { exist: jest.Mock; findOne: jest.Mock };
+  let studentStatsRepository: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
   let dataSource: { query: jest.Mock; createQueryRunner: jest.Mock };
   let ranksService: { calculateRankForPoints: jest.Mock };
   let mockQueryRunner: {
@@ -60,6 +63,12 @@ describe('StudentManagementService', () => {
     };
     groupRepository = { exist: jest.fn().mockResolvedValue(true) };
     enrollmentRepository = { exist: jest.fn(), findOne: jest.fn() };
+    studentStatsRepository = {
+      findOne: jest.fn(),
+      create: jest.fn((_, data) => data),
+      save: jest.fn(async (entity) => entity),
+    };
+    backlogService = { logEvent: jest.fn().mockResolvedValue({}) };
     ranksService = { calculateRankForPoints: jest.fn().mockResolvedValue(99) };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -70,11 +79,12 @@ describe('StudentManagementService', () => {
           provide: UserRolesService,
           useValue: { userHasRole: jest.fn(), findAccountIdForRole: jest.fn() },
         },
+        { provide: BacklogService, useValue: backlogService },
         { provide: DataSource, useValue: dataSource },
         { provide: RanksService, useValue: ranksService },
         { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },
         { provide: getRepositoryToken(EnrollmentEntity), useValue: enrollmentRepository },
-        { provide: getRepositoryToken(StudentStatsEntity), useValue: {} },
+        { provide: getRepositoryToken(StudentStatsEntity), useValue: studentStatsRepository },
       ],
     }).compile();
 
@@ -164,6 +174,36 @@ describe('StudentManagementService', () => {
       expect(ranksService.calculateRankForPoints).toHaveBeenCalledWith(groupId, 500);
       expect(savedStats[0].rankId).toBe(99);
       expect(savedStats[0].autoRankEnabled).toBe(true);
+    });
+  });
+
+  describe('lives management', () => {
+    beforeEach(() => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.userHasRole.mockResolvedValue(true);
+      enrollmentRepository.findOne.mockResolvedValue({ id: 10, groupId, studentAccountId: 20 });
+    });
+
+    it('should increment lives by 1 and log event', async () => {
+      studentStatsRepository.findOne.mockResolvedValue({ enrollmentId: 10, lives: 3 });
+      const result = await service.incrementLives(mockRequest, groupId, 20);
+
+      expect(result.lives).toBe(4);
+      expect(studentStatsRepository.save).toHaveBeenCalledWith(expect.objectContaining({ lives: 4 }));
+      expect(backlogService.logEvent).toHaveBeenCalledWith(
+        groupId,
+        20,
+        'LIVES_CHANGED',
+        expect.objectContaining({ lives: 4, delta: 1 }),
+      );
+    });
+
+    it('should decrement lives by 1 not falling below 0', async () => {
+      studentStatsRepository.findOne.mockResolvedValue({ enrollmentId: 10, lives: 0 });
+      const result = await service.decrementLives(mockRequest, groupId, 20);
+
+      expect(result.lives).toBe(0);
+      expect(studentStatsRepository.save).toHaveBeenCalledWith(expect.objectContaining({ lives: 0 }));
     });
   });
 });

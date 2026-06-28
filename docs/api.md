@@ -1065,6 +1065,58 @@ Grant: `currency` and `totalEarned` increase by `rewardAmount`. Revoke: `currenc
 
 ---
 
+## Student Management (lecturer)
+
+Manages participants enrolled in a course group. Requires **lecturer** role.
+
+### Get Group Students
+**Endpoint:** `GET /api/groups/:groupId/students`
+
+Retrieves a list of all enrolled students with their profile data, currency, total earned, auto-rank status, and remaining lives.
+
+**Response example:**
+```json
+[
+  {
+    "enrollmentId": 1,
+    "accountId": 20,
+    "name": "Jan",
+    "surname": "Kowalski",
+    "nickname": "Czarodziej",
+    "email": "jan@example.com",
+    "avatarId": 1,
+    "avatarUrl": null,
+    "rankId": 5,
+    "currency": 100,
+    "totalEarned": 500,
+    "autoRankEnabled": true,
+    "lives": 3
+  }
+]
+```
+
+### Increment Student Lives
+**Endpoint:** `POST /api/groups/:groupId/students/:accountId/lives/increment`
+
+Increases the remaining lives of the specified student by 1 and records a backlog event (`LIVES_CHANGED`).
+
+**Response example:**
+```json
+{ "lives": 4 }
+```
+
+### Decrement Student Lives
+**Endpoint:** `POST /api/groups/:groupId/students/:accountId/lives/decrement`
+
+Decreases the remaining lives of the specified student by 1 (minimum 0) and records a backlog event (`LIVES_CHANGED`).
+
+**Response example:**
+```json
+{ "lives": 2 }
+```
+
+---
+
 ## Shop item categories (lecturer)
 
 Group-scoped categories for shop catalog items (`gamification.item_categories`). Items reference a category via `gamification.items.category_id` (nullable). Item images use `gamification.items.image_ref` — a drive UUID from `POST /api/drive`, served at `GET /api/drive/:driveRef` (same as group `imageRef` / `bannerId`).
