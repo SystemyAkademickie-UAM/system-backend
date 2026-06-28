@@ -3,6 +3,7 @@
  */
 
 import { SUPER_ROLE_NAME } from '../../src/constants/role-name-constants.ts';
+import { PRIVATE_ORGANIZATION_ID } from '../../src/constants/organization-constants.ts';
 
 export async function withPgTransaction(client, work) {
   await client.query('BEGIN');
@@ -46,6 +47,7 @@ export async function purgeAccountDependentData(client, accountId) {
     await client.query(`DELETE FROM gamification.enrollments WHERE id = $1`, [enrollment.id]);
   }
   await client.query(`DELETE FROM analytics.backlog WHERE account_id = $1`, [accountId]);
+  await client.query(`DELETE FROM education.group_template_favorites WHERE account_id = $1`, [accountId]);
   await client.query(`DELETE FROM education.group_templates WHERE creator_account_id = $1`, [accountId]);
 }
 
@@ -116,10 +118,19 @@ export async function unregisterUser(client, normalizedEmail, organizationId = n
 
 /**
  * @param {import('pg').Client} client
+ * @param {string} normalizedEmail
+ * @param {number} organizationId
+ * @param {string} roleName
+ * @param {{ allowInternalOrg?: boolean }} [options]
  */
-export async function revokeUserRole(client, normalizedEmail, organizationId, roleName) {
+export async function revokeUserRole(client, normalizedEmail, organizationId, roleName, options = {}) {
+  const allowInternalOrg = options.allowInternalOrg === true;
   if (roleName === SUPER_ROLE_NAME) {
-    throw new Error('Super administrator accounts cannot be revoked via CLI');
+    if (!(allowInternalOrg && organizationId === PRIVATE_ORGANIZATION_ID)) {
+      throw new Error(
+        'Super administrator role can only be revoked in organization id 1 with --allow-internal-org',
+      );
+    }
   }
   const user = await client.query(
     `SELECT id, email FROM auth.users WHERE LOWER(email) = LOWER($1) LIMIT 1`,

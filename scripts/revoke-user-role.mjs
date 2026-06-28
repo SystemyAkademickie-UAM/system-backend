@@ -71,7 +71,7 @@ async function main() {
     const result = await withPgTransaction(client, async (tx) => {
       assertInternalOrgAllowed(organizationId, allowInternalOrg);
       await assertOrganizationActive(tx, organizationId);
-      return revokeUserRole(tx, normalizedEmail, organizationId, roleName);
+      return revokeUserRole(tx, normalizedEmail, organizationId, roleName, { allowInternalOrg });
     });
     console.log(
       `Revoked ${roleName} from ${normalizedEmail}: accountId=${result.accountId} userId=${result.userId} ` +
