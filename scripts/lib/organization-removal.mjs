@@ -9,6 +9,34 @@ import { removeOrganizationAccount, withPgTransaction } from './account-removal.
  * @param {import('pg').Client} client
  * @param {number[]} groupIds
  */
+async function deleteLegacyShopItems(client, groupIds) {
+  const relation = await client.query(`SELECT to_regclass('gamification.shop_items') AS rel`);
+  if (!relation.rows[0]?.rel) {
+    return;
+  }
+  await client.query(`DELETE FROM gamification.shop_items WHERE group_id = ANY($1::int[])`, [groupIds]);
+}
+
+/**
+ * @param {import('pg').Client} client
+ * @param {string} sql
+ * @param {unknown[]} params
+ */
+async function deleteFromOptionalTable(client, sql, params) {
+  try {
+    await client.query(sql, params);
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === '42P01') {
+      return;
+    }
+    throw error;
+  }
+}
+
+/**
+ * @param {import('pg').Client} client
+ * @param {number[]} groupIds
+ */
 export async function deleteGroupsByIds(client, groupIds) {
   if (groupIds.length === 0) {
     return 0;
@@ -44,18 +72,44 @@ export async function deleteGroupsByIds(client, groupIds) {
   await client.query(`DELETE FROM analytics.backlog WHERE group_id = ANY($1::int[])`, [groupIds]);
 
   await client.query(
+    `DELETE FROM gamification.shop_listing_rank_promotions srp
+     USING gamification.shop_listings sl
+     JOIN gamification.items i ON i.id = sl.item_id
+     WHERE srp.shop_listing_id = sl.id AND i.group_id = ANY($1::int[])`,
+    [groupIds],
+  );
+  await deleteFromOptionalTable(
+    client,
+    `DELETE FROM gamification.shop_listing_rank_prices srp
+     USING gamification.shop_listings sl
+     JOIN gamification.items i ON i.id = sl.item_id
+     WHERE srp.shop_listing_id = sl.id AND i.group_id = ANY($1::int[])`,
+    [groupIds],
+  );
+  await client.query(
+    `DELETE FROM gamification.shop_listing_badge_promotions sbp
+     USING gamification.shop_listings sl
+     JOIN gamification.items i ON i.id = sl.item_id
+     WHERE sbp.shop_listing_id = sl.id AND i.group_id = ANY($1::int[])`,
+    [groupIds],
+  );
+  await client.query(
     `DELETE FROM gamification.shop_listings sl
      USING gamification.items i
      WHERE sl.item_id = i.id AND i.group_id = ANY($1::int[])`,
     [groupIds],
   );
+  await deleteFromOptionalTable(
+    client,
+    `DELETE FROM gamification.item_category_links icl
+     USING gamification.items i
+     WHERE icl.item_id = i.id AND i.group_id = ANY($1::int[])`,
+    [groupIds],
+  );
   await client.query(`DELETE FROM gamification.items WHERE group_id = ANY($1::int[])`, [groupIds]);
   await client.query(`DELETE FROM gamification.item_categories WHERE group_id = ANY($1::int[])`, [groupIds]);
 
-  await client.query(
-    `DELETE FROM gamification.shop_items WHERE group_id = ANY($1::int[])`,
-    [groupIds],
-  ).catch(() => undefined);
+  await deleteLegacyShopItems(client, groupIds);
 
   await client.query(`DELETE FROM gamification.badges WHERE group_id = ANY($1::int[])`, [groupIds]);
   await client.query(`DELETE FROM gamification.ranks WHERE group_id = ANY($1::int[])`, [groupIds]);
