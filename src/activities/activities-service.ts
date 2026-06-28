@@ -212,17 +212,6 @@ export class ActivitiesService {
         activity: ACTIVITY_RESPONSE_NOT_FOUND_ID,
       };
     }
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      LECTURER_ROLE_NAME);
-    if (lecturerAccountId === null) {
-      return {
-        statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN,
-        method: 'remove',
-        activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID,
-      };
-    }
-    const group = await this.groupRepository.findOne({ where: { id: stage.groupId } });
     try {
       await this.groupAuthorizationService.assertLecturerOwnsGroup(subject.userId, stage.groupId);
     } catch (err) {
@@ -234,13 +223,6 @@ export class ActivitiesService {
         };
       }
       throw err;
-    }
-    if (!group) {
-      return {
-        statusCode: ACTIVITY_API_JSON_STATUS_FORBIDDEN,
-        method: 'remove',
-        activity: ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID,
-      };
     }
     try {
       await this.activityBacklogRepository.delete({ activityId: body.activityId });
