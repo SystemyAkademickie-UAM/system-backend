@@ -235,6 +235,12 @@ async function registerEmailOnlyOrganization(client, organizationName, productio
     console.log(`Created email organization id=${organizationId}`);
   } else {
     organizationId = existing.rows[0].id;
+    if (organizationId === PRIVATE_ORGANIZATION_ID) {
+      throw new Error(
+        `Organization id ${PRIVATE_ORGANIZATION_ID} is the internal MAQ tenant and cannot be converted to an email tenant. ` +
+          'Use `maq org repair-internal` if login_method was changed by mistake, then `maq user register … --org-id 1 --allow-internal-org`.',
+      );
+    }
     await client.query(
       `UPDATE auth.organizations
        SET name = $2, login_method = $3, is_active = true, updated_at = NOW()

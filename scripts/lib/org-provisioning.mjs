@@ -2,8 +2,26 @@ import {
   ORGANIZATION_LOGIN_METHOD_EMAIL,
   ORGANIZATION_LOGIN_METHOD_INTERNAL,
   PRIVATE_ORGANIZATION_ID,
+  PRIVATE_ORGANIZATION_NAME,
 } from '../../src/constants/organization-constants.ts';
 import { SUPER_ROLE_NAME } from '../../src/constants/role-name-constants.ts';
+
+export async function repairInternalOrganizationLoginMethod(client) {
+  const result = await client.query(
+    `UPDATE auth.organizations
+     SET login_method = $2,
+         name = $3,
+         updated_at = NOW()
+     WHERE id = $1
+       AND login_method <> $2
+     RETURNING id, name, login_method`,
+    [PRIVATE_ORGANIZATION_ID, ORGANIZATION_LOGIN_METHOD_INTERNAL, PRIVATE_ORGANIZATION_NAME],
+  );
+  if ((result.rowCount ?? 0) === 0) {
+    return null;
+  }
+  return result.rows[0];
+}
 
 export async function assertOrganizationExists(client, organizationId) {
   const organization = await client.query(
@@ -43,10 +61,20 @@ export async function assertOrganizationAllowsEmailProvisioning(client, organiza
   assertInternalOrgAllowed(organizationId, allowInternalOrg);
   assertSuperRoleOrganization(organizationId, roleName);
   const organization = await assertOrganizationActive(client, organizationId);
-  const loginMethod = organization.login_method;
+  let loginMethod = organization.login_method;
   if (organizationId === PRIVATE_ORGANIZATION_ID) {
     if (loginMethod !== ORGANIZATION_LOGIN_METHOD_INTERNAL) {
-      throw new Error(`Organization id ${PRIVATE_ORGANIZATION_ID} must have login_method=internal`);
+      if (!allowInternalOrg) {
+        throw new Error(`Organization id ${PRIVATE_ORGANIZATION_ID} must have login_method=internal`);
+      }
+      const repaired = await repairInternalOrganizationLoginMethod(client);
+      if (repaired !== null) {
+        console.warn(
+          `Repaired organization id ${PRIVATE_ORGANIZATION_ID}: login_method "${loginMethod}" → "${ORGANIZATION_LOGIN_METHOD_INTERNAL}"`,
+        );
+        return repaired;
+      }
+      loginMethod = ORGANIZATION_LOGIN_METHOD_INTERNAL;
     }
     return organization;
   }
