@@ -18,19 +18,21 @@ async function deleteLegacyShopItems(client, groupIds) {
 }
 
 /**
+ * Skips DELETE when the table was removed by a later migration.
+ * Do not catch SQL errors here — a failed statement aborts the PostgreSQL transaction
+ * even when Node catches the error, which surfaces as "current transaction is aborted".
+ *
  * @param {import('pg').Client} client
+ * @param {string} qualifiedName e.g. `gamification.shop_listing_rank_prices`
  * @param {string} sql
  * @param {unknown[]} params
  */
-async function deleteFromOptionalTable(client, sql, params) {
-  try {
-    await client.query(sql, params);
-  } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === '42P01') {
-      return;
-    }
-    throw error;
+async function deleteFromOptionalTable(client, qualifiedName, sql, params) {
+  const relation = await client.query(`SELECT to_regclass($1) AS rel`, [qualifiedName]);
+  if (!relation.rows[0]?.rel) {
+    return;
   }
+  await client.query(sql, params);
 }
 
 /**
@@ -80,6 +82,7 @@ export async function deleteGroupsByIds(client, groupIds) {
   );
   await deleteFromOptionalTable(
     client,
+    'gamification.shop_listing_rank_prices',
     `DELETE FROM gamification.shop_listing_rank_prices srp
      USING gamification.shop_listings sl
      JOIN gamification.items i ON i.id = sl.item_id
@@ -101,6 +104,7 @@ export async function deleteGroupsByIds(client, groupIds) {
   );
   await deleteFromOptionalTable(
     client,
+    'gamification.item_category_links',
     `DELETE FROM gamification.item_category_links icl
      USING gamification.items i
      WHERE icl.item_id = i.id AND i.group_id = ANY($1::int[])`,
@@ -198,6 +202,10 @@ export async function purgeOrganization(client, organizationId) {
     [organizationId],
   );
   const drives = await client.query(`DELETE FROM services.drive WHERE organization_id = $1`, [organizationId]);
+  await client.query(
+    `UPDATE auth.organizations SET certificate_id = NULL, updated_at = NOW() WHERE id = $1`,
+    [organizationId],
+  );
   await client.query(`DELETE FROM auth.idp_certificates WHERE organization_id = $1`, [organizationId]);
 
   await client.query(`DELETE FROM auth.organizations WHERE id = $1`, [organizationId]);

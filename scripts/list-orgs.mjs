@@ -7,49 +7,29 @@
  */
 import './lib/load-env.mjs';
 import { createPgClient } from './lib/pg-client.mjs';
-
-/**
- * @param {string} value
- * @param {number} width
- */
-function padCell(value, width) {
-  const text = String(value);
-  if (text.length >= width) {
-    return `${text.slice(0, width - 1)}…`;
-  }
-  return text.padEnd(width, ' ');
-}
+import { printTable } from './lib/table-format.mjs';
 
 /**
  * @param {Array<Record<string, unknown>>} rows
  */
 function printOrganizationTable(rows) {
-  const columns = [
-    { key: 'id', header: 'ID', width: 5 },
-    { key: 'name', header: 'Name', width: 36 },
-    { key: 'login_method', header: 'Login', width: 10 },
-    { key: 'is_active', header: 'Active', width: 7 },
-    { key: 'accounts', header: 'Accounts', width: 9 },
-    { key: 'groups', header: 'Groups', width: 7 },
-  ];
-
-  const header = columns.map((column) => padCell(column.header, column.width)).join('  ');
-  const separator = columns.map((column) => '-'.repeat(column.width)).join('  ');
-  console.log(header);
-  console.log(separator);
-
-  for (const row of rows) {
-    const line = columns
-      .map((column) => {
-        const raw = row[column.key];
-        const display = column.key === 'is_active' ? (raw === true ? 'yes' : 'no') : raw;
-        return padCell(display, column.width);
-      })
-      .join('  ');
-    console.log(line);
-  }
-
-  console.log(`\nTotal: ${rows.length}`);
+  printTable(
+    [
+      { key: 'id', header: 'ID', width: 5 },
+      { key: 'name', header: 'Name', width: 36 },
+      { key: 'login_method', header: 'Login', width: 10 },
+      { key: 'is_active', header: 'Active', width: 7 },
+      { key: 'accounts', header: 'Accounts', width: 9 },
+      { key: 'groups', header: 'Groups', width: 7 },
+    ],
+    rows,
+    (row, column) => {
+      if (column.key === 'is_active') {
+        return row.is_active === true ? 'yes' : 'no';
+      }
+      return row[column.key];
+    },
+  );
 }
 
 async function listOrganizations(client) {
@@ -81,6 +61,7 @@ async function main() {
       return;
     }
     printOrganizationTable(rows);
+    console.log(`\nTotal: ${rows.length}`);
   } finally {
     await client.end();
   }
