@@ -6,12 +6,14 @@ import { UserRolesModule } from '../user-roles/user-roles-module';
 import { BacklogEntity } from '../database/entities/backlog.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
+import { AccountEntity } from '../database/entities/account.entity';
+import { UserEntity } from '../database/entities/user.entity';
 import { BacklogController } from './backlog-controller';
 import { BacklogService } from './backlog-service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BacklogEntity, GroupEntity, EnrollmentEntity]),
+    TypeOrmModule.forFeature([BacklogEntity, GroupEntity, EnrollmentEntity, AccountEntity, UserEntity]),
     AuthTokenSessionModule,
     UserRolesModule,
   ],

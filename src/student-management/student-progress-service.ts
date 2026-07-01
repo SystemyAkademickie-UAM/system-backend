@@ -16,6 +16,7 @@ import { ActivityEntity } from '../database/entities/activity.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StageEntity } from '../database/entities/stage.entity';
+import { RankEntity } from '../database/entities/rank.entity';
 import { RanksService } from '../gamification/ranks-service';
 import { BacklogService } from '../backlog/backlog-service';
 import { GroupAuthorizationService } from '../groups/group-authorization.service';
@@ -292,9 +293,11 @@ export class StudentProgressService {
       rankChange.previousRankId !== rankChange.newRankId
       && rankChange.newRankId != null
     ) {
+      const newRank = await queryRunner.manager.findOne(RankEntity, { where: { id: rankChange.newRankId } });
       await this.backlogService.logEvent(groupId, accountId, 'RANK_UP', {
-        message: `Otrzymano wyższą rangę.`,
+        message: newRank ? `Otrzymano wyższą rangę: ${newRank.name}.` : 'Otrzymano wyższą rangę.',
         rankId: rankChange.newRankId,
+        rankName: newRank?.name,
         previousRankId: rankChange.previousRankId,
       }, queryRunner.manager);
     }
