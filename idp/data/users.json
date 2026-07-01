@@ -1,78 +1,6 @@
 {
     "users": [
         {
-            "username": "student1",
-            "password": "student1",
-            "uid": "student1",
-            "eduPersonAffiliation": [
-                "student",
-                "member"
-            ],
-            "eduPersonPrincipalName": "student1@localhost.invalid",
-            "mail": "student1@localhost.invalid",
-            "displayName": "Student One"
-        },
-        {
-            "username": "student2",
-            "password": "student2",
-            "uid": "student2",
-            "eduPersonAffiliation": [
-                "student",
-                "member"
-            ],
-            "eduPersonPrincipalName": "student2@localhost.invalid",
-            "mail": "student2@localhost.invalid",
-            "displayName": "Student Two"
-        },
-        {
-            "username": "student3",
-            "password": "student3",
-            "uid": "student3",
-            "eduPersonAffiliation": [
-                "student",
-                "member"
-            ],
-            "eduPersonPrincipalName": "student3@localhost.invalid",
-            "mail": "student3@localhost.invalid",
-            "displayName": "Student Three"
-        },
-        {
-            "username": "lecturer1",
-            "password": "lecturer1",
-            "uid": "lecturer1",
-            "eduPersonAffiliation": [
-                "faculty",
-                "member"
-            ],
-            "eduPersonPrincipalName": "lecturer1@localhost.invalid",
-            "mail": "lecturer1@localhost.invalid",
-            "displayName": "Lecturer One"
-        },
-        {
-            "username": "lecturer2",
-            "password": "lecturer2",
-            "uid": "lecturer2",
-            "eduPersonAffiliation": [
-                "faculty",
-                "member"
-            ],
-            "eduPersonPrincipalName": "lecturer2@localhost.invalid",
-            "mail": "lecturer2@localhost.invalid",
-            "displayName": "Lecturer Two"
-        },
-        {
-            "username": "lecturer3",
-            "password": "lecturer3",
-            "uid": "lecturer3",
-            "eduPersonAffiliation": [
-                "faculty",
-                "member"
-            ],
-            "eduPersonPrincipalName": "lecturer3@localhost.invalid",
-            "mail": "lecturer3@localhost.invalid",
-            "displayName": "Lecturer Three"
-        },
-        {
             "username": "administrator",
             "password": "administrator",
             "uid": "administrator",
@@ -83,6 +11,534 @@
             "eduPersonPrincipalName": "administrator@localhost.invalid",
             "mail": "administrator@localhost.invalid",
             "displayName": "University Administrator"
+        },
+        {
+            "username": "barrob",
+            "password": "barrob",
+            "uid": "barrob",
+            "eduPersonAffiliation": [
+                "faculty",
+                "member"
+            ],
+            "eduPersonPrincipalName": "barrob@localhost.invalid",
+            "mail": "barrob@localhost.invalid",
+            "displayName": "Bartek Robaszyński"
+        },
+        {
+            "username": "annkow",
+            "password": "annkow",
+            "uid": "annkow",
+            "eduPersonAffiliation": [
+                "faculty",
+                "member"
+            ],
+            "eduPersonPrincipalName": "annkow@localhost.invalid",
+            "mail": "annkow@localhost.invalid",
+            "displayName": "Anna Kowalska"
+        },
+        {
+            "username": "piowis",
+            "password": "piowis",
+            "uid": "piowis",
+            "eduPersonAffiliation": [
+                "faculty",
+                "member"
+            ],
+            "eduPersonPrincipalName": "piowis@localhost.invalid",
+            "mail": "piowis@localhost.invalid",
+            "displayName": "Piotr Wiśniewski"
+        },
+        {
+            "username": "magzie",
+            "password": "magzie",
+            "uid": "magzie",
+            "eduPersonAffiliation": [
+                "faculty",
+                "member"
+            ],
+            "eduPersonPrincipalName": "magzie@localhost.invalid",
+            "mail": "magzie@localhost.invalid",
+            "displayName": "Magdalena Zielińska"
+        },
+        {
+            "username": "krzdab",
+            "password": "krzdab",
+            "uid": "krzdab",
+            "eduPersonAffiliation": [
+                "faculty",
+                "member"
+            ],
+            "eduPersonPrincipalName": "krzdab@localhost.invalid",
+            "mail": "krzdab@localhost.invalid",
+            "displayName": "Krzysztof Dąbrowski"
+        },
+        {
+            "username": "jaknow",
+            "password": "jaknow",
+            "uid": "jaknow",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "jaknow@localhost.invalid",
+            "mail": "jaknow@localhost.invalid",
+            "displayName": "Jakub Nowak"
+        },
+        {
+            "username": "zuzwoj",
+            "password": "zuzwoj",
+            "uid": "zuzwoj",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "zuzwoj@localhost.invalid",
+            "mail": "zuzwoj@localhost.invalid",
+            "displayName": "Zuzanna Wójcik"
+        },
+        {
+            "username": "majkam",
+            "password": "majkam",
+            "uid": "majkam",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "majkam@localhost.invalid",
+            "mail": "majkam@localhost.invalid",
+            "displayName": "Maja Kamińska"
+        },
+        {
+            "username": "fillew",
+            "password": "fillew",
+            "uid": "fillew",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "fillew@localhost.invalid",
+            "mail": "fillew@localhost.invalid",
+            "displayName": "Filip Lewandowski"
+        },
+        {
+            "username": "natzaw",
+            "password": "natzaw",
+            "uid": "natzaw",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "natzaw@localhost.invalid",
+            "mail": "natzaw@localhost.invalid",
+            "displayName": "Natalia Zawadzka"
+        },
+        {
+            "username": "oliszy",
+            "password": "oliszy",
+            "uid": "oliszy",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "oliszy@localhost.invalid",
+            "mail": "oliszy@localhost.invalid",
+            "displayName": "Oliwier Szymański"
+        },
+        {
+            "username": "wikdud",
+            "password": "wikdud",
+            "uid": "wikdud",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "wikdud@localhost.invalid",
+            "mail": "wikdud@localhost.invalid",
+            "displayName": "Wiktoria Dudek"
+        },
+        {
+            "username": "alemaz",
+            "password": "alemaz",
+            "uid": "alemaz",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "alemaz@localhost.invalid",
+            "mail": "alemaz@localhost.invalid",
+            "displayName": "Aleksander Mazur"
+        },
+        {
+            "username": "julpio",
+            "password": "julpio",
+            "uid": "julpio",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "julpio@localhost.invalid",
+            "mail": "julpio@localhost.invalid",
+            "displayName": "Julia Piotrowska"
+        },
+        {
+            "username": "kacgra",
+            "password": "kacgra",
+            "uid": "kacgra",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "kacgra@localhost.invalid",
+            "mail": "kacgra@localhost.invalid",
+            "displayName": "Kacper Grabowski"
+        },
+        {
+            "username": "laujan",
+            "password": "laujan",
+            "uid": "laujan",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "laujan@localhost.invalid",
+            "mail": "laujan@localhost.invalid",
+            "displayName": "Laura Jankowska"
+        },
+        {
+            "username": "markow",
+            "password": "markow",
+            "uid": "markow",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "markow@localhost.invalid",
+            "mail": "markow@localhost.invalid",
+            "displayName": "Marcel Kowalczyk"
+        },
+        {
+            "username": "hankro",
+            "password": "hankro",
+            "uid": "hankro",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "hankro@localhost.invalid",
+            "mail": "hankro@localhost.invalid",
+            "displayName": "Hanna Król"
+        },
+        {
+            "username": "szywoj",
+            "password": "szywoj",
+            "uid": "szywoj",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "szywoj@localhost.invalid",
+            "mail": "szywoj@localhost.invalid",
+            "displayName": "Szymon Wojciechowski"
+        },
+        {
+            "username": "alirut",
+            "password": "alirut",
+            "uid": "alirut",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "alirut@localhost.invalid",
+            "mail": "alirut@localhost.invalid",
+            "displayName": "Alicja Rutkowska"
+        },
+        {
+            "username": "dompaw",
+            "password": "dompaw",
+            "uid": "dompaw",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "dompaw@localhost.invalid",
+            "mail": "dompaw@localhost.invalid",
+            "displayName": "Dominik Pawlak"
+        },
+        {
+            "username": "emisik",
+            "password": "emisik",
+            "uid": "emisik",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "emisik@localhost.invalid",
+            "mail": "emisik@localhost.invalid",
+            "displayName": "Emilia Sikora"
+        },
+        {
+            "username": "adrkol",
+            "password": "adrkol",
+            "uid": "adrkol",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "adrkol@localhost.invalid",
+            "mail": "adrkol@localhost.invalid",
+            "displayName": "Adrian Kołodziej"
+        },
+        {
+            "username": "lenost",
+            "password": "lenost",
+            "uid": "lenost",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "lenost@localhost.invalid",
+            "mail": "lenost@localhost.invalid",
+            "displayName": "Lena Ostrowska"
+        },
+        {
+            "username": "igogor",
+            "password": "igogor",
+            "uid": "igogor",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "igogor@localhost.invalid",
+            "mail": "igogor@localhost.invalid",
+            "displayName": "Igor Górski"
+        },
+        {
+            "username": "nikmic",
+            "password": "nikmic",
+            "uid": "nikmic",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "nikmic@localhost.invalid",
+            "mail": "nikmic@localhost.invalid",
+            "displayName": "Nikodem Michalski"
+        },
+        {
+            "username": "amewie",
+            "password": "amewie",
+            "uid": "amewie",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "amewie@localhost.invalid",
+            "mail": "amewie@localhost.invalid",
+            "displayName": "Amelka Więcek"
+        },
+        {
+            "username": "tymbak",
+            "password": "tymbak",
+            "uid": "tymbak",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "tymbak@localhost.invalid",
+            "mail": "tymbak@localhost.invalid",
+            "displayName": "Tymon Bąk"
+        },
+        {
+            "username": "zofcza",
+            "password": "zofcza",
+            "uid": "zofcza",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "zofcza@localhost.invalid",
+            "mail": "zofcza@localhost.invalid",
+            "displayName": "Zofia Czarnecka"
+        },
+        {
+            "username": "brulis",
+            "password": "brulis",
+            "uid": "brulis",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "brulis@localhost.invalid",
+            "mail": "brulis@localhost.invalid",
+            "displayName": "Bruno Lis"
+        },
+        {
+            "username": "kalwro",
+            "password": "kalwro",
+            "uid": "kalwro",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "kalwro@localhost.invalid",
+            "mail": "kalwro@localhost.invalid",
+            "displayName": "Kalina Wróbel"
+        },
+        {
+            "username": "fabada",
+            "password": "fabada",
+            "uid": "fabada",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "fabada@localhost.invalid",
+            "mail": "fabada@localhost.invalid",
+            "displayName": "Fabian Adamczyk"
+        },
+        {
+            "username": "marsad",
+            "password": "marsad",
+            "uid": "marsad",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "marsad@localhost.invalid",
+            "mail": "marsad@localhost.invalid",
+            "displayName": "Martyna Sadowska"
+        },
+        {
+            "username": "ksatom",
+            "password": "ksatom",
+            "uid": "ksatom",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "ksatom@localhost.invalid",
+            "mail": "ksatom@localhost.invalid",
+            "displayName": "Ksawery Tomczyk"
+        },
+        {
+            "username": "rokkub",
+            "password": "rokkub",
+            "uid": "rokkub",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "rokkub@localhost.invalid",
+            "mail": "rokkub@localhost.invalid",
+            "displayName": "Roksana Kubiak"
+        },
+        {
+            "username": "gusmar",
+            "password": "gusmar",
+            "uid": "gusmar",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "gusmar@localhost.invalid",
+            "mail": "gusmar@localhost.invalid",
+            "displayName": "Gustaw Markowski"
+        },
+        {
+            "username": "igabed",
+            "password": "igabed",
+            "uid": "igabed",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "igabed@localhost.invalid",
+            "mail": "igabed@localhost.invalid",
+            "displayName": "Iga Bednarek"
+        },
+        {
+            "username": "leojar",
+            "password": "leojar",
+            "uid": "leojar",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "leojar@localhost.invalid",
+            "mail": "leojar@localhost.invalid",
+            "displayName": "Leon Jarosz"
+        },
+        {
+            "username": "polmac",
+            "password": "polmac",
+            "uid": "polmac",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "polmac@localhost.invalid",
+            "mail": "polmac@localhost.invalid",
+            "displayName": "Pola Maciejewska"
+        },
+        {
+            "username": "antols",
+            "password": "antols",
+            "uid": "antols",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "antols@localhost.invalid",
+            "mail": "antols@localhost.invalid",
+            "displayName": "Antoni Olszewski"
+        },
+        {
+            "username": "werpie",
+            "password": "werpie",
+            "uid": "werpie",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "werpie@localhost.invalid",
+            "mail": "werpie@localhost.invalid",
+            "displayName": "Weronika Pietrzak"
+        },
+        {
+            "username": "milchm",
+            "password": "milchm",
+            "uid": "milchm",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "milchm@localhost.invalid",
+            "mail": "milchm@localhost.invalid",
+            "displayName": "Miłosz Chmielewski"
+        },
+        {
+            "username": "blaurb",
+            "password": "blaurb",
+            "uid": "blaurb",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "blaurb@localhost.invalid",
+            "mail": "blaurb@localhost.invalid",
+            "displayName": "Blanka Urbańska"
+        },
+        {
+            "username": "barrob1",
+            "password": "barrob1",
+            "uid": "barrob1",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "barrob1@localhost.invalid",
+            "mail": "barrob1@localhost.invalid",
+            "displayName": "Bartłomiej Robak"
         }
     ]
 }
