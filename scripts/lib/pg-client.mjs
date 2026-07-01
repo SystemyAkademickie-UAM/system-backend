@@ -58,6 +58,17 @@ export function resolveOrganizationId(orgIdRaw) {
   return parsed;
 }
 
+export function resolveUserId(userIdRaw) {
+  if (userIdRaw.length === 0) {
+    throw new Error('--id is required');
+  }
+  const parsed = Number.parseInt(userIdRaw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error('User id must be a positive integer (--id)');
+  }
+  return parsed;
+}
+
 export async function createPgClient() {
   assertDatabaseEnv();
   const parsedPort = Number.parseInt(process.env.DATABASE_PORT ?? '', 10);

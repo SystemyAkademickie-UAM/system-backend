@@ -43,6 +43,9 @@
     "unregister:user": "node ./scripts/node-cli.mjs ./scripts/unregister-user.mjs",
     "unregister:org": "node ./scripts/node-cli.mjs ./scripts/unregister-org.mjs",
     "list:orgs": "node ./scripts/node-cli.mjs ./scripts/list-orgs.mjs",
+    "list:users": "node ./scripts/node-cli.mjs ./scripts/list-users.mjs",
+    "show:user": "node ./scripts/node-cli.mjs ./scripts/show-user.mjs",
+    "repair:internal-org": "node ./scripts/node-cli.mjs ./scripts/repair-internal-org.mjs",
     "provision:dev-university": "node ./scripts/node-cli.mjs ./scripts/provision-dev-university.mjs"
   },
   "dependencies": {
