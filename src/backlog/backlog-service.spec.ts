@@ -7,6 +7,8 @@ import { BacklogService } from './backlog-service';
 import { BacklogEntity } from '../database/entities/backlog.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
+import { AccountEntity } from '../database/entities/account.entity';
+import { UserEntity } from '../database/entities/user.entity';
 import { SessionService } from '../auth/session/session.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
@@ -16,6 +18,8 @@ describe('BacklogService', () => {
   let backlogRepository: any;
   let groupRepository: any;
   let enrollmentRepository: any;
+  let accountRepository: any;
+  let userRepository: any;
   let sessionService: any;
   let userRolesService: any;
 
@@ -31,6 +35,12 @@ describe('BacklogService', () => {
     };
     enrollmentRepository = {
       exist: jest.fn(),
+    };
+    accountRepository = {
+      findOne: jest.fn(),
+    };
+    userRepository = {
+      findOne: jest.fn(),
     };
     sessionService = {
       resolveSubjectFromRequest: jest.fn(),
@@ -54,6 +64,14 @@ describe('BacklogService', () => {
         {
           provide: getRepositoryToken(EnrollmentEntity),
           useValue: enrollmentRepository,
+        },
+        {
+          provide: getRepositoryToken(AccountEntity),
+          useValue: accountRepository,
+        },
+        {
+          provide: getRepositoryToken(UserEntity),
+          useValue: userRepository,
         },
         {
           provide: SessionService,
