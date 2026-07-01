@@ -16,7 +16,7 @@ import { StageEntity } from '../../database/entities/stage.entity';
 import type { GroupTemplateData } from './group-template-data.interface';
 import { mapLegacyBadgeDiscount, mapLegacyRankDiscount } from './group-template-legacy-discount';
 import { ShopItemsService } from '../../gamification/shop-items-service';
-
+import { EXTRA_LIFE_ITEM_NAME } from '../../constants/extra-life-constants';
 @Injectable()
 export class GroupTemplatesImportService {
   private readonly logger = new Logger(GroupTemplatesImportService.name);
@@ -120,25 +120,46 @@ export class GroupTemplatesImportService {
         // Map category
         const newCategoryId = oldItem.categoryId ? categoryIdMap.get(oldItem.categoryId) ?? null : null;
 
-        const itemEntity = manager.create(ItemEntity, {
-          groupId: newGroupId,
-          categoryId: newCategoryId,
-          imageRef: oldItem.imageRef,
-          name: oldItem.name,
-          educationalDescription: oldItem.educationalDescription,
-        });
-        const savedItem = await manager.save(ItemEntity, itemEntity);
+        let savedItem: ItemEntity;
+        let savedListing: ShopListingEntity | null = null;
 
-        // If it had a shop listing, create it
-        if (oldItem.listing) {
-          const listingEntity = manager.create(ShopListingEntity, {
-            itemId: savedItem.id,
-            basePrice: oldItem.listing.basePrice,
-            stockQuantity: oldItem.listing.stockQuantity,
-            perStudentLimit: oldItem.listing.perStudentLimit,
+        if (oldItem.name === EXTRA_LIFE_ITEM_NAME) {
+          const existingItem = await manager.findOneOrFail(ItemEntity, { where: { groupId: newGroupId, isExtraLife: true } });
+          existingItem.categoryId = newCategoryId;
+          existingItem.imageRef = oldItem.imageRef;
+          existingItem.educationalDescription = oldItem.educationalDescription;
+          savedItem = await manager.save(ItemEntity, existingItem);
+
+          if (oldItem.listing) {
+            const existingListing = await manager.findOneOrFail(ShopListingEntity, { where: { itemId: savedItem.id } });
+            existingListing.basePrice = oldItem.listing.basePrice;
+            existingListing.stockQuantity = oldItem.listing.stockQuantity;
+            existingListing.perStudentLimit = oldItem.listing.perStudentLimit;
+            savedListing = await manager.save(ShopListingEntity, existingListing);
+          }
+        } else {
+          const itemEntity = manager.create(ItemEntity, {
+            groupId: newGroupId,
+            categoryId: newCategoryId,
+            imageRef: oldItem.imageRef,
+            name: oldItem.name,
+            educationalDescription: oldItem.educationalDescription,
           });
-          const savedListing = await manager.save(ShopListingEntity, listingEntity);
+          savedItem = await manager.save(ItemEntity, itemEntity);
 
+          // If it had a shop listing, create it
+          if (oldItem.listing) {
+            const listingEntity = manager.create(ShopListingEntity, {
+              itemId: savedItem.id,
+              basePrice: oldItem.listing.basePrice,
+              stockQuantity: oldItem.listing.stockQuantity,
+              perStudentLimit: oldItem.listing.perStudentLimit,
+            });
+            savedListing = await manager.save(ShopListingEntity, listingEntity);
+          }
+        }
+
+        if (savedListing && oldItem.listing) {
           // 6a. Rank Promotions
           for (const rp of oldItem.listing.rankPromotions || []) {
             const mappedRankId = rankIdMap.get(rp.rankId);
