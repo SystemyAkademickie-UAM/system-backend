@@ -63,7 +63,7 @@ describe('ShopStudentService', () => {
 
   describe('buyItem — extra life', () => {
     beforeEach(() => {
-      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1, sessionId: 1, activeRole: null });
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1, sessionId: 1, activeRole: null, organizationId: 1 });
       userRolesService.findAccountIdForRole.mockResolvedValue(100);
     });
 

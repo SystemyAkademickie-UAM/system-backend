@@ -20,7 +20,7 @@ import { GroupAuthorizationService } from '../groups/group-authorization.service
 import { StagesService } from './stages-service';
 
 function mockSubject(userId: number): SessionSubject {
-  return { userId, activeRole: null, sessionId: 1 };
+  return { userId, activeRole: null, sessionId: 1, organizationId: 1 };
 }
 
 describe('StagesService', () => {

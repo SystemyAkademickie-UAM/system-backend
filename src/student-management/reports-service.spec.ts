@@ -14,7 +14,7 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 import { ReportsService } from './reports-service';
 
 function mockSubject(userId: number): SessionSubject {
-  return { userId, activeRole: null, sessionId: 1 };
+  return { userId, activeRole: null, sessionId: 1, organizationId: 1 };
 }
 
 describe('ReportsService', () => {

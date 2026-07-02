@@ -29,7 +29,7 @@ describe('AdminOrganizationAccountsService', () => {
 
   beforeEach(async () => {
     sessionService = {
-      resolveSubjectFromRequest: jest.fn().mockResolvedValue({ userId: 10, activeRole: null, sessionId: 1 }),
+      resolveSubjectFromRequest: jest.fn().mockResolvedValue({ userId: 10, activeRole: null, sessionId: 1, organizationId: 1 }),
     };
     userRolesService = {
       userHasRole: jest.fn().mockResolvedValue(false),

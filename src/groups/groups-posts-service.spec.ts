@@ -11,7 +11,7 @@ import { BacklogService } from '../backlog/backlog-service';
 import { GroupsPostsService } from './groups-posts-service';
 
 function mockSubject(userId: number): SessionSubject {
-  return { userId, activeRole: null, sessionId: 1 };
+  return { userId, activeRole: null, sessionId: 1, organizationId: 1 };
 }
 
 describe('GroupsPostsService', () => {

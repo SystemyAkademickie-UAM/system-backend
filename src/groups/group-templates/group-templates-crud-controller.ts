@@ -37,7 +37,7 @@ export class GroupTemplatesCrudController {
       throw new ForbiddenException('Missing or invalid session');
     }
 
-    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
+    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId, subject.organizationId);
 
     const scope = query.scope || 'public';
 
@@ -61,7 +61,7 @@ export class GroupTemplatesCrudController {
       throw new ForbiddenException('Missing or invalid session');
     }
 
-    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
+    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId, subject.organizationId);
 
     await this.crudService.setTemplateFavorite(templateId, lecturerAccountId, dto.favorite);
   }
@@ -76,7 +76,7 @@ export class GroupTemplatesCrudController {
       throw new ForbiddenException('Missing or invalid session');
     }
 
-    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
+    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId, subject.organizationId);
 
     return this.crudService.getTemplateDetails(templateId, lecturerAccountId);
   }
@@ -91,7 +91,7 @@ export class GroupTemplatesCrudController {
       throw new ForbiddenException('Missing or invalid session');
     }
 
-    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
+    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId, subject.organizationId);
 
     return this.crudService.updateTemplate(templateId, lecturerAccountId, {
       name: dto.name,
@@ -111,7 +111,7 @@ export class GroupTemplatesCrudController {
       throw new ForbiddenException('Missing or invalid session');
     }
 
-    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
+    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId, subject.organizationId);
 
     await this.crudService.deleteTemplate(templateId, lecturerAccountId);
   }
@@ -128,7 +128,7 @@ export class GroupTemplatesCrudController {
       throw new ForbiddenException('Missing or invalid session');
     }
 
-    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
+    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId, subject.organizationId);
 
     return this.crudService.cloneTemplate(templateId, lecturerAccountId, dto.name);
   }
