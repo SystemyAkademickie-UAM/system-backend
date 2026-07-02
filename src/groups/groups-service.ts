@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { QueryFailedError, Repository } from 'typeorm';
+import { In, QueryFailedError, Repository } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
 import {
@@ -22,6 +22,7 @@ import { AccountEntity } from '../database/entities/account.entity';
 import { AvatarEntity } from '../database/entities/avatar.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
+import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserEntity } from '../database/entities/user.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
@@ -132,7 +133,11 @@ export class GroupsService {
     private readonly shopItemsService: ShopItemsService,
     private readonly backlogService: BacklogService,
     @InjectRepository(GroupEntity)
-    private readonly groupRepository: Repository<GroupEntity>) { }
+    private readonly groupRepository: Repository<GroupEntity>,
+    @InjectRepository(EnrollmentEntity)
+    private readonly enrollmentRepository: Repository<EnrollmentEntity>,
+    @InjectRepository(StudentStatsEntity)
+    private readonly studentStatsRepository: Repository<StudentStatsEntity>) { }
 
   async assertLecturerOwnsGroupAndGetAccountId(userId: number, internalGroupId: number): Promise<number> {
     const lecturerAccountId = await this.assertLecturerAndGetAccountId(userId);
@@ -482,6 +487,9 @@ export class GroupsService {
 
     try {
       await this.groupRepository.update({ id: internalGroupId }, updates);
+      if (updates.lives !== undefined && updates.lives !== null) {
+        await this.capEnrolledStudentsLivesToLimit(internalGroupId, updates.lives);
+      }
       if (body.livesEnabled !== undefined) {
         await this.backlogService.notifyEnrolledStudents(internalGroupId, 'LIVES_SYSTEM_CHANGED', {
           message: body.livesEnabled ? 'System żyć został włączony.' : 'System żyć został wyłączony.',
@@ -507,6 +515,27 @@ export class GroupsService {
         this.logger.error(`updateLivesConfig failed: ${String(err)}`);
       }
       throw new InternalServerErrorException('Database update failed');
+    }
+  }
+
+  async capEnrolledStudentsLivesToLimit(internalGroupId: number, maxLives: number): Promise<void> {
+    const enrollments = await this.enrollmentRepository.find({
+      where: { groupId: internalGroupId },
+      select: ['id'],
+    });
+    if (enrollments.length === 0) {
+      return;
+    }
+    const enrollmentIds = enrollments.map((e) => e.id);
+    const statsList = await this.studentStatsRepository.find({
+      where: { enrollmentId: In(enrollmentIds) },
+    });
+    const toUpdate = statsList.filter((s) => (s.lives ?? 0) > maxLives);
+    if (toUpdate.length > 0) {
+      for (const stat of toUpdate) {
+        stat.lives = maxLives;
+      }
+      await this.studentStatsRepository.save(toUpdate);
     }
   }
 

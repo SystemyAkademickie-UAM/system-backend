@@ -132,11 +132,7 @@ export class GroupsPostsService implements OnModuleInit, OnModuleDestroy {
       });
       const saved = await this.postRepository.save(entity);
       if (isPublished) {
-        await this.backlogService.notifyEnrolledStudents(groupId, 'POST_ADDED', {
-          message: `Opublikowano nowy wpis: ${saved.title}.`,
-          postId: saved.id,
-          postTitle: saved.title,
-        });
+        await this.notifyPostPublished(groupId, saved.id, saved.title);
       }
       return { status: GROUP_API_JSON_STATUS_OK, post: saved.id };
     } catch (err: unknown) {
@@ -291,6 +287,13 @@ export class GroupsPostsService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
+      const existingPost = await this.postRepository.findOne({
+        where: { id: postId, groupId },
+      });
+      if (!existingPost) {
+        return { status: GROUP_API_JSON_STATUS_OK, updated: false };
+      }
+
       const updateData: Partial<PostEntity> = {};
       if (body.title !== undefined) updateData.title = body.title;
       if (body.content !== undefined) updateData.content = body.content;
@@ -313,14 +316,41 @@ export class GroupsPostsService implements OnModuleInit, OnModuleDestroy {
           }
         }
       }
+
+      const wasPublished = existingPost.isPublished === true;
+      const willBePublished =
+        updateData.isPublished !== undefined
+          ? updateData.isPublished
+          : existingPost.isPublished;
+
       const result = await this.postRepository.update({ id: postId, groupId }, updateData);
+      const isUpdated = (result.affected ?? 0) > 0;
+
+      if (isUpdated && !wasPublished && willBePublished === true) {
+        const updatedTitle = updateData.title !== undefined ? updateData.title : existingPost.title;
+        await this.notifyPostPublished(groupId, postId, updatedTitle);
+      }
+
       return {
         status: GROUP_API_JSON_STATUS_OK,
-        updated: (result.affected ?? 0) > 0,
+        updated: isUpdated,
       };
     } catch (err: unknown) {
       this.logger.error(`Update post failed: ${String(err)}`);
       return { status: GROUP_API_JSON_STATUS_OK, updated: false };
     }
+  }
+
+  private async notifyPostPublished(
+    groupId: number,
+    postId: number,
+    postTitle: string | null,
+  ): Promise<void> {
+    const titleStr = postTitle ?? '';
+    await this.backlogService.notifyEnrolledStudents(groupId, 'POST_ADDED', {
+      message: `Opublikowano nowy wpis: ${titleStr}.`,
+      postId,
+      postTitle: titleStr,
+    });
   }
 }
