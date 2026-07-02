@@ -6,6 +6,8 @@ import { SessionService, type SessionSubject } from '../auth/session/session.ser
 import { GROUP_API_JSON_STATUS_OK, GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { GroupEntity } from '../database/entities/group.entity';
+import { EnrollmentEntity } from '../database/entities/enrollment.entity';
+import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { EnrollmentCodesService } from './enrollment-codes-service';
 import { GroupsService } from './groups-service';
@@ -47,6 +49,8 @@ describe('GroupsService', () => {
   let enrollmentCodesService: jest.Mocked<EnrollmentCodesService>;
   let mockQueryBuilder: MockQueryBuilder;
   let groupRepository: MockGroupRepository;
+  let enrollmentRepository: Record<string, jest.Mock>;
+  let studentStatsRepository: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     const mockSessionService = {
@@ -86,6 +90,8 @@ describe('GroupsService', () => {
       exist: jest.fn(),
       update: jest.fn(),
     };
+    enrollmentRepository = { find: jest.fn().mockResolvedValue([]) };
+    studentStatsRepository = { find: jest.fn().mockResolvedValue([]), save: jest.fn().mockResolvedValue([]) };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GroupsService,
@@ -95,6 +101,8 @@ describe('GroupsService', () => {
         { provide: ShopItemsService, useValue: mockShopItemsService },
         { provide: BacklogService, useValue: mockBacklogService },
         { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },
+        { provide: getRepositoryToken(EnrollmentEntity), useValue: enrollmentRepository },
+        { provide: getRepositoryToken(StudentStatsEntity), useValue: studentStatsRepository },
       ],
     }).compile();
     service = module.get<GroupsService>(GroupsService);
@@ -466,6 +474,20 @@ describe('GroupsService', () => {
       await expect(
         service.updateLivesConfig(mockRequest, 100001, { startingLives: 5 })
       ).rejects.toThrow('startingLives must not exceed lives (max cap)');
+    });
+
+    it('should clamp student lives when lives limit is updated', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.findOne.mockResolvedValue({ id: 1, teacherAccountId: 10, lives: 5, startingLives: null });
+      groupRepository.update = jest.fn().mockResolvedValue({ affected: 1 });
+      enrollmentRepository.find.mockResolvedValue([{ id: 50 }]);
+      studentStatsRepository.find.mockResolvedValue([{ id: 100, enrollmentId: 50, lives: 5 }]);
+      studentStatsRepository.save.mockResolvedValue({});
+
+      await service.updateLivesConfig(mockRequest, 100001, { lives: 3 });
+
+      expect(studentStatsRepository.save).toHaveBeenCalledWith([{ id: 100, enrollmentId: 50, lives: 3 }]);
     });
   });
 

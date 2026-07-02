@@ -12,6 +12,7 @@ import { UserEntity } from '../database/entities/user.entity';
 import { SessionService } from '../auth/session/session.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
+import { STUDENT_ROLE_NAME, LECTURER_ROLE_NAME } from '../constants/role-name-constants';
 
 describe('BacklogService', () => {
   let service: BacklogService;
@@ -29,6 +30,7 @@ describe('BacklogService', () => {
       create: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
     };
     groupRepository = {
       exist: jest.fn(),
@@ -476,6 +478,43 @@ describe('BacklogService', () => {
 
       // Assert
       expect(result).toEqual({ error: 'Forbidden: Role not authorized' });
+    });
+  });
+
+  describe('clearBacklog', () => {
+    const publicGroupId = 100001;
+    const internalGroupId = 1;
+
+    it('should clear student notification types when primary role is student', async () => {
+      // Arrange
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue(STUDENT_ROLE_NAME);
+      userRolesService.findAccountIdForRole.mockResolvedValue(100);
+      enrollmentRepository.exist.mockResolvedValue(true);
+      backlogRepository.delete.mockResolvedValue({ affected: 5 });
+
+      // Act
+      const result = await service.clearBacklog({} as Request, publicGroupId);
+
+      // Assert
+      expect(backlogRepository.delete).toHaveBeenCalled();
+      expect(result).toEqual({ deleted: 5 });
+    });
+
+    it('should clear lecturer activities excluding ITEM_USED when excludeItemUses is true', async () => {
+      // Arrange
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 2 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue(LECTURER_ROLE_NAME);
+      userRolesService.findAccountIdForRole.mockResolvedValue(200);
+      groupRepository.exist.mockResolvedValue(true);
+      backlogRepository.delete.mockResolvedValue({ affected: 3 });
+
+      // Act
+      const result = await service.clearBacklog({} as Request, publicGroupId, true);
+
+      // Assert
+      expect(backlogRepository.delete).toHaveBeenCalled();
+      expect(result).toEqual({ deleted: 3 });
     });
   });
 });

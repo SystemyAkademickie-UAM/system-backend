@@ -2,6 +2,7 @@ import {
     Controller,
     Get,
     Patch,
+    Delete,
     Param,
     ParseIntPipe,
     Req,
@@ -140,6 +141,24 @@ import { BacklogService, BacklogItemResponse } from './backlog-service';
     @Req() req: Request,
   ) {
     const result = await this.backlogService.markAsRead(req, groupId, backlogId);
+    if ('error' in result) {
+      if (result.error.startsWith('Forbidden:')) {
+        throw new ForbiddenException(result.error);
+      }
+      throw new UnauthorizedException(result.error);
+    }
+    return result;
+  }
+
+  @Delete(':groupId/backlog/clear')
+  @ApiOperation({ summary: 'Clear backlog notifications for current user or group' })
+  async clearBacklog(
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Req() req: Request,
+    @Query('excludeItemUses') excludeItemUses?: string,
+  ) {
+    const shouldExclude = excludeItemUses === 'true';
+    const result = await this.backlogService.clearBacklog(req, groupId, shouldExclude);
     if ('error' in result) {
       if (result.error.startsWith('Forbidden:')) {
         throw new ForbiddenException(result.error);

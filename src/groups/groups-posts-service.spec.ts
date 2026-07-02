@@ -21,6 +21,7 @@ describe('GroupsPostsService', () => {
   let groupRepository: Record<string, jest.Mock>;
   let enrollmentRepository: Record<string, jest.Mock>;
   let postRepository: Record<string, jest.Mock>;
+  let backlogService: Record<string, jest.Mock>;
 
   const mockRequest = {} as Request;
 
@@ -31,6 +32,7 @@ describe('GroupsPostsService', () => {
       create: jest.fn((data) => data),
       save: jest.fn((entity) => Promise.resolve({ ...entity, id: 1 })),
       find: jest.fn(),
+      findOne: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
       createQueryBuilder: jest.fn(() => ({
@@ -68,6 +70,7 @@ describe('GroupsPostsService', () => {
     service = module.get<GroupsPostsService>(GroupsPostsService);
     sessionService = module.get(SessionService);
     userRolesService = module.get(UserRolesService);
+    backlogService = module.get(BacklogService);
   });
 
   describe('createPost', () => {
@@ -215,6 +218,7 @@ describe('GroupsPostsService', () => {
       sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(10);
       groupRepository.exist.mockResolvedValue(true);
+      postRepository.findOne.mockResolvedValue({ id: 42, title: 'Draft Post', isPublished: false });
       postRepository.update.mockResolvedValue({ affected: 1 });
     });
 
@@ -244,6 +248,16 @@ describe('GroupsPostsService', () => {
       const updateArg = postRepository.update.mock.calls[0][1];
       expect(updateArg).not.toHaveProperty('isPublished');
       expect(updateArg).not.toHaveProperty('publishedAt');
+    });
+
+    it('should notify enrolled students when transitioning from draft to published', async () => {
+      await service.updatePost(mockRequest, 1, 42, { isPublished: true });
+
+      expect(backlogService.notifyEnrolledStudents).toHaveBeenCalledWith(1, 'POST_ADDED', {
+        message: 'Opublikowano nowy wpis: Draft Post.',
+        postId: 42,
+        postTitle: 'Draft Post',
+      });
     });
   });
 });

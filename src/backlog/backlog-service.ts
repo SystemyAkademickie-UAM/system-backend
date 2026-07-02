@@ -393,6 +393,69 @@ export class BacklogService {
     return { error: 'Forbidden: Role not authorized' };
   }
 
+  async clearBacklog(
+    req: Request,
+    publicGroupId: number,
+    excludeItemUses?: boolean,
+  ): Promise<{ deleted: number } | { error: string }> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      return { error: 'Unauthorized' };
+    }
+
+    const primaryRole = await this.userRolesService.resolvePrimaryRoleForUser(subject.userId);
+    if (!primaryRole) {
+      return { error: 'Forbidden: No role found' };
+    }
+
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+
+    if (primaryRole === STUDENT_ROLE_NAME) {
+      const access = await this.assertEnrolledStudent(req, publicGroupId);
+      if ('error' in access) {
+        return access;
+      }
+
+      const result = await this.backlogRepository.delete(
+        this.buildListFilter(
+          internalGroupId,
+          STUDENT_NOTIFICATION_TYPES,
+          access.studentAccountId,
+        ),
+      );
+
+      return { deleted: result.affected ?? 0 };
+    }
+
+    if (
+      primaryRole === LECTURER_ROLE_NAME ||
+      primaryRole === ADMINISTRATOR_ROLE_NAME ||
+      primaryRole === SUPER_ROLE_NAME
+    ) {
+      const access = await this.assertLecturerGroupAccess(req, publicGroupId);
+      if ('error' in access) {
+        return access;
+      }
+
+      const activityTypes = excludeItemUses
+        ? LECTURER_ACTIVITY_TYPES.filter((type) => type !== 'ITEM_USED')
+        : LECTURER_ACTIVITY_TYPES;
+
+      const result = await this.backlogRepository.delete(
+        this.buildListFilter(internalGroupId, activityTypes),
+      );
+
+      return { deleted: result.affected ?? 0 };
+    }
+
+    return { error: 'Forbidden: Role not authorized' };
+  }
+
   private buildListFilter(
     internalGroupId: number,
     types?: BacklogEventType[],
