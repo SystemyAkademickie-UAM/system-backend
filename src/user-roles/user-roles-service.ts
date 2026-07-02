@@ -37,6 +37,21 @@ export class UserRolesService {
   }
 
   /**
+   * @returns `auth.accounts.id` for the user's role within a specific organization, or null.
+   */
+  async findAccountIdForRoleInOrganization(
+    userId: number,
+    organizationId: number,
+    roleName: string,
+  ): Promise<number | null> {
+    const row = await this.accountRepository.findOne({
+      where: { userId, organizationId, role: roleName },
+      select: ['id'],
+    });
+    return row?.id ?? null;
+  }
+
+  /**
    * @returns lecturer `auth.accounts.id` for the given email within an organization.
    */
   async findLecturerAccountIdByEmailInOrganization(

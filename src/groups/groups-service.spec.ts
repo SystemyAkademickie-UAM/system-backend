@@ -38,8 +38,8 @@ type MockGroupRepository = {
 
 const mockRequest = {} as Request;
 
-function mockSubject(userId: number): SessionSubject {
-  return { userId, activeRole: null, sessionId: 1 };
+function mockSubject(userId: number, organizationId: number | null = 1): SessionSubject {
+  return { userId, activeRole: null, sessionId: 1, organizationId };
 }
 
 describe('GroupsService', () => {
@@ -58,6 +58,7 @@ describe('GroupsService', () => {
     };
     const mockUserRolesService = {
       findAccountIdForRole: jest.fn(),
+      findAccountIdForRoleInOrganization: jest.fn(),
     };
     const mockEnrollmentCodesService = {
       findLatestActiveCode: jest.fn(),
@@ -109,6 +110,9 @@ describe('GroupsService', () => {
     sessionService = module.get(SessionService);
     userRolesService = module.get(UserRolesService);
     enrollmentCodesService = module.get(EnrollmentCodesService);
+    userRolesService.findAccountIdForRoleInOrganization.mockImplementation(
+      async (userId, _organizationId, role) => userRolesService.findAccountIdForRole(userId, role),
+    );
   });
 
   describe('getUserGroups', () => {
@@ -208,7 +212,7 @@ describe('GroupsService', () => {
       });
     });
 
-    it('should split catalog into myGroups and otherGroups', async () => {
+    it('should split catalog into myGroups and otherGroups within the same organization', async () => {
       sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(2));
       userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) => {
         if (role === LECTURER_ROLE_NAME) {
@@ -263,6 +267,13 @@ describe('GroupsService', () => {
       expect(result.otherGroups[0].groupName).toBe('Foreign');
     });
 
+    it('should return empty catalog when session has no organizationId', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(3, null));
+      const result = await service.getGroupsCatalog(mockRequest);
+      expect(result).toEqual({ statusCode: GROUP_API_JSON_STATUS_OK, myGroups: [], otherGroups: [] });
+      expect(mockQueryBuilder.getRawMany).not.toHaveBeenCalled();
+    });
+
     it('should include enrollment join when user has student role', async () => {
       sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(3));
       userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) => {
@@ -276,6 +287,10 @@ describe('GroupsService', () => {
       });
       mockQueryBuilder.getRawMany.mockResolvedValue([]);
       await service.getGroupsCatalog(mockRequest);
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'account.organization_id = :organizationId',
+        { organizationId: 1 },
+      );
       expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith('lecturerId', 40);
       expect(mockQueryBuilder.leftJoin).toHaveBeenCalledTimes(4);
     });

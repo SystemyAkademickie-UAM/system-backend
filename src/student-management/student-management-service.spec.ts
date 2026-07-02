@@ -16,7 +16,7 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 import { StudentManagementService } from './student-management-service';
 
 function mockSubject(userId: number): SessionSubject {
-  return { userId, activeRole: null, sessionId: 1 };
+  return { userId, activeRole: null, sessionId: 1, organizationId: 1 };
 }
 
 describe('StudentManagementService', () => {

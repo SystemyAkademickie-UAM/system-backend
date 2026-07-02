@@ -13,6 +13,7 @@ import {
   GROUP_ENROLL_API_JSON_STATUS_OK,
 } from '../constants/group-enroll-api-constants';
 import { STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { AccountEntity } from '../database/entities/account.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
@@ -77,6 +78,22 @@ export class GroupsEnrollmentService {
     @InjectRepository(StudentStatsEntity)
     private readonly studentStatsRepository: Repository<StudentStatsEntity>) {}
 
+  private async groupBelongsToStudentOrganization(
+    groupId: number,
+    studentAccountId: number,
+  ): Promise<boolean> {
+    const match = await this.groupRepository
+      .createQueryBuilder('group')
+      .innerJoin(AccountEntity, 'teacherAccount', 'group.teacher_account_id = teacherAccount.id')
+      .innerJoin(AccountEntity, 'studentAccount', 'studentAccount.id = :studentAccountId', {
+        studentAccountId,
+      })
+      .where('group.id = :groupId', { groupId })
+      .andWhere('teacherAccount.organization_id = studentAccount.organization_id')
+      .getCount();
+    return match > 0;
+  }
+
   /**
    * Core enrollment logic - use when you already have studentAccountId and groupId.
    * Returns `enrollmentId > 0` on success, negative error code otherwise.
@@ -84,6 +101,10 @@ export class GroupsEnrollmentService {
    * @param groupId - The internal group ID (not public ID with offset)
    */
   async enrollStudentById(studentAccountId: number, groupId: number): Promise<EnrollResult> {
+    const groupBelongsToOrg = await this.groupBelongsToStudentOrganization(groupId, studentAccountId);
+    if (!groupBelongsToOrg) {
+      return { enrollmentId: ENROLL_RESULT_GROUP_NOT_FOUND, groupId };
+    }
     const group = await this.groupRepository.findOne({
       where: { id: groupId },
       select: ['id', 'startingLives', 'lives'],
@@ -139,7 +160,13 @@ export class GroupsEnrollmentService {
     if (!subject) {
       return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }
-    const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
+    const studentAccountId =
+      subject.organizationId === null
+        ? null
+        : await this.userRolesService.findAccountIdForRoleInOrganization(
+            subject.userId,
+            subject.organizationId,
+            STUDENT_ROLE_NAME);
     if (studentAccountId === null) {
       return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }
@@ -172,7 +199,13 @@ export class GroupsEnrollmentService {
     if (!subject) {
       return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }
-    const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
+    const studentAccountId =
+      subject.organizationId === null
+        ? null
+        : await this.userRolesService.findAccountIdForRoleInOrganization(
+            subject.userId,
+            subject.organizationId,
+            STUDENT_ROLE_NAME);
     if (studentAccountId === null) {
       return { statusCode: GROUP_ENROLL_API_JSON_STATUS_OK, enrollmentId: ENROLL_RESULT_NOT_AUTHORIZED };
     }

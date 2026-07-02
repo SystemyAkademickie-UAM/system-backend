@@ -20,8 +20,18 @@ export class GroupAuthorizationService {
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>) {}
 
-  async assertLecturerOwnsGroup(userId: number, groupId: number): Promise<number> {
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(userId, LECTURER_ROLE_NAME);
+  async assertLecturerOwnsGroup(
+    userId: number,
+    groupId: number,
+    organizationId?: number | null,
+  ): Promise<number> {
+    const lecturerAccountId =
+      organizationId != null
+        ? await this.userRolesService.findAccountIdForRoleInOrganization(
+            userId,
+            organizationId,
+            LECTURER_ROLE_NAME)
+        : await this.userRolesService.findAccountIdForRole(userId, LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       throw new ForbiddenException('Not authorized');
     }
@@ -42,11 +52,21 @@ export class GroupAuthorizationService {
     if (!subject) {
       throw new ForbiddenException('Not authorized');
     }
-    return this.assertLecturerOwnsGroup(subject.userId, groupId);
+    return this.assertLecturerOwnsGroup(subject.userId, groupId, subject.organizationId);
   }
 
-  async isLecturerOwner(userId: number, groupId: number): Promise<boolean> {
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(userId, LECTURER_ROLE_NAME);
+  async isLecturerOwner(
+    userId: number,
+    groupId: number,
+    organizationId?: number | null,
+  ): Promise<boolean> {
+    const lecturerAccountId =
+      organizationId != null
+        ? await this.userRolesService.findAccountIdForRoleInOrganization(
+            userId,
+            organizationId,
+            LECTURER_ROLE_NAME)
+        : await this.userRolesService.findAccountIdForRole(userId, LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       return false;
     }

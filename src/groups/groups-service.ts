@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { In, QueryFailedError, Repository } from 'typeorm';
 
-import { SessionService } from '../auth/session/session.service';
+import { SessionService, type SessionSubject } from '../auth/session/session.service';
 import {
   GROUP_API_JSON_STATUS_OK,
   GROUP_RESPONSE_GROUP_ID_OFFSET,
@@ -139,8 +139,12 @@ export class GroupsService {
     @InjectRepository(StudentStatsEntity)
     private readonly studentStatsRepository: Repository<StudentStatsEntity>) { }
 
-  async assertLecturerOwnsGroupAndGetAccountId(userId: number, internalGroupId: number): Promise<number> {
-    const lecturerAccountId = await this.assertLecturerAndGetAccountId(userId);
+  async assertLecturerOwnsGroupAndGetAccountId(
+    userId: number,
+    internalGroupId: number,
+    organizationId?: number | null,
+  ): Promise<number> {
+    const lecturerAccountId = await this.assertLecturerAndGetAccountId(userId, organizationId);
     const group = await this.groupRepository.findOne({
       where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
     });
@@ -150,12 +154,50 @@ export class GroupsService {
     return lecturerAccountId;
   }
 
-  async assertLecturerAndGetAccountId(userId: number): Promise<number> {
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(userId, LECTURER_ROLE_NAME);
+  async assertLecturerAndGetAccountId(userId: number, organizationId?: number | null): Promise<number> {
+    const lecturerAccountId =
+      organizationId != null
+        ? await this.userRolesService.findAccountIdForRoleInOrganization(
+            userId,
+            organizationId,
+            LECTURER_ROLE_NAME)
+        : await this.userRolesService.findAccountIdForRole(userId, LECTURER_ROLE_NAME);
     if (lecturerAccountId === null) {
       throw new ForbiddenException('Requires lecturer privileges');
     }
     return lecturerAccountId;
+  }
+
+  private async resolveOrganizationScopedAccountIds(subject: SessionSubject): Promise<{
+    organizationId: number | null;
+    lecturerAccountId: number | null;
+    studentAccountId: number | null;
+  }> {
+    const organizationId = subject.organizationId;
+    if (organizationId === null) {
+      return { organizationId: null, lecturerAccountId: null, studentAccountId: null };
+    }
+    const [lecturerAccountId, studentAccountId] = await Promise.all([
+      this.userRolesService.findAccountIdForRoleInOrganization(
+        subject.userId,
+        organizationId,
+        LECTURER_ROLE_NAME),
+      this.userRolesService.findAccountIdForRoleInOrganization(
+        subject.userId,
+        organizationId,
+        STUDENT_ROLE_NAME),
+    ]);
+    return { organizationId, lecturerAccountId, studentAccountId };
+  }
+
+  private async resolveLecturerAccountId(subject: SessionSubject): Promise<number | null> {
+    if (subject.organizationId === null) {
+      return null;
+    }
+    return this.userRolesService.findAccountIdForRoleInOrganization(
+      subject.userId,
+      subject.organizationId,
+      LECTURER_ROLE_NAME);
   }
 
   async createGroup(
@@ -165,7 +207,7 @@ export class GroupsService {
     if (!subject) {
       return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID };
     }
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
+    const lecturerAccountId = await this.resolveLecturerAccountId(subject);
     if (lecturerAccountId === null) {
       return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID };
     }
@@ -244,9 +286,7 @@ export class GroupsService {
         updated: false,
       };
     }
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      LECTURER_ROLE_NAME);
+    const lecturerAccountId = await this.resolveLecturerAccountId(subject);
     if (lecturerAccountId === null) {
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
@@ -377,9 +417,7 @@ export class GroupsService {
     if (!subject) {
       throw new UnauthorizedException('Missing or invalid session');
     }
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      LECTURER_ROLE_NAME);
+    const lecturerAccountId = await this.resolveLecturerAccountId(subject);
     if (lecturerAccountId === null) {
       throw new ForbiddenException('Requires lecturer privileges');
     }
@@ -430,9 +468,7 @@ export class GroupsService {
     if (!subject) {
       throw new UnauthorizedException('Missing or invalid session');
     }
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      LECTURER_ROLE_NAME);
+    const lecturerAccountId = await this.resolveLecturerAccountId(subject);
     if (lecturerAccountId === null) {
       throw new ForbiddenException('Requires lecturer privileges');
     }
@@ -559,14 +595,14 @@ export class GroupsService {
       throw new BadRequestException('Invalid group ID');
     }
 
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      LECTURER_ROLE_NAME);
-    const studentAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      STUDENT_ROLE_NAME);
+    const { organizationId, lecturerAccountId, studentAccountId } =
+      await this.resolveOrganizationScopedAccountIds(subject);
+    if (organizationId === null) {
+      throw new BadRequestException('Group not found');
+    }
 
     const rows = await this.fetchAllGroupsWithMembershipFlags(
+      organizationId,
       lecturerAccountId,
       studentAccountId,
       internalGroupId);
@@ -613,9 +649,7 @@ export class GroupsService {
     if (!subject) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      LECTURER_ROLE_NAME);
+    const lecturerAccountId = await this.resolveLecturerAccountId(subject);
     if (lecturerAccountId === null) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
@@ -650,9 +684,7 @@ export class GroupsService {
     if (!subject) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      LECTURER_ROLE_NAME);
+    const lecturerAccountId = await this.resolveLecturerAccountId(subject);
     if (lecturerAccountId === null) {
       return this.buildGenerateCodeError(GENERATE_CODE_RESULT_NOT_AUTHORIZED);
     }
@@ -722,13 +754,13 @@ export class GroupsService {
     if (!subject) {
       return { statusCode: GROUP_API_JSON_STATUS_OK, myGroups: [], otherGroups: [] };
     }
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      LECTURER_ROLE_NAME);
-    const studentAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      STUDENT_ROLE_NAME);
+    const { organizationId, lecturerAccountId, studentAccountId } =
+      await this.resolveOrganizationScopedAccountIds(subject);
+    if (organizationId === null) {
+      return { statusCode: GROUP_API_JSON_STATUS_OK, myGroups: [], otherGroups: [] };
+    }
     const allGroups = await this.fetchAllGroupsWithMembershipFlags(
+      organizationId,
       lecturerAccountId,
       studentAccountId);
     const myGroups: UserGroupListItem[] = [];
@@ -768,13 +800,13 @@ export class GroupsService {
     } catch {
       return empty;
     }
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      LECTURER_ROLE_NAME);
-    const studentAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      STUDENT_ROLE_NAME);
+    const { organizationId, lecturerAccountId, studentAccountId } =
+      await this.resolveOrganizationScopedAccountIds(subject);
+    if (organizationId === null) {
+      return empty;
+    }
     const rows = await this.fetchAllGroupsWithMembershipFlags(
+      organizationId,
       lecturerAccountId,
       studentAccountId,
       internalGroupId);
@@ -848,6 +880,7 @@ export class GroupsService {
   }
 
   private async fetchAllGroupsWithMembershipFlags(
+    organizationId: number,
     lecturerAccountId: number | null,
     studentAccountId: number | null,
     internalGroupId?: number): Promise<
@@ -904,6 +937,7 @@ export class GroupsService {
         'user.show_nickname AS teacher_show_nickname',
         'avatar.image_url AS teacher_avatar_url',
       ]);
+    qb.andWhere('account.organization_id = :organizationId', { organizationId });
     if (studentAccountId !== null) {
       qb.leftJoin(
         EnrollmentEntity,

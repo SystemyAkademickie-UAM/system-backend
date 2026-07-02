@@ -40,7 +40,8 @@ export class GroupTemplatesController {
 
     const accountId = await this.groupsService.assertLecturerOwnsGroupAndGetAccountId(
       subject.userId,
-      internalGroupId);
+      internalGroupId,
+      subject.organizationId);
 
     const creatorAccountId = await this.resolveTemplateCreatorAccountId(accountId, dto.devCreatorEmail);
 
@@ -92,7 +93,9 @@ export class GroupTemplatesController {
       throw new ForbiddenException('Missing or invalid session');
     }
 
-    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(subject.userId);
+    const lecturerAccountId = await this.groupsService.assertLecturerAndGetAccountId(
+      subject.userId,
+      subject.organizationId);
 
     const newGroup = await this.importService.createGroupFromTemplate(
       templateId,

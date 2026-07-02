@@ -15,6 +15,8 @@ export type SessionSubject = {
   userId: number;
   activeRole: string | null;
   sessionId: number;
+  /** Tenant from login (SAML / magic link). Required for org-scoped API behavior. */
+  organizationId: number | null;
 };
 
 /**
@@ -86,6 +88,7 @@ export class SessionService {
       userId: row.userId,
       activeRole: row.activeRole,
       sessionId: row.id,
+      organizationId: row.organizationId,
     };
   }
 
