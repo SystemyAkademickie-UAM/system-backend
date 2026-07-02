@@ -355,6 +355,7 @@ export class GroupsService {
     if (payload.imageRef !== undefined) {
       updates.imageRef = nullableTrimmedString(payload.imageRef);
     }
+    let shopOpenedBySchedule = false;
     if (payload.shopOpensAt !== undefined) {
       if (payload.shopOpensAt === null) {
         updates.shopOpensAt = null;
@@ -363,6 +364,7 @@ export class GroupsService {
         if (d <= new Date()) {
           updates.shopOpen = true;
           updates.shopOpensAt = null;
+          shopOpenedBySchedule = !existing.shopOpen;
         } else {
           updates.shopOpensAt = d;
           updates.shopOpen = false;
@@ -391,6 +393,12 @@ export class GroupsService {
 
     try {
       await this.groupRepository.update({ id: internalGroupId }, updates);
+      if (shopOpenedBySchedule) {
+        await this.backlogService.notifyEnrolledStudents(internalGroupId, 'SHOP_STATUS_CHANGED', {
+          message: 'Sklep grupy został otwarty.',
+          shopOpen: true,
+        });
+      }
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
         group: internalGroupId + GROUP_RESPONSE_GROUP_ID_OFFSET,

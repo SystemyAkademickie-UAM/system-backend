@@ -109,9 +109,9 @@ export class ShopStudentService {
           throw new ForbiddenException('Kupowanie dodatkowego życia jest wyłączone.');
         }
 
-        const maxLives = group.lives ?? group.startingLives ?? 3;
+        const maxLives = group.lives;
         const currentLives = stats.lives ?? 0;
-        if (currentLives >= maxLives) {
+        if (maxLives != null && currentLives >= maxLives) {
           throw new BadRequestException('Osiągnięto maksymalną liczbę żyć. Nie można kupić więcej.');
         }
       }
@@ -170,9 +170,11 @@ export class ShopStudentService {
       // 7. ZATWIERDZANIE ZAKUPU
       stats.currency = currentCurrency - price;
       if (isExtraLife) {
-        const maxLives = group.lives ?? group.startingLives ?? 3;
+        const maxLives = group.lives;
         const currentLives = stats.lives ?? 0;
-        stats.lives = Math.min(maxLives, currentLives + 1);
+        stats.lives = maxLives == null
+          ? currentLives + 1
+          : Math.min(maxLives, currentLives + 1);
       }
       await manager.save(StudentStatsEntity, stats);
 

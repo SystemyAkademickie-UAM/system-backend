@@ -101,5 +101,24 @@ describe('ShopStudentService', () => {
       expect(statsObj.lives).toBe(3);
       expect(statsObj.currency).toBe(50);
     });
+
+    it('should allow extra life purchase when group lives cap is null', async () => {
+      const statsObj = { id: 50, currency: 100, lives: 99 };
+      manager.findOne.mockImplementation(async (entity) => {
+        if (entity === GroupEntity) return { id: 1, shopOpen: true, livesEnabled: true, livesShopEnabled: true, lives: null, startingLives: 3 };
+        if (entity === ItemEntity) return { id: 10, name: 'Dodatkowe Życie', isExtraLife: true, groupId: 1 };
+        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50 };
+        if (entity === EnrollmentEntity) return { id: 5, groupId: 1, studentAccountId: 100 };
+        if (entity === StudentStatsEntity) return statsObj;
+        return null;
+      });
+      manager.find.mockResolvedValue([]);
+      manager.save.mockResolvedValue({});
+
+      const result = await service.buyItem(mockRequest, 1, 10);
+
+      expect(result).toEqual({ success: true, message: 'Item purchased successfully' });
+      expect(statsObj.lives).toBe(100);
+    });
   });
 });
