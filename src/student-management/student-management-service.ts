@@ -13,6 +13,7 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 import { RanksService } from '../gamification/ranks-service';
 import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { BulkUpdateStudentsDto } from './dto/bulk-update-student.dto';
+import { BulkUpdateLivesDto } from './dto/bulk-update-lives.dto';
 
 /**
  * Response shape for a single student row in the participants table.
@@ -358,6 +359,90 @@ export class StudentManagementService {
 
     this.logger.log(`Student (account=${accountId}) lives decremented to ${newLives} in group ${groupId}`);
     return { lives: newLives };
+  }
+
+  /**
+   * PATCH /groups/:groupId/students/lives/bulk-update
+   * Updates lives for multiple students in a single transaction.
+   * Each student's lives are clamped to [0, group.lives] (livesMax).
+   *
+   * @returns Per-student result array `{ accountId, lives }[]`.
+   */
+  async bulkUpdateLives(
+    req: Request,
+    groupId: number,
+    dto: BulkUpdateLivesDto,
+  ): Promise<{ results: { accountId: number; lives: number }[] }> {
+    await this.assertLecturerOwnsGroup(req, groupId);
+
+    const group = await this.groupRepository.findOne({ where: { id: groupId } });
+    if (!group) {
+      throw new NotFoundException(`Group with id ${groupId} not found`);
+    }
+    const livesMax = group.lives ?? null;
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    const results: { accountId: number; lives: number }[] = [];
+
+    try {
+      for (const item of dto.students) {
+        const enrollment = await queryRunner.manager.findOne(EnrollmentEntity, {
+          where: { groupId, studentAccountId: item.accountId },
+        });
+
+        if (!enrollment) {
+          this.logger.warn(
+            `Bulk-lives-update skipped: account ${item.accountId} not enrolled in group ${groupId}`);
+          continue;
+        }
+
+        let stats = await queryRunner.manager.findOne(StudentStatsEntity, {
+          where: { enrollmentId: enrollment.id },
+        });
+
+        if (!stats) {
+          stats = queryRunner.manager.create(StudentStatsEntity, {
+            enrollmentId: enrollment.id,
+            currency: 0,
+            totalEarned: 0,
+            rankId: null,
+            autoRankEnabled: true,
+            lives: 3,
+          });
+        }
+
+        const currentLives = stats.lives ?? 3;
+        const uncapped = currentLives + item.delta;
+        const newLives = livesMax != null
+          ? Math.min(livesMax, Math.max(0, uncapped))
+          : Math.max(0, uncapped);
+
+        stats.lives = newLives;
+        await queryRunner.manager.save(StudentStatsEntity, stats);
+
+        await this.backlogService.logEvent(groupId, item.accountId, 'LIVES_CHANGED', {
+          message: `Prowadzący zmienił liczbę Twoich szans (żyć) o ${item.delta > 0 ? '+' : ''}${item.delta}. Aktualna liczba szans: ${newLives}.`,
+          lives: newLives,
+          delta: item.delta,
+        });
+
+        results.push({ accountId: item.accountId, lives: newLives });
+      }
+
+      await queryRunner.commitTransaction();
+      this.logger.log(
+        `Bulk-lives-update: ${results.length} student(s) updated in group ${groupId}`);
+      return { results };
+    } catch (err: unknown) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Bulk-lives-update failed for group ${groupId}: ${String(err)}`);
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   // ── Shared auth & validation helpers ────────────────────────────────

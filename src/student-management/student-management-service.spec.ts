@@ -223,4 +223,161 @@ describe('StudentManagementService', () => {
       expect(studentStatsRepository.save).toHaveBeenCalledWith(expect.objectContaining({ lives: 0 }));
     });
   });
+
+  describe('bulkUpdateLives', () => {
+    beforeEach(() => {
+      groupAuthorizationService.assertLecturerOwnsGroupFromRequest.mockResolvedValue(10);
+      groupRepository.exist.mockResolvedValue(true);
+    });
+
+    it('should update lives for multiple students respecting livesMax cap', async () => {
+      groupRepository.exist.mockResolvedValue(true);
+      // Return group with livesMax = 5
+      mockQueryRunner.manager.findOne.mockImplementation(async (entity, options) => {
+        if (entity === EnrollmentEntity) {
+          return { id: options.where.studentAccountId * 10, groupId, studentAccountId: options.where.studentAccountId };
+        }
+        return { enrollmentId: options.where.enrollmentId, lives: 4 };
+      });
+
+      // Spy on groupRepository to return livesMax
+      groupRepository.exist.mockResolvedValue(true);
+      jest.spyOn(service as never, 'assertLecturerOwnsGroup').mockResolvedValue(undefined as never);
+
+      const savedStats: { lives: number }[] = [];
+      mockQueryRunner.manager.save.mockImplementation(async (_entity, data) => {
+        savedStats.push(data);
+        return data;
+      });
+
+      // accountId=20 has 4 lives, delta=+3 → capped at 5; accountId=30 has 4 lives, delta=-2 → 2
+      const inputStudents = [
+        { accountId: 20, delta: 3 },
+        { accountId: 30, delta: -2 },
+      ];
+
+      // Re-mock findOne to return group
+      const originalFindOne = mockQueryRunner.manager.findOne;
+      mockQueryRunner.manager.findOne.mockImplementation(async (entity, options) => {
+        if (entity === EnrollmentEntity) {
+          const accountId = options.where.studentAccountId as number;
+          return { id: accountId * 10, groupId, studentAccountId: accountId };
+        }
+        return { enrollmentId: (options.where.enrollmentId as number), lives: 4 };
+      });
+
+      const module2 = await (await import('@nestjs/testing')).Test.createTestingModule({
+        providers: [
+          StudentManagementService,
+          { provide: SessionService, useValue: { resolveSubjectFromRequest: jest.fn() } },
+          { provide: UserRolesService, useValue: { userHasRole: jest.fn(), findAccountIdForRole: jest.fn() } },
+          { provide: BacklogService, useValue: backlogService },
+          { provide: DataSource, useValue: dataSource },
+          { provide: RanksService, useValue: ranksService },
+          { provide: GroupAuthorizationService, useValue: groupAuthorizationService },
+          { provide: getRepositoryToken(GroupEntity), useValue: { ...groupRepository, findOne: jest.fn().mockResolvedValue({ id: groupId, lives: 5 }) } },
+          { provide: getRepositoryToken(EnrollmentEntity), useValue: enrollmentRepository },
+          { provide: getRepositoryToken(StudentStatsEntity), useValue: studentStatsRepository },
+        ],
+      }).compile();
+
+      const service2 = module2.get(StudentManagementService);
+      const result = await service2.bulkUpdateLives(mockRequest, groupId, { students: inputStudents });
+
+      expect(result.results).toHaveLength(2);
+      // accountId=20: 4+3=7 → capped to 5
+      expect(result.results[0]).toEqual({ accountId: 20, lives: 5 });
+      // accountId=30: 4-2=2 → 2 (no cap needed)
+      expect(result.results[1]).toEqual({ accountId: 30, lives: 2 });
+    });
+
+    it('should clamp lives to 0 when negative delta exceeds current lives', async () => {
+      mockQueryRunner.manager.findOne.mockImplementation(async (entity, options) => {
+        if (entity === EnrollmentEntity) {
+          return { id: 100, groupId, studentAccountId: options.where.studentAccountId };
+        }
+        return { enrollmentId: 100, lives: 1 };
+      });
+
+      const savedStats: { lives: number }[] = [];
+      mockQueryRunner.manager.save.mockImplementation(async (_entity, data) => {
+        savedStats.push(data);
+        return data;
+      });
+
+      const module3 = await (await import('@nestjs/testing')).Test.createTestingModule({
+        providers: [
+          StudentManagementService,
+          { provide: SessionService, useValue: { resolveSubjectFromRequest: jest.fn() } },
+          { provide: UserRolesService, useValue: { userHasRole: jest.fn(), findAccountIdForRole: jest.fn() } },
+          { provide: BacklogService, useValue: backlogService },
+          { provide: DataSource, useValue: dataSource },
+          { provide: RanksService, useValue: ranksService },
+          { provide: GroupAuthorizationService, useValue: groupAuthorizationService },
+          { provide: getRepositoryToken(GroupEntity), useValue: { exist: jest.fn().mockResolvedValue(true), findOne: jest.fn().mockResolvedValue({ id: groupId, lives: null }) } },
+          { provide: getRepositoryToken(EnrollmentEntity), useValue: enrollmentRepository },
+          { provide: getRepositoryToken(StudentStatsEntity), useValue: studentStatsRepository },
+        ],
+      }).compile();
+
+      const service3 = module3.get(StudentManagementService);
+      const result = await service3.bulkUpdateLives(mockRequest, groupId, {
+        students: [{ accountId: 20, delta: -99 }],
+      });
+
+      expect(result.results[0].lives).toBe(0);
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
+    });
+
+    it('should skip unknown accountId and process the rest', async () => {
+      let callCount = 0;
+      mockQueryRunner.manager.findOne.mockImplementation(async (entity, options) => {
+        if (entity === EnrollmentEntity) {
+          callCount++;
+          // First call (accountId=999) returns null → not enrolled
+          if (options.where.studentAccountId === 999) return null;
+          return { id: 200, groupId, studentAccountId: options.where.studentAccountId };
+        }
+        return { enrollmentId: 200, lives: 2 };
+      });
+
+      mockQueryRunner.manager.save.mockImplementation(async (_entity, data) => data);
+
+      const module4 = await (await import('@nestjs/testing')).Test.createTestingModule({
+        providers: [
+          StudentManagementService,
+          { provide: SessionService, useValue: { resolveSubjectFromRequest: jest.fn() } },
+          { provide: UserRolesService, useValue: { userHasRole: jest.fn(), findAccountIdForRole: jest.fn() } },
+          { provide: BacklogService, useValue: backlogService },
+          { provide: DataSource, useValue: dataSource },
+          { provide: RanksService, useValue: ranksService },
+          { provide: GroupAuthorizationService, useValue: groupAuthorizationService },
+          { provide: getRepositoryToken(GroupEntity), useValue: { exist: jest.fn().mockResolvedValue(true), findOne: jest.fn().mockResolvedValue({ id: groupId, lives: null }) } },
+          { provide: getRepositoryToken(EnrollmentEntity), useValue: enrollmentRepository },
+          { provide: getRepositoryToken(StudentStatsEntity), useValue: studentStatsRepository },
+        ],
+      }).compile();
+
+      const service4 = module4.get(StudentManagementService);
+      const result = await service4.bulkUpdateLives(mockRequest, groupId, {
+        students: [
+          { accountId: 999, delta: 1 },  // not enrolled → skipped
+          { accountId: 20, delta: 1 },   // enrolled → processed
+        ],
+      });
+
+      expect(result.results).toHaveLength(1);
+      expect(result.results[0].accountId).toBe(20);
+    });
+
+    it('should throw ForbiddenException when lecturer does not own the group', async () => {
+      groupAuthorizationService.assertLecturerOwnsGroupFromRequest.mockRejectedValue(
+        new (await import('@nestjs/common')).ForbiddenException('Not authorized'),
+      );
+
+      await expect(
+        service.bulkUpdateLives(mockRequest, groupId, { students: [{ accountId: 20, delta: 1 }] }),
+      ).rejects.toThrow((await import('@nestjs/common')).ForbiddenException);
+    });
+  });
 });
