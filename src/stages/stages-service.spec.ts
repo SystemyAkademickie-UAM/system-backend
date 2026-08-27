@@ -2,7 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 
 import { SessionService, type SessionSubject } from '../auth/session/session.service';
 import {
@@ -12,6 +12,8 @@ import {
 } from '../constants/stage-api-constants';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+import { ActivityBacklogEntity } from '../database/entities/activity-backlog.entity';
+import { ActivityEntity } from '../database/entities/activity.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StageEntity } from '../database/entities/stage.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
@@ -28,8 +30,9 @@ describe('StagesService', () => {
   let sessionService: jest.Mocked<SessionService>;
   let userRolesService: jest.Mocked<UserRolesService>;
   let groupRepository: { exist: jest.Mock };
+  let stageRepository: { find: jest.Mock; findOne: jest.Mock; save: jest.Mock; delete: jest.Mock; update: jest.Mock };
   let groupAuthorizationService: { assertLecturerOwnsGroup: jest.Mock; isLecturerOwner: jest.Mock };
-  let mockManager: { update: jest.Mock };
+  let mockManager: { update: jest.Mock; find: jest.Mock; delete: jest.Mock };
   let mockQueryRunner: {
     connect: jest.Mock;
     startTransaction: jest.Mock;
@@ -44,7 +47,11 @@ describe('StagesService', () => {
   const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 5;
 
   beforeEach(async () => {
-    mockManager = { update: jest.fn().mockResolvedValue({ affected: 1 }) };
+    mockManager = {
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      find: jest.fn().mockResolvedValue([]),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
     mockQueryRunner = {
       connect: jest.fn(),
       startTransaction: jest.fn(),
@@ -85,6 +92,7 @@ describe('StagesService', () => {
     service = module.get(StagesService);
     sessionService = module.get(SessionService);
     userRolesService = module.get(UserRolesService);
+    stageRepository = module.get(getRepositoryToken(StageEntity));
   });
 
   describe('handleStage reorder', () => {
@@ -133,6 +141,54 @@ describe('StagesService', () => {
       });
       expect(mockManager.update).toHaveBeenCalledTimes(2);
       expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
+    });
+  });
+
+  describe('handleStage remove', () => {
+    it('should delete an empty stage', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.userHasRole.mockResolvedValue(true);
+      stageRepository.findOne.mockResolvedValue({ id: 4, groupId: 5, name: 'Empty' });
+      mockManager.find.mockResolvedValue([]);
+
+      const actualResult = await service.handleStage(mockRequest, {
+        auth: 'token',
+        method: 'remove',
+        stageId: 4,
+      });
+
+      expect(actualResult).toEqual({
+        statusCode: STAGE_API_JSON_STATUS_OK,
+        method: 'remove',
+        stage: 4,
+      });
+      expect(mockManager.delete).toHaveBeenCalledTimes(1);
+      expect(mockManager.delete).toHaveBeenCalledWith(StageEntity, { id: 4 });
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
+    });
+
+    it('should delete a stage together with its activities and completion rows', async () => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
+      userRolesService.userHasRole.mockResolvedValue(true);
+      stageRepository.findOne.mockResolvedValue({ id: 4, groupId: 5, name: 'Filled' });
+      mockManager.find.mockResolvedValue([{ id: 21 }, { id: 22 }]);
+
+      const actualResult = await service.handleStage(mockRequest, {
+        auth: 'token',
+        method: 'remove',
+        stageId: 4,
+      });
+
+      expect(actualResult).toEqual({
+        statusCode: STAGE_API_JSON_STATUS_OK,
+        method: 'remove',
+        stage: 4,
+      });
+      expect(mockManager.delete).toHaveBeenNthCalledWith(1, ActivityBacklogEntity, {
+        activityId: In([21, 22]),
+      });
+      expect(mockManager.delete).toHaveBeenNthCalledWith(2, ActivityEntity, { stageId: 4 });
+      expect(mockManager.delete).toHaveBeenNthCalledWith(3, StageEntity, { id: 4 });
     });
   });
 });

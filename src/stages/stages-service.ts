@@ -1,7 +1,7 @@
 import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
 import {
@@ -15,6 +15,8 @@ import {
 } from '../constants/stage-api-constants';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
 import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+import { ActivityBacklogEntity } from '../database/entities/activity-backlog.entity';
+import { ActivityEntity } from '../database/entities/activity.entity';
 import { StageEntity } from '../database/entities/stage.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
@@ -187,8 +189,8 @@ export class StagesService {
     }
     try {
       await this.groupAuthorizationService.assertLecturerOwnsGroup(subject.userId, existing.groupId);
-      const result = await this.stageRepository.delete({ id: body.stageId });
-      if (result.affected === 0) {
+      const deleted = await this.deleteStageAndLinkedRows(body.stageId);
+      if (!deleted) {
         return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
       }
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: body.stageId };
@@ -198,6 +200,35 @@ export class StagesService {
       }
       this.logger.error(`Stage removal failed: ${err instanceof Error ? err.message : String(err)}`);
       return { statusCode: STAGE_API_JSON_STATUS_OK, method: 'remove', stage: STAGE_RESPONSE_NOT_FOUND_ID };
+    }
+  }
+
+  /**
+   * Deletes a stage and its activities (and activity completion rows) in one transaction.
+   * PostgreSQL rejects a bare stage DELETE while `education.activities.stage_id` still points at it.
+   */
+  private async deleteStageAndLinkedRows(stageId: number): Promise<boolean> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      const activities = await queryRunner.manager.find(ActivityEntity, {
+        where: { stageId },
+        select: ['id'],
+      });
+      const activityIds = activities.map((activity) => activity.id);
+      if (activityIds.length > 0) {
+        await queryRunner.manager.delete(ActivityBacklogEntity, { activityId: In(activityIds) });
+        await queryRunner.manager.delete(ActivityEntity, { stageId });
+      }
+      const result = await queryRunner.manager.delete(StageEntity, { id: stageId });
+      await queryRunner.commitTransaction();
+      return (result.affected ?? 0) > 0;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
     }
   }
 
