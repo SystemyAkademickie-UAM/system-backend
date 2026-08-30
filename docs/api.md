@@ -1600,3 +1600,75 @@ Permanently deletes the template from the database. Does not affect any groups a
 - `403 Forbidden` if caller is not the creator.
 - `404 Not Found` if template does not exist.
 
+---
+
+## Bulk lives update (lecturer)
+
+Updates lives for one or more students in a single atomic transaction. Each student's result is
+independently clamped to `[0, group.lives]` (the group's configured maximum).
+
+**Endpoint:** `PATCH /api/groups/:groupId/students/lives/bulk-update`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`).
+Caller must have the **lecturer** role and must own the group (`education.groups.teacher_account_id`).
+Missing auth → `401 Unauthorized`. Not group owner → `403 Forbidden`.
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | — | Plaintext bearer token (alternative to `maq_auth` cookie). |
+| `students` | array | non-empty, max 200 items | Array of `{ accountId, delta }` objects. Empty or oversized arrays fail validation (`400`). |
+| `students[].accountId` | integer | — | Student's account ID (`auth.accounts.id`). If not enrolled in the group, the entry is skipped and listed in `skippedAccountIds`. |
+| `students[].delta` | integer | any sign | Value to add to the student's current lives. Positive = add, negative = remove. Result is clamped to `[0, livesMax]`. |
+
+**Response:** `200 OK`
+
+```json
+{
+  "results": [
+    { "accountId": 42, "lives": 5 },
+    { "accountId": 55, "lives": 0 }
+  ],
+  "skippedAccountIds": []
+}
+```
+
+The `results` array contains one entry per successfully processed student.
+Each entry includes the student's `accountId` and their new `lives` value after applying the delta and clamping.
+`skippedAccountIds` lists `accountId` values that were not enrolled in the group (those rows are not in `results`).
+
+**Backlog:** A `LIVES_CHANGED` event is logged per student in `analytics.backlog` with `{ delta, lives, message }`.
+
+**Example — add 3 lives to two students:**
+
+```http
+PATCH /api/groups/100005/students/lives/bulk-update HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+Cookie: maq_auth=<token>
+
+{
+  "students": [
+    { "accountId": 42, "delta": 3 },
+    { "accountId": 55, "delta": -2 }
+  ]
+}
+```
+
+```json
+{
+  "results": [
+    { "accountId": 42, "lives": 5 },
+    { "accountId": 55, "lives": 1 }
+  ],
+  "skippedAccountIds": []
+}
+```
+
+> **Legacy endpoints (deprecated, kept for backwards compatibility):**
+> - `POST /api/groups/:groupId/students/:accountId/lives/increment` — adds exactly 1 life (ignores `livesMax`).
+> - `POST /api/groups/:groupId/students/:accountId/lives/decrement` — removes exactly 1 life (clamped to 0).
+>
+> Prefer the bulk endpoint for all new integrations.
+
