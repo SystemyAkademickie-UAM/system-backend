@@ -860,7 +860,7 @@ Manage stages within groups. Each stage belongs to a group and contains activiti
 | ----- | ---- | ----------- |
 | `statusCode` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
 | `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
-| `stage` | integer | For `post`/`modify`: stage DB id (positive); for `remove`: the removed id; for `retrieve`: count of stages returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = invalid request. |
+| `stage` | integer | For `post`/`modify`: stage DB id (positive); for `remove`: the removed id; for `retrieve`: count of stages returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = invalid request. `remove` deletes the stage even when it has no activities; if activities (or activity completion rows) still exist, they are removed in the same transaction so PostgreSQL foreign keys do not block the delete. |
 | `stages` | array (optional) | For `retrieve`: array of `{ id, groupId, name, visibilityStatus }` — `id` is DB id; `groupId` is public (with offset). |
 
 All responses use this flat JSON shape only (no Nest `message` / `error` fields).
@@ -910,6 +910,18 @@ Content-Type: application/json
     { "id": 2, "groupId": 100001, "name": "Week 2" }
   ]
 }
+```
+
+Remove a stage (also deletes its activities and `analytics.activity_backlog` rows for those activities):
+```http
+POST /api/stages HTTP/1.1
+Content-Type: application/json
+
+{"auth":"<token>","method":"remove","stageId":1}
+```
+
+```json
+{ "statusCode": 200, "method": "remove", "stage": 1 }
 ```
 
 ---
