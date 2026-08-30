@@ -120,7 +120,11 @@ export class StudentManagementController {
    */
   @Patch(':groupId/students/lives/bulk-update')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Bulk-update lives for multiple students (arbitrary delta, capped to group livesMax)' })
+  @ApiOperation({
+    summary: 'Bulk-update lives for multiple students (arbitrary delta, capped to group livesMax)',
+    description:
+      'students must be non-empty and at most 200 items. Response includes skippedAccountIds for account IDs not enrolled in the group.',
+  })
   bulkUpdateLives(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request,

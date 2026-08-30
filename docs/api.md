@@ -1606,8 +1606,8 @@ Missing auth → `401 Unauthorized`. Not group owner → `403 Forbidden`.
 | Field | Type | Rules | Description |
 | ----- | ---- | ----- | ----------- |
 | `auth` | string (optional) | — | Plaintext bearer token (alternative to `maq_auth` cookie). |
-| `students` | array | non-empty | Array of `{ accountId, delta }` objects. |
-| `students[].accountId` | integer | — | Student's account ID (`auth.accounts.id`). If not enrolled in the group, the entry is silently skipped. |
+| `students` | array | non-empty, max 200 items | Array of `{ accountId, delta }` objects. Empty or oversized arrays fail validation (`400`). |
+| `students[].accountId` | integer | — | Student's account ID (`auth.accounts.id`). If not enrolled in the group, the entry is skipped and listed in `skippedAccountIds`. |
 | `students[].delta` | integer | any sign | Value to add to the student's current lives. Positive = add, negative = remove. Result is clamped to `[0, livesMax]`. |
 
 **Response:** `200 OK`
@@ -1617,12 +1617,14 @@ Missing auth → `401 Unauthorized`. Not group owner → `403 Forbidden`.
   "results": [
     { "accountId": 42, "lives": 5 },
     { "accountId": 55, "lives": 0 }
-  ]
+  ],
+  "skippedAccountIds": []
 }
 ```
 
-The `results` array contains one entry per successfully processed student (skipped students are omitted).
+The `results` array contains one entry per successfully processed student.
 Each entry includes the student's `accountId` and their new `lives` value after applying the delta and clamping.
+`skippedAccountIds` lists `accountId` values that were not enrolled in the group (those rows are not in `results`).
 
 **Backlog:** A `LIVES_CHANGED` event is logged per student in `analytics.backlog` with `{ delta, lives, message }`.
 
@@ -1647,7 +1649,8 @@ Cookie: maq_auth=<token>
   "results": [
     { "accountId": 42, "lives": 5 },
     { "accountId": 55, "lives": 1 }
-  ]
+  ],
+  "skippedAccountIds": []
 }
 ```
 

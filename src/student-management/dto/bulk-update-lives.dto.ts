@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsInt, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsInt, IsOptional, IsString, ValidateNested } from 'class-validator';
+
+import { BULK_UPDATE_LIVES_MAX_STUDENTS } from '../../constants/lives-constants';
 
 /**
  * Single item in the bulk-lives-update payload.
@@ -29,6 +31,8 @@ export class BulkUpdateLivesDto {
   auth?: string;
 
   @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(BULK_UPDATE_LIVES_MAX_STUDENTS)
   @ValidateNested({ each: true })
   @Type(() => BulkUpdateLivesItemDto)
   students: BulkUpdateLivesItemDto[];

@@ -13,6 +13,7 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 import { RanksService } from '../gamification/ranks-service';
 import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { BulkUpdateStudentsDto } from './dto/bulk-update-student.dto';
+import { DEFAULT_STUDENT_LIVES } from '../constants/lives-constants';
 import { BulkUpdateLivesDto } from './dto/bulk-update-lives.dto';
 
 /**
@@ -366,13 +367,13 @@ export class StudentManagementService {
    * Updates lives for multiple students in a single transaction.
    * Each student's lives are clamped to [0, group.lives] (livesMax).
    *
-   * @returns Per-student result array `{ accountId, lives }[]`.
+   * @returns Updated students and account IDs skipped because they are not enrolled.
    */
   async bulkUpdateLives(
     req: Request,
     groupId: number,
     dto: BulkUpdateLivesDto,
-  ): Promise<{ results: { accountId: number; lives: number }[] }> {
+  ): Promise<{ results: { accountId: number; lives: number }[]; skippedAccountIds: number[] }> {
     await this.assertLecturerOwnsGroup(req, groupId);
 
     const group = await this.groupRepository.findOne({ where: { id: groupId } });
@@ -380,12 +381,14 @@ export class StudentManagementService {
       throw new NotFoundException(`Group with id ${groupId} not found`);
     }
     const livesMax = group.lives ?? null;
+    const defaultLives = group.startingLives ?? group.lives ?? DEFAULT_STUDENT_LIVES;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     const results: { accountId: number; lives: number }[] = [];
+    const skippedAccountIds: number[] = [];
 
     try {
       for (const item of dto.students) {
@@ -396,6 +399,7 @@ export class StudentManagementService {
         if (!enrollment) {
           this.logger.warn(
             `Bulk-lives-update skipped: account ${item.accountId} not enrolled in group ${groupId}`);
+          skippedAccountIds.push(item.accountId);
           continue;
         }
 
@@ -410,11 +414,11 @@ export class StudentManagementService {
             totalEarned: 0,
             rankId: null,
             autoRankEnabled: true,
-            lives: 3,
+            lives: defaultLives,
           });
         }
 
-        const currentLives = stats.lives ?? 3;
+        const currentLives = stats.lives ?? defaultLives;
         const uncapped = currentLives + item.delta;
         const newLives = livesMax != null
           ? Math.min(livesMax, Math.max(0, uncapped))
@@ -434,8 +438,9 @@ export class StudentManagementService {
 
       await queryRunner.commitTransaction();
       this.logger.log(
-        `Bulk-lives-update: ${results.length} student(s) updated in group ${groupId}`);
-      return { results };
+        `Bulk-lives-update: ${results.length} student(s) updated in group ${groupId}` +
+        (skippedAccountIds.length > 0 ? `, skipped ${skippedAccountIds.length}` : ''));
+      return { results, skippedAccountIds };
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Bulk-lives-update failed for group ${groupId}: ${String(err)}`);

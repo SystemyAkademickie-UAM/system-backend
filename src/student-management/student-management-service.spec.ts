@@ -285,6 +285,7 @@ describe('StudentManagementService', () => {
       const result = await service2.bulkUpdateLives(mockRequest, groupId, { students: inputStudents });
 
       expect(result.results).toHaveLength(2);
+      expect(result.skippedAccountIds).toEqual([]);
       // accountId=20: 4+3=7 → capped to 5
       expect(result.results[0]).toEqual({ accountId: 20, lives: 5 });
       // accountId=30: 4-2=2 → 2 (no cap needed)
@@ -326,6 +327,7 @@ describe('StudentManagementService', () => {
       });
 
       expect(result.results[0].lives).toBe(0);
+      expect(result.skippedAccountIds).toEqual([]);
       expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
     });
 
@@ -368,6 +370,7 @@ describe('StudentManagementService', () => {
 
       expect(result.results).toHaveLength(1);
       expect(result.results[0].accountId).toBe(20);
+      expect(result.skippedAccountIds).toEqual([999]);
     });
 
     it('should throw ForbiddenException when lecturer does not own the group', async () => {
