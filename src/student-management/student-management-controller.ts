@@ -22,6 +22,7 @@ import { StudentManagementService } from './student-management-service';
 import { StudentProgressService } from './student-progress-service';
 import { ShopStudentService } from '../gamification/shop-student-service';
 import { BulkUpdateStudentsDto } from './dto/bulk-update-student.dto';
+import { BulkUpdateLivesDto } from './dto/bulk-update-lives.dto';
 import { SetActivityCompletionsDto } from './dto/set-activity-completions.dto';
 
 /**
@@ -112,6 +113,23 @@ export class StudentManagementController {
     @Param('accountId', ParseIntPipe) accountId: number,
     @Req() req: Request) {
     return this.studentManagementService.decrementLives(req, toInternalGroupId(publicGroupId), accountId);
+  }
+
+  /**
+   * Bulk-updates lives for multiple students (PATCH, arbitrary delta, livesMax-capped).
+   */
+  @Patch(':groupId/students/lives/bulk-update')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Bulk-update lives for multiple students (arbitrary delta, capped to group livesMax)',
+    description:
+      'students must be non-empty and at most 200 items. Response includes skippedAccountIds for account IDs not enrolled in the group.',
+  })
+  bulkUpdateLives(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Body() dto: BulkUpdateLivesDto) {
+    return this.studentManagementService.bulkUpdateLives(req, toInternalGroupId(publicGroupId), dto);
   }
 
   // ── Part 2: Badge management pop-up ─────────────────────────────────
