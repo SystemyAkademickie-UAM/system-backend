@@ -12,7 +12,7 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { toInternalGroupId } from '../constants/group-api-constants';
@@ -21,6 +21,7 @@ import { StudentBadgesService } from './student-badges-service';
 import { StudentManagementService } from './student-management-service';
 import { StudentProgressService } from './student-progress-service';
 import { ShopStudentService } from '../gamification/shop-student-service';
+import { InventoryHistoryItemDto } from '../gamification/dto/inventory-history.dto';
 import { BulkUpdateStudentsDto } from './dto/bulk-update-student.dto';
 import { SetActivityCompletionsDto } from './dto/set-activity-completions.dto';
 
@@ -203,6 +204,7 @@ export class StudentManagementController {
   @Get(':groupId/students/:accountId/inventory-history')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get inventory history for a specific student in the group' })
+  @ApiResponse({ status: HttpStatus.OK, type: [InventoryHistoryItemDto] })
   getStudentInventoryHistory(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Param('accountId', ParseIntPipe) accountId: number,

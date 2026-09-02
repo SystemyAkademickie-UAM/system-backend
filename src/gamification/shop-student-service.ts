@@ -10,6 +10,7 @@ import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { EarnedItemEntity } from '../database/entities/earned-item.entity';
 import { BacklogEntity } from '../database/entities/backlog.entity';
+import { InventoryHistoryItemDto } from './dto/inventory-history.dto';
 import { BacklogService } from '../backlog/backlog-service';
 import { SessionService } from '../auth/session/session.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
@@ -277,7 +278,7 @@ export class ShopStudentService {
     return earnedItems;
   }
 
-  private async fetchInventoryHistory(internalGroupId: number, studentAccountId: number): Promise<any[]> {
+  private async fetchInventoryHistory(internalGroupId: number, studentAccountId: number): Promise<InventoryHistoryItemDto[]> {
     const records = await this.dataSource.getRepository(BacklogEntity).find({
       where: [
         { groupId: internalGroupId, accountId: studentAccountId, type: 'SHOP_PURCHASE' },
@@ -287,24 +288,24 @@ export class ShopStudentService {
     });
 
     return records.map(record => {
-      let parsedValue: any = {};
+      let parsedValue: Partial<InventoryHistoryItemDto> = {};
       try {
         if (record.value) {
-          parsedValue = JSON.parse(record.value);
+          parsedValue = JSON.parse(record.value) as Partial<InventoryHistoryItemDto>;
         }
       } catch (e) {
-        // ignore
+        console.warn(`Failed to parse backlog value for record id ${record.id}`);
       }
 
       return {
         id: record.id,
-        type: record.type,
+        type: record.type ?? 'UNKNOWN',
         date: record.date?.toISOString() ?? new Date().toISOString(),
-        itemId: parsedValue.itemId,
+        itemId: parsedValue.itemId ?? 0,
         itemName: parsedValue.itemName,
-        price: parsedValue.price ?? null,
+        price: parsedValue.price,
         isExtraLife: parsedValue.isExtraLife ?? false,
-        message: parsedValue.message ?? null,
+        message: parsedValue.message,
       };
     });
   }
@@ -312,7 +313,7 @@ export class ShopStudentService {
   async getInventoryHistory(
     req: Request,
     internalGroupId: number,
-    authHeader?: string): Promise<any[]> {
+    authHeader?: string): Promise<InventoryHistoryItemDto[]> {
     const studentAccountId = await this.getStudentAccountId(req);
 
     const enrollment = await this.enrollmentRepository.findOne({
@@ -328,7 +329,7 @@ export class ShopStudentService {
   async getInventoryHistoryForAccount(
     req: Request,
     internalGroupId: number,
-    studentAccountId: number): Promise<any[]> {
+    studentAccountId: number): Promise<InventoryHistoryItemDto[]> {
     const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       throw new ForbiddenException('Unauthorized');

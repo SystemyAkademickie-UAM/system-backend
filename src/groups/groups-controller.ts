@@ -1,8 +1,9 @@
 import { Body, Controller, Delete, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Req, Get, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { toInternalGroupId } from '../constants/group-api-constants';
+import { InventoryHistoryItemDto } from '../gamification/dto/inventory-history.dto';
 
 import { CreateBadgeDto } from '../gamification/dto/create-badge.dto';
 import { CreateItemCategoryDto } from '../gamification/dto/create-item-category.dto';
@@ -484,6 +485,7 @@ export class GroupsController {
   @Get(':groupId/inventory-history')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get the student inventory history for the given course group' })
+  @ApiResponse({ status: HttpStatus.OK, type: [InventoryHistoryItemDto] })
   getStudentInventoryHistory(
     @Param('groupId', ParseIntPipe) publicGroupId: number,
     @Req() req: Request) {
