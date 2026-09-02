@@ -200,6 +200,19 @@ export class StudentManagementController {
       accountId);
   }
 
+  @Get(':groupId/students/:accountId/inventory-history')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get inventory history for a specific student in the group' })
+  getStudentInventoryHistory(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('accountId', ParseIntPipe) accountId: number,
+    @Req() req: Request) {
+    return this.shopStudentService.getInventoryHistoryForAccount(
+      req,
+      toInternalGroupId(publicGroupId),
+      accountId);
+  }
+
   /**
    * Returns the progress tree (stages → activities with `isCompleted` flags).
    */

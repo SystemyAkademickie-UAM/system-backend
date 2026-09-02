@@ -481,6 +481,15 @@ export class GroupsController {
     return this.shopStudentService.getInventory(req, toInternalGroupId(publicGroupId));
   }
 
+  @Get(':groupId/inventory-history')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get the student inventory history for the given course group' })
+  getStudentInventoryHistory(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request) {
+    return this.shopStudentService.getInventoryHistory(req, toInternalGroupId(publicGroupId));
+  }
+
   @Post(':groupId/inventory/:itemId/use')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Use an item from the student inventory' })
