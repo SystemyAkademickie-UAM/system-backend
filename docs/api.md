@@ -791,13 +791,57 @@ Retrieves the recent backlog history for the currently logged-in student in a gi
 
 **Response:** `200 OK` with JSON array of backlog items.
 
+Each item has the following fields:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | integer | Backlog entry primary key. |
+| `type` | string | Event type (see table below). |
+| `date` | string (ISO-8601) | Timestamp of the event. |
+| `value` | object | JSON payload — fields depend on `type` (see below). |
+| `accountId` | integer | Student account ID who triggered the event. |
+
+**Backlog event types and their `value` payload fields:**
+
+| `type` | Visible to | Payload fields |
+| ------ | ---------- | -------------- |
+| `SHOP_PURCHASE` | Lecturer | `message`, `itemId`, `itemName`, `price`, `isExtraLife`, `storyDescription`, `educationalDescription` |
+| `ITEM_USED` | Lecturer | `message`, `itemId`, `itemName`, `basePrice`, `storyDescription`, `educationalDescription` |
+| `SHOP_ITEM_ADDED` | Student | `message`, `itemId`, `itemName`, `basePrice`, `storyDescription`, `educationalDescription` |
+| `LIVES_CHANGED` | Lecturer | `message`, `delta`, `lives` |
+| `CURRENCY_ADDED` | Lecturer | `message`, `amount` |
+| `RANK_UP` | Student | `message`, `rankId`, `rankName` |
+| `BADGE_EARNED` | Student | `message`, `badgeId`, `badgeName` |
+| `ACTIVITY_COMPLETED` | Student | `message`, `activityId`, `activityName`, `currency` |
+| `STUDENT_JOINED` | Lecturer | `message` |
+| `STAGE_ADDED` | Student | `message`, `stageName` |
+| `BADGE_ADDED` | Student | `message`, `badgeId`, `badgeName` |
+| `RANK_ADDED` | Student | `message`, `rankId`, `rankName` |
+| `LIVES_SYSTEM_CHANGED` | Student | `message` |
+| `SHOP_STATUS_CHANGED` | Student | `message` |
+| `POST_ADDED` | Student | `message`, `postId`, `postTitle` |
+| `STAGE_COMPLETED` | Student | `message`, `stageName` |
+| `OTHER` | Both | `message` |
+
+> **Note:** `storyDescription` and `educationalDescription` can be `null` when the item has no description set.
+
+**Example response:**
+
 ```json
 [
   {
     "id": 12,
     "type": "SHOP_PURCHASE",
     "date": "2026-06-08T10:00:00.000Z",
-    "value": "health_potion",
+    "value": {
+      "message": "Kupiono przedmiot ze sklepu: Mikstura zdrowia za kwotę 50.",
+      "itemId": 7,
+      "itemName": "Mikstura zdrowia",
+      "price": 50,
+      "isExtraLife": false,
+      "storyDescription": "Magiczny eliksir przywracający siły.",
+      "educationalDescription": "Nagradza aktywnego uczestnika."
+    },
     "accountId": 42
   }
 ]
@@ -822,7 +866,7 @@ Requires `SUPER` role or ownership of the group (`teacherAccountId`).
 | ------ | ----------- |
 | `X-Browser-ID` | Browser binding ID for the strong session. |
 
-**Response:** `200 OK` with JSON array of backlog items.
+**Response:** `200 OK` with JSON array of backlog items (same structure as student backlog above).
 
 ---
 

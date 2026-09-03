@@ -200,7 +200,7 @@ export class ShopStudentService {
       await this.backlogService.logEvent(
         internalGroupId,
         studentAccountId,
-        isExtraLife ? 'SHOP_PURCHASE' : 'SHOP_PURCHASE',
+        'SHOP_PURCHASE',
         {
           message: isExtraLife
             ? `Kupiono dodatkowe życie za kwotę ${price}.`
@@ -209,6 +209,8 @@ export class ShopStudentService {
           itemName: item.name,
           price,
           isExtraLife,
+          storyDescription: item.storyDescription ?? null,
+          educationalDescription: item.educationalDescription ?? null,
         },
         manager,
       );
@@ -307,6 +309,10 @@ export class ShopStudentService {
         throw new NotFoundException('Item not found');
       }
 
+      const listing = await manager.findOne(ShopListingEntity, {
+        where: { itemId: item.id },
+      });
+
       earnedItem.quantity -= 1;
       if (earnedItem.quantity === 0) {
         await manager.remove(EarnedItemEntity, earnedItem);
@@ -322,6 +328,9 @@ export class ShopStudentService {
           message: `Użyto przedmiotu: ${item.name}.`,
           itemId: item.id,
           itemName: item.name,
+          basePrice: listing?.basePrice ?? null,
+          storyDescription: item.storyDescription ?? null,
+          educationalDescription: item.educationalDescription ?? null,
         },
         manager,
       );
