@@ -202,7 +202,7 @@ export class ShopStudentService {
       await this.backlogService.logEvent(
         internalGroupId,
         studentAccountId,
-        isExtraLife ? 'SHOP_PURCHASE' : 'SHOP_PURCHASE',
+        'SHOP_PURCHASE',
         {
           message: isExtraLife
             ? `Kupiono dodatkowe życie za kwotę ${price}.`
@@ -211,6 +211,8 @@ export class ShopStudentService {
           itemName: item.name,
           price,
           isExtraLife,
+          storyDescription: item.storyDescription ?? null,
+          educationalDescription: item.educationalDescription ?? null,
         },
         manager,
       );
@@ -288,10 +290,10 @@ export class ShopStudentService {
     });
 
     return records.map(record => {
-      let parsedValue: Partial<InventoryHistoryItemDto> = {};
+      let parsedValue: Partial<InventoryHistoryItemDto> & { basePrice?: number } = {};
       try {
         if (record.value) {
-          parsedValue = JSON.parse(record.value) as Partial<InventoryHistoryItemDto>;
+          parsedValue = JSON.parse(record.value) as Partial<InventoryHistoryItemDto> & { basePrice?: number };
         }
       } catch (e) {
         console.warn(`Failed to parse backlog value for record id ${record.id}`);
@@ -303,7 +305,7 @@ export class ShopStudentService {
         date: record.date?.toISOString() ?? new Date().toISOString(),
         itemId: parsedValue.itemId ?? 0,
         itemName: parsedValue.itemName,
-        price: parsedValue.price,
+        price: parsedValue.price ?? parsedValue.basePrice,
         isExtraLife: parsedValue.isExtraLife ?? false,
         message: parsedValue.message,
       };
@@ -384,6 +386,10 @@ export class ShopStudentService {
         throw new NotFoundException('Item not found');
       }
 
+      const listing = await manager.findOne(ShopListingEntity, {
+        where: { itemId: item.id },
+      });
+
       earnedItem.quantity -= 1;
       if (earnedItem.quantity === 0) {
         await manager.remove(EarnedItemEntity, earnedItem);
@@ -399,6 +405,10 @@ export class ShopStudentService {
           message: `Użyto przedmiotu: ${item.name}.`,
           itemId: item.id,
           itemName: item.name,
+          basePrice: listing?.basePrice ?? null,
+          price: listing?.basePrice ?? null,
+          storyDescription: item.storyDescription ?? null,
+          educationalDescription: item.educationalDescription ?? null,
         },
         manager,
       );

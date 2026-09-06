@@ -18,6 +18,7 @@ describe('ShopStudentService', () => {
   let service: ShopStudentService;
   let sessionService: jest.Mocked<SessionService>;
   let userRolesService: jest.Mocked<UserRolesService>;
+  let backlogService: { logEvent: jest.Mock };
   let manager: Record<string, jest.Mock>;
 
   const mockRequest = {} as Request;
@@ -28,7 +29,9 @@ describe('ShopStudentService', () => {
       find: jest.fn(),
       save: jest.fn(),
       create: jest.fn(),
+      remove: jest.fn(),
     };
+    backlogService = { logEvent: jest.fn().mockResolvedValue({}) };
 
     const mockDataSource = {
       transaction: jest.fn(async (cb) => cb(manager)),
@@ -43,7 +46,7 @@ describe('ShopStudentService', () => {
         { provide: getRepositoryToken(EarnedItemEntity), useValue: {} },
         {
           provide: BacklogService,
-          useValue: { logEvent: jest.fn().mockResolvedValue({}) },
+          useValue: backlogService,
         },
         {
           provide: SessionService,
@@ -119,6 +122,56 @@ describe('ShopStudentService', () => {
 
       expect(result).toEqual({ success: true, message: 'Item purchased successfully' });
       expect(statsObj.lives).toBe(100);
+    });
+  });
+
+  describe('useItem — backlog payload', () => {
+    beforeEach(() => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({
+        userId: 1,
+        sessionId: 1,
+        activeRole: null,
+        organizationId: 1,
+      });
+      userRolesService.findAccountIdForRole.mockResolvedValue(100);
+    });
+
+    it('should log item details including price alias and descriptions', async () => {
+      manager.findOne.mockImplementation(async (entity) => {
+        if (entity === EnrollmentEntity) return { id: 5, groupId: 1, studentAccountId: 100 };
+        if (entity === EarnedItemEntity) return { id: 8, enrollmentId: 5, itemId: 10, quantity: 1 };
+        if (entity === ItemEntity) {
+          return {
+            id: 10,
+            name: 'Mikstura',
+            groupId: 1,
+            storyDescription: 'Fabula',
+            educationalDescription: 'Dydaktyka',
+          };
+        }
+        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50 };
+        return null;
+      });
+      manager.remove.mockResolvedValue({});
+
+      const result = await service.useItem(mockRequest, 1, 10);
+
+      expect(result).toEqual({ success: true, message: 'Item used successfully' });
+      expect(backlogService.logEvent).toHaveBeenCalledWith(
+        1,
+        100,
+        'ITEM_USED',
+        {
+          message: 'Użyto przedmiotu: Mikstura.',
+          itemId: 10,
+          itemName: 'Mikstura',
+          basePrice: 50,
+          price: 50,
+          storyDescription: 'Fabula',
+          educationalDescription: 'Dydaktyka',
+        },
+        manager,
+      );
     });
   });
 });
