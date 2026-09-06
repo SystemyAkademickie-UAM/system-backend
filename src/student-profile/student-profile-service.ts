@@ -21,6 +21,8 @@ export type StudentProfileBadgeItem = {
 export type StudentProfileActivityItem = {
   id: number;
   name: string;
+  stageId: number | null;
+  stageName: string | null;
   storyDescription: string | null;
   educationalDescription: string | null;
   currency: number;
@@ -81,6 +83,8 @@ type EarnedBadgeRow = {
 type CompletedActivityRow = {
   id: number;
   name: string;
+  stageId: number | null;
+  stageName: string | null;
   storyDescription: string | null;
   educationalDescription: string | null;
   currency: number | null;
@@ -179,12 +183,15 @@ export class StudentProfileService {
       `SELECT
          a.id                         AS "id",
          a.name                       AS "name",
+         a.stage_id                   AS "stageId",
+         s.name                       AS "stageName",
          a.story_description          AS "storyDescription",
          a.educational_description    AS "educationalDescription",
          a.currency                   AS "currency",
          ab.date                      AS "completedAt"
        FROM analytics.activity_backlog ab
        JOIN education.activities a ON a.id = ab.activity_id
+       LEFT JOIN education.stages s ON s.id = a.stage_id
        WHERE ab.group_id = $1 AND ab.account_id = $2
        ORDER BY ab.date DESC NULLS LAST, a.id ASC`,
       [internalGroupId, row.studentAccountId]);
@@ -192,6 +199,8 @@ export class StudentProfileService {
     const completedActivities: StudentProfileActivityItem[] = completedActivityRows.map((activity) => ({
       id: activity.id,
       name: activity.name,
+      stageId: activity.stageId,
+      stageName: activity.stageName,
       storyDescription: activity.storyDescription,
       educationalDescription: activity.educationalDescription,
       currency: activity.currency ?? 0,

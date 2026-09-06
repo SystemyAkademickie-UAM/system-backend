@@ -4,6 +4,8 @@ services:
     build: .
     env_file:
       - .env
+    environment:
+      PRODUCTION_LOG_DIR: /app/var/logs
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -13,6 +15,7 @@ services:
         condition: service_healthy
     volumes:
       - ../secrets:/app/secrets:ro
+      - production_logs:/app/var/logs
     networks:
       - academy-network
 
@@ -57,6 +60,7 @@ services:
 
 volumes:
   pg_data:
+  production_logs:
 
 networks:
   academy-network:
