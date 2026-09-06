@@ -80,6 +80,48 @@ Register organizations via admin API (no migration seed). Example: UAM — `meta
 
 ---
 
+## Production logs (super role + file archive)
+
+The API writes Nest and browser-forwarded lines to **plaintext slot files** (`live/YYYY-MM-DDTHH-mm.log`, timezone `Europe/Warsaw`). Each slot is **5 minutes** (local simulation of a “day”). Closed slots are **gzip-compressed** to `archive/YYYY-MM-DDTHH-mm.log.gz`. Files older than `PRODUCTION_LOG_TTL_SLOTS` (default 3 slots) are deleted. Directory: `PRODUCTION_LOG_DIR` or `../logs` (workspace `logs/` next to `system-backend`).
+
+**List days —** `GET /api/admin/logs`
+
+**Authorization:** **super** role. Missing or non-super → `403 Forbidden`.
+
+**Response:** `200 OK`
+
+```json
+{ "days": ["2026-09-04", "2026-09-05"], "timeZone": "Europe/Warsaw" }
+```
+
+**Export one day (ciphertext) —** `POST /api/admin/logs/export`
+
+The HTTP body is **not** log plaintext. The client sends an uncompressed P-256 public key (base64). The server replies with AES-256-GCM fields; the browser derives the key via ECDH and decrypts locally.
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `clientPublicKey` | string | base64, 65-byte uncompressed P-256 | Browser ECDH public key |
+| `day` | string (optional) | `today` or `YYYY-MM-DDTHH-mm` | Default `today` (current 5-minute slot) |
+| `auth` | string (optional) | — | Bearer alternative to `maq_session` |
+
+**Response:** `200 OK` — `day`, `algorithm`, `serverPublicKey`, `iv`, `ciphertext`, `authTag` (all secrets as base64). `404` if that day has no file.
+
+**Browser ingest —** `POST /api/client-logs`
+
+**Authorization:** any valid session. No session → `403`.
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `level` | string | `error` or `warn` | Severity |
+| `message` | string | max 4000 chars | Line text (tokens stripped server-side where `Bearer …` appears) |
+| `source` | string (optional) | max 4000 chars | e.g. script URL |
+
+**Response:** `{ "accepted": true }`
+
+---
+
 ## Login (opaque API bearer issuance)
 
 Issues a **plaintext** opaque bearer token. Clients send it back as the **`maq_auth`** HTTP-only cookie (browsers, automatic) **or** an **`Authorization: Bearer <token>`** header (non-browser API clients). The token is **never** read from the URL query string. The server persists only **`hex(HMAC-SHA256(API_TOKEN_HMAC_SECRET, plaintext))`** in Postgres **`autoryzacja.tokens.token_hmac`** plus **`user_id`**, **`browser_uuid`** (**PostgreSQL `uuid`** — clients MUST send an RFC 4122 UUID in **`X-Browser-ID`**), **`created_at`**, **`expired_at`** — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
@@ -761,9 +803,23 @@ Cookie: maq_auth=<token>
   "currency": "100",
   "currencyIcon": "coin",
   "livesIcon": "heart",
-  "shopOpen": true
+  "shopOpen": true,
+  "completedActivities": [
+    {
+      "id": 10,
+      "name": "Wejściówka 1",
+      "stageId": 3,
+      "stageName": "Moduł 1",
+      "storyDescription": null,
+      "educationalDescription": "Quiz",
+      "currency": 5,
+      "completedAt": "2026-09-06T09:00:00.000Z"
+    }
+  ]
 }
 ```
+
+`completedActivities[].stageId` / `stageName` come from `education.activities.stage_id` → `education.stages`. `stageName` is null only if the stage row is missing.
 
 ---
 
