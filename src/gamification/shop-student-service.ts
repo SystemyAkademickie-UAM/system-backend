@@ -9,6 +9,8 @@ import { ItemEntity } from '../database/entities/item.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { EarnedItemEntity } from '../database/entities/earned-item.entity';
+import { BacklogEntity } from '../database/entities/backlog.entity';
+import { InventoryHistoryItemDto } from './dto/inventory-history.dto';
 import { BacklogService } from '../backlog/backlog-service';
 import { SessionService } from '../auth/session/session.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
@@ -274,6 +276,81 @@ export class ShopStudentService {
       .getMany();
 
     return earnedItems;
+  }
+
+  private async fetchInventoryHistory(internalGroupId: number, studentAccountId: number): Promise<InventoryHistoryItemDto[]> {
+    const records = await this.dataSource.getRepository(BacklogEntity).find({
+      where: [
+        { groupId: internalGroupId, accountId: studentAccountId, type: 'SHOP_PURCHASE' },
+        { groupId: internalGroupId, accountId: studentAccountId, type: 'ITEM_USED' }
+      ],
+      order: { date: 'DESC' }
+    });
+
+    return records.map(record => {
+      let parsedValue: Partial<InventoryHistoryItemDto> = {};
+      try {
+        if (record.value) {
+          parsedValue = JSON.parse(record.value) as Partial<InventoryHistoryItemDto>;
+        }
+      } catch (e) {
+        console.warn(`Failed to parse backlog value for record id ${record.id}`);
+      }
+
+      return {
+        id: record.id,
+        type: record.type ?? 'UNKNOWN',
+        date: record.date?.toISOString() ?? new Date().toISOString(),
+        itemId: parsedValue.itemId ?? 0,
+        itemName: parsedValue.itemName,
+        price: parsedValue.price,
+        isExtraLife: parsedValue.isExtraLife ?? false,
+        message: parsedValue.message,
+      };
+    });
+  }
+
+  async getInventoryHistory(
+    req: Request,
+    internalGroupId: number,
+    authHeader?: string): Promise<InventoryHistoryItemDto[]> {
+    const studentAccountId = await this.getStudentAccountId(req);
+
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: { groupId: internalGroupId, studentAccountId },
+    });
+    if (!enrollment) {
+      throw new ForbiddenException('Student is not enrolled in this group');
+    }
+
+    return this.fetchInventoryHistory(internalGroupId, studentAccountId);
+  }
+
+  async getInventoryHistoryForAccount(
+    req: Request,
+    internalGroupId: number,
+    studentAccountId: number): Promise<InventoryHistoryItemDto[]> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      throw new ForbiddenException('Unauthorized');
+    }
+
+    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+      subject.userId,
+      LECTURER_ROLE_NAME,
+    );
+    if (!lecturerAccountId) {
+      throw new ForbiddenException('Forbidden: lecturer access required');
+    }
+
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: { groupId: internalGroupId, studentAccountId },
+    });
+    if (!enrollment) {
+      throw new NotFoundException('Student is not enrolled in this group');
+    }
+
+    return this.fetchInventoryHistory(internalGroupId, studentAccountId);
   }
 
   async useItem(
