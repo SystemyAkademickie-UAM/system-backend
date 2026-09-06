@@ -798,7 +798,7 @@ Each item has the following fields:
 | `id` | integer | Backlog entry primary key. |
 | `type` | string | Event type (see table below). |
 | `date` | string (ISO-8601) | Timestamp of the event. |
-| `value` | object | JSON payload — fields depend on `type` (see below). |
+| `value` | string or null | Serialized JSON payload — fields depend on `type` (see below). |
 | `accountId` | integer | Student account ID who triggered the event. |
 
 **Backlog event types and their `value` payload fields:**
@@ -806,9 +806,9 @@ Each item has the following fields:
 | `type` | Visible to | Payload fields |
 | ------ | ---------- | -------------- |
 | `SHOP_PURCHASE` | Lecturer | `message`, `itemId`, `itemName`, `price`, `isExtraLife`, `storyDescription`, `educationalDescription` |
-| `ITEM_USED` | Lecturer | `message`, `itemId`, `itemName`, `basePrice`, `storyDescription`, `educationalDescription` |
-| `SHOP_ITEM_ADDED` | Student | `message`, `itemId`, `itemName`, `basePrice`, `storyDescription`, `educationalDescription` |
-| `LIVES_CHANGED` | Lecturer | `message`, `delta`, `lives` |
+| `ITEM_USED` | Lecturer | `message`, `itemId`, `itemName`, `basePrice`, `price`, `storyDescription`, `educationalDescription` |
+| `SHOP_ITEM_ADDED` | Student | `message`, `itemId`, `itemName`, `basePrice`, `price`, `storyDescription`, `educationalDescription` |
+| `LIVES_CHANGED` | Student | `message`, `delta`, `lives` |
 | `CURRENCY_ADDED` | Lecturer | `message`, `amount` |
 | `RANK_UP` | Student | `message`, `rankId`, `rankName` |
 | `BADGE_EARNED` | Student | `message`, `badgeId`, `badgeName` |
@@ -833,15 +833,7 @@ Each item has the following fields:
     "id": 12,
     "type": "SHOP_PURCHASE",
     "date": "2026-06-08T10:00:00.000Z",
-    "value": {
-      "message": "Kupiono przedmiot ze sklepu: Mikstura zdrowia za kwotę 50.",
-      "itemId": 7,
-      "itemName": "Mikstura zdrowia",
-      "price": 50,
-      "isExtraLife": false,
-      "storyDescription": "Magiczny eliksir przywracający siły.",
-      "educationalDescription": "Nagradza aktywnego uczestnika."
-    },
+    "value": "{\"message\":\"Kupiono przedmiot ze sklepu: Mikstura zdrowia za kwotę 50.\",\"itemId\":7,\"itemName\":\"Mikstura zdrowia\",\"price\":50,\"isExtraLife\":false,\"storyDescription\":\"Magiczny eliksir przywracający siły.\",\"educationalDescription\":\"Nagradza aktywnego uczestnika.\"}",
     "accountId": 42
   }
 ]

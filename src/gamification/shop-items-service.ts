@@ -291,6 +291,7 @@ export class ShopItemsService {
           itemId: savedItem.id,
           itemName: savedItem.name,
           basePrice: savedListing.basePrice,
+          price: savedListing.basePrice,
           storyDescription: savedItem.storyDescription ?? null,
           educationalDescription: savedItem.educationalDescription ?? null,
         });

@@ -290,10 +290,10 @@ export class ShopStudentService {
     });
 
     return records.map(record => {
-      let parsedValue: Partial<InventoryHistoryItemDto> = {};
+      let parsedValue: Partial<InventoryHistoryItemDto> & { basePrice?: number } = {};
       try {
         if (record.value) {
-          parsedValue = JSON.parse(record.value) as Partial<InventoryHistoryItemDto>;
+          parsedValue = JSON.parse(record.value) as Partial<InventoryHistoryItemDto> & { basePrice?: number };
         }
       } catch (e) {
         console.warn(`Failed to parse backlog value for record id ${record.id}`);
@@ -305,7 +305,7 @@ export class ShopStudentService {
         date: record.date?.toISOString() ?? new Date().toISOString(),
         itemId: parsedValue.itemId ?? 0,
         itemName: parsedValue.itemName,
-        price: parsedValue.price,
+        price: parsedValue.price ?? parsedValue.basePrice,
         isExtraLife: parsedValue.isExtraLife ?? false,
         message: parsedValue.message,
       };
@@ -406,6 +406,7 @@ export class ShopStudentService {
           itemId: item.id,
           itemName: item.name,
           basePrice: listing?.basePrice ?? null,
+          price: listing?.basePrice ?? null,
           storyDescription: item.storyDescription ?? null,
           educationalDescription: item.educationalDescription ?? null,
         },
