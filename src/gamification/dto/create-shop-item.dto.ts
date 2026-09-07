@@ -44,6 +44,11 @@ export class CreateShopItemDto {
   @IsInt()
   @IsOptional()
   @Min(0)
+  minPrice?: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
   stockQuantity?: number;
 
   @IsInt()
