@@ -194,6 +194,19 @@ export class StudentManagementService {
           if (delta > 0) {
             stats.totalEarned = (stats.totalEarned || 0) + delta;
           }
+          if (delta !== 0) {
+            await this.backlogService.logEvent(
+              groupId,
+              enrollment.studentAccountId,
+              'CURRENCY_ADDED',
+              {
+                message: `Prowadzący zmienił Twój stan konta o ${delta > 0 ? '+' : ''}${delta}. Aktualny stan: ${item.currency}.`,
+                currency: item.currency,
+                delta: delta,
+              },
+              queryRunner.manager
+            );
+          }
         }
         if (item.totalEarned !== undefined) {
           stats.totalEarned = item.totalEarned;
