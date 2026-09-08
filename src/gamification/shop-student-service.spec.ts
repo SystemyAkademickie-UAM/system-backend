@@ -74,7 +74,7 @@ describe('ShopStudentService', () => {
       manager.findOne.mockImplementation(async (entity) => {
         if (entity === GroupEntity) return { id: 1, shopOpen: true, livesEnabled: true, livesShopEnabled: true, lives: 3, startingLives: 3 };
         if (entity === ItemEntity) return { id: 10, isExtraLife: true, groupId: 1 };
-        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50 };
+        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50, minPrice: 0 };
         if (entity === EnrollmentEntity) return { id: 5, groupId: 1, studentAccountId: 100 };
         if (entity === StudentStatsEntity) return { id: 50, currency: 100, lives: 3 };
         return null;
@@ -90,7 +90,7 @@ describe('ShopStudentService', () => {
       manager.findOne.mockImplementation(async (entity) => {
         if (entity === GroupEntity) return { id: 1, shopOpen: true, livesEnabled: true, livesShopEnabled: true, lives: 3, startingLives: 3 };
         if (entity === ItemEntity) return { id: 10, name: 'Dodatkowe Życie', isExtraLife: true, groupId: 1 };
-        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50 };
+        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50, minPrice: 0 };
         if (entity === EnrollmentEntity) return { id: 5, groupId: 1, studentAccountId: 100 };
         if (entity === StudentStatsEntity) return statsObj;
         return null;
@@ -110,7 +110,7 @@ describe('ShopStudentService', () => {
       manager.findOne.mockImplementation(async (entity) => {
         if (entity === GroupEntity) return { id: 1, shopOpen: true, livesEnabled: true, livesShopEnabled: true, lives: null, startingLives: 3 };
         if (entity === ItemEntity) return { id: 10, name: 'Dodatkowe Życie', isExtraLife: true, groupId: 1 };
-        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50 };
+        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50, minPrice: 0 };
         if (entity === EnrollmentEntity) return { id: 5, groupId: 1, studentAccountId: 100 };
         if (entity === StudentStatsEntity) return statsObj;
         return null;

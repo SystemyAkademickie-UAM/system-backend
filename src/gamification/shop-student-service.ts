@@ -140,6 +140,7 @@ export class ShopStudentService {
       
       const price = DiscountCalculator.calculateDiscountedPrice(
          listing.basePrice,
+         listing.minPrice,
          earnedBadges,
          eligibleRanks,
          badgePromotions,

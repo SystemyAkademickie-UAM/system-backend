@@ -7,6 +7,7 @@ import { ShopListingRankPromotionEntity } from '../database/entities/shop-listin
 export class DiscountCalculator {
   static calculateDiscountedPrice(
     basePrice: number,
+    minPrice: number,
     earnedBadges: BadgeEntity[],
     eligibleRanks: RankEntity[],
     badgePromotions: ShopListingBadgePromotionEntity[], // dotyczy tylko 1 listing_id
@@ -51,7 +52,7 @@ export class DiscountCalculator {
     const totalFixed = totalBadgeFixed + bestRankFixed;
 
     const discountedPrice = Math.floor(basePrice * (1 - totalPercent / 100)) - totalFixed;
-    return Math.max(0, discountedPrice);
+    return Math.max(minPrice, discountedPrice);
   }
 
   static isItemLocked(

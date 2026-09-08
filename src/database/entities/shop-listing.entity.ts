@@ -17,4 +17,7 @@ export class ShopListingEntity {
 
   @Column({ name: 'per_student_limit', type: 'integer', nullable: true })
   perStudentLimit: number | null;
+
+  @Column({ name: 'min_price', type: 'integer', nullable: false, default: 0 })
+  minPrice: number;
 }
