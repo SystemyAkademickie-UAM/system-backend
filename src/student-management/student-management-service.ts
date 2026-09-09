@@ -200,9 +200,8 @@ export class StudentManagementService {
               enrollment.studentAccountId,
               'CURRENCY_ADDED',
               {
-                message: `Prowadzący zmienił Twój stan konta o ${delta > 0 ? '+' : ''}${delta}. Aktualny stan: ${item.currency}.`,
                 currency: item.currency,
-                delta: delta,
+                currencyDelta: delta,
               },
               queryRunner.manager
             );
