@@ -249,6 +249,7 @@ describe('BacklogService', () => {
             'BADGE_EARNED',
             'ACTIVITY_COMPLETED',
             'LIVES_CHANGED',
+            'CURRENCY_ADDED',
           ]),
           accountId: studentAccountId,
         },

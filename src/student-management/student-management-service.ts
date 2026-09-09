@@ -194,6 +194,18 @@ export class StudentManagementService {
           if (delta > 0) {
             stats.totalEarned = (stats.totalEarned || 0) + delta;
           }
+          if (delta !== 0) {
+            await this.backlogService.logEvent(
+              groupId,
+              enrollment.studentAccountId,
+              'CURRENCY_ADDED',
+              {
+                currency: item.currency,
+                currencyDelta: delta,
+              },
+              queryRunner.manager
+            );
+          }
         }
         if (item.totalEarned !== undefined) {
           stats.totalEarned = item.totalEarned;

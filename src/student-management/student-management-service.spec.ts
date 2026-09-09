@@ -182,6 +182,22 @@ describe('StudentManagementService', () => {
       expect(savedStats[0].autoRankEnabled).toBe(true);
     });
 
+    it('should log CURRENCY_ADDED event when currency changes', async () => {
+      mockQueryRunner.manager.save.mockImplementation(async (_entity, data) => data);
+
+      await service.bulkUpdate(mockRequest, groupId, {
+        students: [{ enrollmentId: 1, currency: 500 }],
+      });
+
+      expect(backlogService.logEvent).toHaveBeenCalledWith(
+        groupId,
+        1, // studentAccountId
+        'CURRENCY_ADDED',
+        { currency: 500, currencyDelta: 500 },
+        mockQueryRunner.manager,
+      );
+    });
+
     it('should throw ForbiddenException when lecturer does not own the group', async () => {
       groupAuthorizationService.assertLecturerOwnsGroupFromRequest.mockRejectedValue(
         new ForbiddenException('Not authorized to manage this group'),
