@@ -20,6 +20,7 @@ import { ActivitiesModule } from './activities/activities-module';
 import { StudentManagementModule } from './student-management/student-management-module';
 import { ProfileModule } from './profile/profile-module';
 import { AdminModule } from './admin/admin-module';
+import { ProductionLogsModule } from './ops/logs/production-logs.module';
 import { BacklogModule } from './backlog/backlog-module';
 import { BannersModule } from './banners/banners-module';
 
@@ -34,6 +35,7 @@ import { BannersModule } from './banners/banners-module';
     SamlModule,
     LoginModule,
     AdminModule,
+    ProductionLogsModule,
     CounterModule,
     GamificationModule,
     GroupsModule,
