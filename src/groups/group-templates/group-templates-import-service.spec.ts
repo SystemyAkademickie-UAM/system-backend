@@ -98,8 +98,10 @@ describe('GroupTemplatesImportService', () => {
             id: 400,
             categoryId: 300,
             name: 'Item1',
+            storyDescription: 'Story for item 1',
             listing: {
               basePrice: 10,
+              minPrice: 5,
               rankPromotions: [{ rankId: 200, promotionType: 'fixed', value: 5 }],
               badgePromotions: [{ badgeId: 100, promotionType: 'fixed', value: 2 }],
             },
@@ -109,7 +111,7 @@ describe('GroupTemplatesImportService', () => {
           {
             id: 500,
             name: 'Stage1',
-            activities: [{ name: 'Act1', currency: 10 }],
+            activities: [{ name: 'Act1', currency: 10, isVisible: true }],
           },
         ],
         posts: [{ title: 'Post1', content: 'Content1' }],
@@ -155,10 +157,11 @@ describe('GroupTemplatesImportService', () => {
     // Verify correct calls
     expect(mockManager.save).toHaveBeenCalled();
 
-    // Verify Item Entity received the NEW mapped category ID
+    // Verify Item Entity received the NEW mapped category ID and storyDescription
     const itemSaveCall = mockManager.save.mock.calls.find((call: any) => call[0].name === 'ItemEntity');
     expect(itemSaveCall[1].categoryId).toBe(savedCatId);
     expect(itemSaveCall[1].groupId).toBe(savedGroupId);
+    expect(itemSaveCall[1].storyDescription).toBe('Story for item 1');
 
     // Verify Shop Listing Rank Promotions raw query used NEW rank ID and NEW listing ID
     const rankQueryCall = mockManager.query.mock.calls.find((call: any) => call[0].includes('shop_listing_rank_promotions'));

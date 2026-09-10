@@ -104,6 +104,27 @@ describe('ActivitiesService', () => {
       
       const act3 = activities.find(a => a.id === 3);
       expect(act3?.completionCount).toBe(0); // fallback to 0
+      expect(act1?.isVisible).toBe(true);
+    });
+
+    it('should filter out hidden activities for students', async () => {
+      userRolesService.userHasRole.mockResolvedValue(false);
+      activityRepository.find.mockResolvedValue([
+        { id: 1, stageId: 10, name: 'Activity 1', currency: 100, educationalDescription: '', storyDescription: '', isVisible: true },
+        { id: 2, stageId: 10, name: 'Activity 2', currency: 50, educationalDescription: '', storyDescription: '', isVisible: false },
+      ]);
+      stageRepository.find.mockResolvedValue([
+        { id: 10, visibilityStatus: 1 },
+      ]);
+      mockQueryBuilder.getRawMany.mockResolvedValue([]);
+
+      const req = {} as Request;
+      const result = await service.handleActivity(req, { method: 'retrieve' });
+
+      expect(result.statusCode).toBe(200);
+      expect(result.activities).toBeDefined();
+      expect(result.activities?.length).toBe(1);
+      expect(result.activities?.[0].id).toBe(1);
     });
   });
 });

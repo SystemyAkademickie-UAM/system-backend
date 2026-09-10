@@ -127,12 +127,14 @@ export class GroupTemplatesImportService {
           const existingItem = await manager.findOneOrFail(ItemEntity, { where: { groupId: newGroupId, isExtraLife: true } });
           existingItem.categoryId = newCategoryId;
           existingItem.imageRef = oldItem.imageRef;
+          existingItem.storyDescription = oldItem.storyDescription ?? existingItem.storyDescription;
           existingItem.educationalDescription = oldItem.educationalDescription;
           savedItem = await manager.save(ItemEntity, existingItem);
 
           if (oldItem.listing) {
             const existingListing = await manager.findOneOrFail(ShopListingEntity, { where: { itemId: savedItem.id } });
             existingListing.basePrice = oldItem.listing.basePrice;
+            existingListing.minPrice = oldItem.listing.minPrice ?? existingListing.minPrice ?? 0;
             existingListing.stockQuantity = oldItem.listing.stockQuantity;
             existingListing.perStudentLimit = oldItem.listing.perStudentLimit;
             savedListing = await manager.save(ShopListingEntity, existingListing);
@@ -143,6 +145,7 @@ export class GroupTemplatesImportService {
             categoryId: newCategoryId,
             imageRef: oldItem.imageRef,
             name: oldItem.name,
+            storyDescription: oldItem.storyDescription ?? null,
             educationalDescription: oldItem.educationalDescription,
           });
           savedItem = await manager.save(ItemEntity, itemEntity);
@@ -152,6 +155,7 @@ export class GroupTemplatesImportService {
             const listingEntity = manager.create(ShopListingEntity, {
               itemId: savedItem.id,
               basePrice: oldItem.listing.basePrice,
+              minPrice: oldItem.listing.minPrice ?? 0,
               stockQuantity: oldItem.listing.stockQuantity,
               perStudentLimit: oldItem.listing.perStudentLimit,
             });
@@ -212,6 +216,7 @@ export class GroupTemplatesImportService {
             currency: oldActivity.currency,
             educationalDescription: oldActivity.educationalDescription,
             storyDescription: oldActivity.storyDescription,
+            isVisible: oldActivity.isVisible ?? true,
           });
           await manager.save(ActivityEntity, actEntity);
         }

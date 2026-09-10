@@ -42,6 +42,9 @@ export type StudentProfileResponseBody = {
   currency: number;
   totalEarned: number;
   badgesCount: number;
+  purchasedItemsCount: number;
+  usedItemsCount: number;
+  lostLivesCount: number;
   groupCurrency: string | null;
   groupCurrencyEmoji: string | null;
   lives: number | null;
@@ -207,6 +210,35 @@ export class StudentProfileService {
       completedAt: activity.completedAt ? new Date(activity.completedAt).toISOString() : null,
     }));
 
+    const backlogRows = await this.dataSource.query<{ type: string; value: string | null }[]>(
+      `SELECT type, value
+       FROM analytics.backlog
+       WHERE group_id = $1 AND account_id = $2 AND type IN ('SHOP_PURCHASE', 'ITEM_USED', 'LIVES_CHANGED')`,
+      [internalGroupId, row.studentAccountId],
+    );
+
+    let purchasedItemsCount = 0;
+    let usedItemsCount = 0;
+    let lostLivesCount = 0;
+
+    for (const entry of backlogRows) {
+      if (entry.type === 'SHOP_PURCHASE') {
+        purchasedItemsCount += 1;
+      } else if (entry.type === 'ITEM_USED') {
+        usedItemsCount += 1;
+      } else if (entry.type === 'LIVES_CHANGED' && entry.value) {
+        try {
+          const parsed = typeof entry.value === 'string' ? JSON.parse(entry.value) : entry.value;
+          const delta = typeof parsed.delta === 'number' ? parsed.delta : parseInt(parsed.delta, 10);
+          if (Number.isFinite(delta) && delta < 0) {
+            lostLivesCount += Math.abs(delta);
+          }
+        } catch {
+          // ignore malformed backlog payload
+        }
+      }
+    }
+
     return {
       studentAccountId: row.studentAccountId,
       groupId: publicGroupId,
@@ -220,6 +252,9 @@ export class StudentProfileService {
       currency: row.currency ?? 0,
       totalEarned: row.totalEarned ?? 0,
       badgesCount: earnedBadges.length,
+      purchasedItemsCount,
+      usedItemsCount,
+      lostLivesCount,
       groupCurrency: row.groupCurrency,
       groupCurrencyEmoji: row.groupCurrencyEmoji,
       lives: row.lives,

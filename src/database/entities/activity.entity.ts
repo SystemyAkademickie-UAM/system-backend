@@ -27,4 +27,7 @@ export class ActivityEntity {
 
   @Column({ name: 'story_description', type: 'text', nullable: false })
   storyDescription: string;
+
+  @Column({ name: 'is_visible', type: 'boolean', nullable: false, default: true })
+  isVisible: boolean;
 }
