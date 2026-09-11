@@ -12,6 +12,7 @@ export type ParsedActivityRequest = {
   currency?: number;
   educationalDescription?: string;
   storyDescription?: string;
+  isVisible?: boolean;
 };
 
 export type ActivityParseFailure = {
@@ -103,6 +104,22 @@ function parseOptionalString(value: unknown): string | undefined | null {
   return value;
 }
 
+function parseOptionalBoolean(value: unknown): boolean | undefined | null {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (value === 'true' || value === 1 || value === '1') {
+    return true;
+  }
+  if (value === 'false' || value === 0 || value === '0') {
+    return false;
+  }
+  return null;
+}
+
 function invalid(method: ActivityMethod): ActivityParseFailure {
   return { ok: false, method, activity: ACTIVITY_RESPONSE_INVALID_REQUEST_ID };
 }
@@ -146,6 +163,10 @@ export function parseActivityRequest(body: unknown): ActivityParseResult {
   if (storyDescription === null) {
     return invalid(method);
   }
+  const isVisible = parseOptionalBoolean(body.isVisible);
+  if (isVisible === null) {
+    return invalid(method);
+  }
   return {
     ok: true,
     request: {
@@ -157,6 +178,7 @@ export function parseActivityRequest(body: unknown): ActivityParseResult {
       currency,
       educationalDescription,
       storyDescription,
+      isVisible,
     },
   };
 }

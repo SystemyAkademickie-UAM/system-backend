@@ -198,6 +198,22 @@ describe('StudentManagementService', () => {
       );
     });
 
+    it('should log CURRENCY_ADDED event with isTotalEarned when totalEarned changes', async () => {
+      mockQueryRunner.manager.save.mockImplementation(async (_entity, data) => data);
+
+      await service.bulkUpdate(mockRequest, groupId, {
+        students: [{ enrollmentId: 1, totalEarned: 350 }],
+      });
+
+      expect(backlogService.logEvent).toHaveBeenCalledWith(
+        groupId,
+        1, // studentAccountId
+        'CURRENCY_ADDED',
+        { totalEarned: 350, totalEarnedDelta: 250, isTotalEarned: true },
+        mockQueryRunner.manager,
+      );
+    });
+
     it('should throw ForbiddenException when lecturer does not own the group', async () => {
       groupAuthorizationService.assertLecturerOwnsGroupFromRequest.mockRejectedValue(
         new ForbiddenException('Not authorized to manage this group'),

@@ -244,6 +244,7 @@ export class ShopItemsService {
 
     try {
       const categoryIds = await this.resolveCategoryIds(groupId, dto.categoryIds, dto.categoryId);
+      const isPublished = dto.isPublished !== false;
       const item = this.itemRepository.create({
         groupId,
         name: dto.name.trim(),
@@ -251,7 +252,8 @@ export class ShopItemsService {
         educationalDescription: dto.educationalDescription ?? null,
         imageRef: dto.imageRef ?? null,
         categoryId: categoryIds[0] ?? null,
-        isPublished: true,
+        isPublished,
+        publishedAt: isPublished ? new Date() : null,
       });
 
       const savedItem = await queryRunner.manager.save(item);
@@ -293,7 +295,7 @@ export class ShopItemsService {
       await queryRunner.commitTransaction();
       this.logger.log(`Shop item "${savedItem.name}" (id=${savedItem.id}) created for group ${groupId}`);
 
-      if (!savedItem.isExtraLife) {
+      if (!savedItem.isExtraLife && savedItem.isPublished) {
         await this.backlogService.notifyEnrolledStudents(groupId, 'SHOP_ITEM_ADDED', {
           message: `Dodano nowy produkt do sklepu: ${savedItem.name}.`,
           itemId: savedItem.id,

@@ -35,6 +35,7 @@ export type ActivityResponseBody = {
     completionCount: number;
     educationalDescription: string;
     storyDescription: string;
+    isVisible: boolean;
   }>;
 };
 
@@ -108,6 +109,7 @@ export class ActivitiesService {
         currency: body.currency,
         educationalDescription: body.educationalDescription?.trim() ?? '',
         storyDescription: body.storyDescription?.trim() ?? '',
+        isVisible: body.isVisible ?? true,
       });
       const saved = await this.activityRepository.save(entity);
       return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'post', activity: saved.id };
@@ -158,6 +160,9 @@ export class ActivitiesService {
       }
       if (body.storyDescription !== undefined) {
         existing.storyDescription = body.storyDescription.trim();
+      }
+      if (body.isVisible !== undefined) {
+        existing.isVisible = body.isVisible;
       }
       await this.activityRepository.save(existing);
       return { statusCode: ACTIVITY_API_JSON_STATUS_OK, method: 'modify', activity: existing.id };
@@ -271,7 +276,7 @@ export class ActivitiesService {
         });
         
         const visibleStageIds = new Set(stages.filter(s => s.visibilityStatus !== 0).map(s => s.id));
-        activities = activities.filter(a => visibleStageIds.has(a.stageId));
+        activities = activities.filter(a => visibleStageIds.has(a.stageId) && a.isVisible !== false);
       }
 
       const countsMap = new Map<number, number>();
@@ -300,6 +305,7 @@ export class ActivitiesService {
           completionCount: countsMap.get(a.id) ?? 0,
           educationalDescription: a.educationalDescription,
           storyDescription: a.storyDescription,
+          isVisible: a.isVisible ?? true,
         })),
       };
     } catch (err) {
