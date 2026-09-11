@@ -5,7 +5,7 @@ import { DataSource } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
-import { STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { UserRolesService } from '../user-roles/user-roles-service';
 
 export type StudentProfileBadgeItem = {
@@ -49,6 +49,7 @@ export type StudentProfileResponseBody = {
   groupCurrencyEmoji: string | null;
   lives: number | null;
   livesIcon: number | null;
+  livesEnabled: boolean;
   shopOpen: boolean;
   earnedBadges: StudentProfileBadgeItem[];
   completedActivities: StudentProfileActivityItem[];
@@ -70,6 +71,7 @@ type StudentProfileRow = {
   groupCurrencyEmoji: string | null;
   lives: number | null;
   livesIcon: number | null;
+  livesEnabled: boolean | string | number | null;
   shopOpen: boolean;
 };
 
@@ -104,24 +106,55 @@ export class StudentProfileService {
 
   async getStudentProfile(
     req: Request,
-    publicGroupId: number
+    publicGroupId: number,
+    requestedStudentAccountId?: number,
   ): Promise<StudentProfileResponseBody | { error: string }> {
     const subject = await this.sessionService.resolveSubjectFromRequest(req, undefined);
     if (!subject) {
       return { error: 'Unauthorized' };
     }
 
-    const studentAccountId = await this.userRolesService.findAccountIdForRole(
-      subject.userId,
-      STUDENT_ROLE_NAME);
-    if (studentAccountId === null) {
-      return { error: 'Brak profilu studenta dla tego użytkownika' };
-    }
-
     const internalGroupId =
       publicGroupId >= GROUP_RESPONSE_GROUP_ID_OFFSET
         ? publicGroupId - GROUP_RESPONSE_GROUP_ID_OFFSET
         : publicGroupId;
+
+    let targetStudentAccountId: number;
+
+    if (requestedStudentAccountId !== undefined) {
+      const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
+        subject.userId,
+        LECTURER_ROLE_NAME,
+      );
+      if (lecturerAccountId !== null) {
+        const isOwner = await this.dataSource.query<{ id: number }[]>(
+          `SELECT id FROM education.groups WHERE id = $1 AND teacher_account_id = $2`,
+          [internalGroupId, lecturerAccountId],
+        );
+        if (!isOwner || isOwner.length === 0) {
+          return { error: 'Forbidden' };
+        }
+        targetStudentAccountId = requestedStudentAccountId;
+      } else {
+        const studentAccountId = await this.userRolesService.findAccountIdForRole(
+          subject.userId,
+          STUDENT_ROLE_NAME,
+        );
+        if (studentAccountId === null || studentAccountId !== requestedStudentAccountId) {
+          return { error: 'Unauthorized' };
+        }
+        targetStudentAccountId = studentAccountId;
+      }
+    } else {
+      const studentAccountId = await this.userRolesService.findAccountIdForRole(
+        subject.userId,
+        STUDENT_ROLE_NAME,
+      );
+      if (studentAccountId === null) {
+        return { error: 'Brak profilu studenta dla tego użytkownika' };
+      }
+      targetStudentAccountId = studentAccountId;
+    }
 
     const rows = await this.dataSource.query<StudentProfileRow[]>(
       `SELECT
@@ -140,6 +173,7 @@ export class StudentProfileService {
          g.currency_emoji             AS "groupCurrencyEmoji",
          ss.lives                     AS "lives",
          g.lives_icon                 AS "livesIcon",
+         g.lives_enabled              AS "livesEnabled",
          g.shop_open                  AS "shopOpen"
        FROM gamification.enrollments e
        JOIN auth.accounts a ON a.id = e.student_account_id
@@ -150,7 +184,7 @@ export class StudentProfileService {
        JOIN education.groups g ON g.id = e.group_id
        WHERE e.group_id = $1 AND e.student_account_id = $2
        LIMIT 1`,
-      [internalGroupId, studentAccountId]);
+      [internalGroupId, targetStudentAccountId]);
 
     const row = rows[0];
     if (!row) {
@@ -259,6 +293,7 @@ export class StudentProfileService {
       groupCurrencyEmoji: row.groupCurrencyEmoji,
       lives: row.lives,
       livesIcon: row.livesIcon,
+      livesEnabled: row.livesEnabled === true || (row.livesEnabled as unknown) === 't' || (row.livesEnabled as unknown) === 1,
       shopOpen: row.shopOpen === true || row.shopOpen === ('t' as unknown) || row.shopOpen === (1 as unknown),
       earnedBadges,
       completedActivities,

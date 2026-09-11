@@ -33,6 +33,7 @@ export interface StudentListItem {
   totalEarned: number;
   autoRankEnabled: boolean;
   lives: number;
+  livesEnabled?: boolean;
 }
 
 /**
@@ -89,14 +90,16 @@ export class StudentManagementService {
          COALESCE(ss.currency, 0)     AS "currency",
          COALESCE(ss.total_earned, 0) AS "totalEarned",
          COALESCE(ss.auto_rank_enabled, true) AS "autoRankEnabled",
-         COALESCE(ss.lives, 3)        AS "lives"
+         COALESCE(ss.lives, 3)        AS "lives",
+         g.lives_enabled              AS "livesEnabled"
        FROM gamification.enrollments e
+       JOIN education.groups g ON g.id = e.group_id
        JOIN auth.accounts a  ON a.id = e.student_account_id
        JOIN auth.users u     ON u.id = a.user_id
        LEFT JOIN auth.avatars av ON av.id = u.avatar_id
        LEFT JOIN gamification.student_stats ss ON ss.enrollment_id = e.id
        WHERE e.group_id = $1
-       ORDER BY u.surname, u.name`,
+       ORDER BY e.id ASC`,
       [groupId]);
 
     return rows;
@@ -140,7 +143,7 @@ export class StudentManagementService {
        JOIN auth.users u     ON u.id = a.user_id
        LEFT JOIN auth.avatars av ON av.id = u.avatar_id
        WHERE e.group_id = $1
-       ORDER BY u.surname, u.name`,
+       ORDER BY e.id ASC`,
       [groupId]);
 
     return rows;
@@ -208,7 +211,21 @@ export class StudentManagementService {
           }
         }
         if (item.totalEarned !== undefined) {
+          const totalEarnedDelta = item.totalEarned - (stats.totalEarned || 0);
           stats.totalEarned = item.totalEarned;
+          if (totalEarnedDelta !== 0) {
+            await this.backlogService.logEvent(
+              groupId,
+              enrollment.studentAccountId,
+              'CURRENCY_ADDED',
+              {
+                totalEarned: item.totalEarned,
+                totalEarnedDelta,
+                isTotalEarned: true,
+              },
+              queryRunner.manager
+            );
+          }
         }
 
         if (item.autoRankEnabled !== undefined) {
