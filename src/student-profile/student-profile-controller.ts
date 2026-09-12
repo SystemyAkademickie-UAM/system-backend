@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseIntPipe, Req } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Query, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { StudentProfileService } from './student-profile-service';
@@ -16,7 +16,13 @@ export class StudentProfileController {
   @ApiOperation({ summary: 'Retrieve the student profile scoped to a specific group' })
   getProfile(
     @Param('groupId', ParseIntPipe) groupId: number,
+    @Query('studentAccountId') studentAccountId: string | undefined,
     @Req() req: Request) {
-    return this.studentProfileService.getStudentProfile(req, groupId);
+    const parsed = studentAccountId ? parseInt(studentAccountId, 10) : undefined;
+    return this.studentProfileService.getStudentProfile(
+      req,
+      groupId,
+      parsed !== undefined && Number.isFinite(parsed) ? parsed : undefined,
+    );
   }
 }

@@ -125,6 +125,7 @@ export class GroupTemplatesExportService {
 
           templateListing = {
             basePrice: listing.basePrice,
+            minPrice: listing.minPrice,
             stockQuantity: listing.stockQuantity,
             perStudentLimit: listing.perStudentLimit,
             rankPromotions: rp,
@@ -138,6 +139,7 @@ export class GroupTemplatesExportService {
           categoryId: item.categoryId,
           imageRef: item.imageRef,
           name: item.name,
+          storyDescription: item.storyDescription,
           educationalDescription: item.educationalDescription,
           listing: templateListing,
         };
@@ -172,6 +174,7 @@ export class GroupTemplatesExportService {
               currency: a.currency,
               educationalDescription: a.educationalDescription,
               storyDescription: a.storyDescription,
+              isVisible: a.isVisible ?? true,
             })),
         })),
       };

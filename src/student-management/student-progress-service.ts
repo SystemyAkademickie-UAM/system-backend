@@ -32,6 +32,7 @@ export interface ProgressActivityItem {
   storyDescription: string;
   educationalDescription: string;
   isCompleted: boolean;
+  isVisible: boolean;
 }
 
 /** Single stage node in the progress tree response. */
@@ -118,6 +119,7 @@ export class StudentProgressService {
         storyDescription: activity.storyDescription,
         educationalDescription: activity.educationalDescription,
         isCompleted: completedActivityIds.has(activity.id),
+        isVisible: activity.isVisible ?? true,
       })),
     }));
     return { stages: result };

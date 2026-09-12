@@ -45,6 +45,11 @@ export class UpdateShopItemDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  minPrice?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
   stockQuantity?: number;
 
   @IsOptional()

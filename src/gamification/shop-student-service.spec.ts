@@ -18,6 +18,7 @@ describe('ShopStudentService', () => {
   let service: ShopStudentService;
   let sessionService: jest.Mocked<SessionService>;
   let userRolesService: jest.Mocked<UserRolesService>;
+  let backlogService: { logEvent: jest.Mock };
   let manager: Record<string, jest.Mock>;
 
   const mockRequest = {} as Request;
@@ -28,7 +29,9 @@ describe('ShopStudentService', () => {
       find: jest.fn(),
       save: jest.fn(),
       create: jest.fn(),
+      remove: jest.fn(),
     };
+    backlogService = { logEvent: jest.fn().mockResolvedValue({}) };
 
     const mockDataSource = {
       transaction: jest.fn(async (cb) => cb(manager)),
@@ -43,7 +46,7 @@ describe('ShopStudentService', () => {
         { provide: getRepositoryToken(EarnedItemEntity), useValue: {} },
         {
           provide: BacklogService,
-          useValue: { logEvent: jest.fn().mockResolvedValue({}) },
+          useValue: backlogService,
         },
         {
           provide: SessionService,
@@ -71,7 +74,7 @@ describe('ShopStudentService', () => {
       manager.findOne.mockImplementation(async (entity) => {
         if (entity === GroupEntity) return { id: 1, shopOpen: true, livesEnabled: true, livesShopEnabled: true, lives: 3, startingLives: 3 };
         if (entity === ItemEntity) return { id: 10, isExtraLife: true, groupId: 1 };
-        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50 };
+        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50, minPrice: 0 };
         if (entity === EnrollmentEntity) return { id: 5, groupId: 1, studentAccountId: 100 };
         if (entity === StudentStatsEntity) return { id: 50, currency: 100, lives: 3 };
         return null;
@@ -87,7 +90,7 @@ describe('ShopStudentService', () => {
       manager.findOne.mockImplementation(async (entity) => {
         if (entity === GroupEntity) return { id: 1, shopOpen: true, livesEnabled: true, livesShopEnabled: true, lives: 3, startingLives: 3 };
         if (entity === ItemEntity) return { id: 10, name: 'Dodatkowe Życie', isExtraLife: true, groupId: 1 };
-        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50 };
+        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50, minPrice: 0 };
         if (entity === EnrollmentEntity) return { id: 5, groupId: 1, studentAccountId: 100 };
         if (entity === StudentStatsEntity) return statsObj;
         return null;
@@ -100,6 +103,75 @@ describe('ShopStudentService', () => {
       expect(result).toEqual({ success: true, message: 'Item purchased successfully' });
       expect(statsObj.lives).toBe(3);
       expect(statsObj.currency).toBe(50);
+    });
+
+    it('should allow extra life purchase when group lives cap is null', async () => {
+      const statsObj = { id: 50, currency: 100, lives: 99 };
+      manager.findOne.mockImplementation(async (entity) => {
+        if (entity === GroupEntity) return { id: 1, shopOpen: true, livesEnabled: true, livesShopEnabled: true, lives: null, startingLives: 3 };
+        if (entity === ItemEntity) return { id: 10, name: 'Dodatkowe Życie', isExtraLife: true, groupId: 1 };
+        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50, minPrice: 0 };
+        if (entity === EnrollmentEntity) return { id: 5, groupId: 1, studentAccountId: 100 };
+        if (entity === StudentStatsEntity) return statsObj;
+        return null;
+      });
+      manager.find.mockResolvedValue([]);
+      manager.save.mockResolvedValue({});
+
+      const result = await service.buyItem(mockRequest, 1, 10);
+
+      expect(result).toEqual({ success: true, message: 'Item purchased successfully' });
+      expect(statsObj.lives).toBe(100);
+    });
+  });
+
+  describe('useItem — backlog payload', () => {
+    beforeEach(() => {
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({
+        userId: 1,
+        sessionId: 1,
+        activeRole: null,
+        organizationId: 1,
+      });
+      userRolesService.findAccountIdForRole.mockResolvedValue(100);
+    });
+
+    it('should log item details including price alias and descriptions', async () => {
+      manager.findOne.mockImplementation(async (entity) => {
+        if (entity === EnrollmentEntity) return { id: 5, groupId: 1, studentAccountId: 100 };
+        if (entity === EarnedItemEntity) return { id: 8, enrollmentId: 5, itemId: 10, quantity: 1 };
+        if (entity === ItemEntity) {
+          return {
+            id: 10,
+            name: 'Mikstura',
+            groupId: 1,
+            storyDescription: 'Fabula',
+            educationalDescription: 'Dydaktyka',
+          };
+        }
+        if (entity === ShopListingEntity) return { id: 20, itemId: 10, basePrice: 50 };
+        return null;
+      });
+      manager.remove.mockResolvedValue({});
+
+      const result = await service.useItem(mockRequest, 1, 10);
+
+      expect(result).toEqual({ success: true, message: 'Item used successfully' });
+      expect(backlogService.logEvent).toHaveBeenCalledWith(
+        1,
+        100,
+        'ITEM_USED',
+        {
+          message: 'Użyto przedmiotu: Mikstura.',
+          itemId: 10,
+          itemName: 'Mikstura',
+          basePrice: 50,
+          price: 50,
+          storyDescription: 'Fabula',
+          educationalDescription: 'Dydaktyka',
+        },
+        manager,
+      );
     });
   });
 });

@@ -80,6 +80,48 @@ Register organizations via admin API (no migration seed). Example: UAM — `meta
 
 ---
 
+## Production logs (super role + file archive)
+
+The API writes Nest and browser-forwarded lines to **plaintext slot files** (`live/YYYY-MM-DDTHH-mm.log`, timezone `Europe/Warsaw`). Each slot is **5 minutes** (local simulation of a “day”). Closed slots are **gzip-compressed** to `archive/YYYY-MM-DDTHH-mm.log.gz`. Files older than `PRODUCTION_LOG_TTL_SLOTS` (default 3 slots) are deleted. Directory: `PRODUCTION_LOG_DIR` or `../logs` (workspace `logs/` next to `system-backend`).
+
+**List days —** `GET /api/admin/logs`
+
+**Authorization:** **super** role. Missing or non-super → `403 Forbidden`.
+
+**Response:** `200 OK`
+
+```json
+{ "days": ["2026-09-04", "2026-09-05"], "timeZone": "Europe/Warsaw" }
+```
+
+**Export one day (ciphertext) —** `POST /api/admin/logs/export`
+
+The HTTP body is **not** log plaintext. The client sends an uncompressed P-256 public key (base64). The server replies with AES-256-GCM fields; the browser derives the key via ECDH and decrypts locally.
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `clientPublicKey` | string | base64, 65-byte uncompressed P-256 | Browser ECDH public key |
+| `day` | string (optional) | `today` or `YYYY-MM-DDTHH-mm` | Default `today` (current 5-minute slot) |
+| `auth` | string (optional) | — | Bearer alternative to `maq_session` |
+
+**Response:** `200 OK` — `day`, `algorithm`, `serverPublicKey`, `iv`, `ciphertext`, `authTag` (all secrets as base64). `404` if that day has no file.
+
+**Browser ingest —** `POST /api/client-logs`
+
+**Authorization:** any valid session. No session → `403`.
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `level` | string | `error` or `warn` | Severity |
+| `message` | string | max 4000 chars | Line text (tokens stripped server-side where `Bearer …` appears) |
+| `source` | string (optional) | max 4000 chars | e.g. script URL |
+
+**Response:** `{ "accepted": true }`
+
+---
+
 ## Login (opaque API bearer issuance)
 
 Issues a **plaintext** opaque bearer token. Clients send it back as the **`maq_auth`** HTTP-only cookie (browsers, automatic) **or** an **`Authorization: Bearer <token>`** header (non-browser API clients). The token is **never** read from the URL query string. The server persists only **`hex(HMAC-SHA256(API_TOKEN_HMAC_SECRET, plaintext))`** in Postgres **`autoryzacja.tokens.token_hmac`** plus **`user_id`**, **`browser_uuid`** (**PostgreSQL `uuid`** — clients MUST send an RFC 4122 UUID in **`X-Browser-ID`**), **`created_at`**, **`expired_at`** — recovering the plaintext from the database digest is intentionally infeasible without brute-forcing candidate tokens offline.
@@ -761,9 +803,23 @@ Cookie: maq_auth=<token>
   "currency": "100",
   "currencyIcon": "coin",
   "livesIcon": "heart",
-  "shopOpen": true
+  "shopOpen": true,
+  "completedActivities": [
+    {
+      "id": 10,
+      "name": "Wejściówka 1",
+      "stageId": 3,
+      "stageName": "Moduł 1",
+      "storyDescription": null,
+      "educationalDescription": "Quiz",
+      "currency": 5,
+      "completedAt": "2026-09-06T09:00:00.000Z"
+    }
+  ]
 }
 ```
+
+`completedActivities[].stageId` / `stageName` come from `education.activities.stage_id` → `education.stages`. `stageName` is null only if the stage row is missing.
 
 ---
 
@@ -791,13 +847,49 @@ Retrieves the recent backlog history for the currently logged-in student in a gi
 
 **Response:** `200 OK` with JSON array of backlog items.
 
+Each item has the following fields:
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | integer | Backlog entry primary key. |
+| `type` | string | Event type (see table below). |
+| `date` | string (ISO-8601) | Timestamp of the event. |
+| `value` | string or null | Serialized JSON payload — fields depend on `type` (see below). |
+| `accountId` | integer | Student account ID who triggered the event. |
+
+**Backlog event types and their `value` payload fields:**
+
+| `type` | Visible to | Payload fields |
+| ------ | ---------- | -------------- |
+| `SHOP_PURCHASE` | Lecturer | `message`, `itemId`, `itemName`, `price`, `isExtraLife`, `storyDescription`, `educationalDescription` |
+| `ITEM_USED` | Lecturer | `message`, `itemId`, `itemName`, `basePrice`, `price`, `storyDescription`, `educationalDescription` |
+| `SHOP_ITEM_ADDED` | Student | `message`, `itemId`, `itemName`, `basePrice`, `price`, `storyDescription`, `educationalDescription` |
+| `LIVES_CHANGED` | Student | `message`, `delta`, `lives` |
+| `CURRENCY_ADDED` | Lecturer | `message`, `amount` |
+| `RANK_UP` | Student | `message`, `rankId`, `rankName` |
+| `BADGE_EARNED` | Student | `message`, `badgeId`, `badgeName` |
+| `ACTIVITY_COMPLETED` | Student | `message`, `activityId`, `activityName`, `currency` |
+| `STUDENT_JOINED` | Lecturer | `message` |
+| `STAGE_ADDED` | Student | `message`, `stageName` |
+| `BADGE_ADDED` | Student | `message`, `badgeId`, `badgeName` |
+| `RANK_ADDED` | Student | `message`, `rankId`, `rankName` |
+| `LIVES_SYSTEM_CHANGED` | Student | `message` |
+| `SHOP_STATUS_CHANGED` | Student | `message` |
+| `POST_ADDED` | Student | `message`, `postId`, `postTitle` |
+| `STAGE_COMPLETED` | Student | `message`, `stageName` |
+| `OTHER` | Both | `message` |
+
+> **Note:** `storyDescription` and `educationalDescription` can be `null` when the item has no description set.
+
+**Example response:**
+
 ```json
 [
   {
     "id": 12,
     "type": "SHOP_PURCHASE",
     "date": "2026-06-08T10:00:00.000Z",
-    "value": "health_potion",
+    "value": "{\"message\":\"Kupiono przedmiot ze sklepu: Mikstura zdrowia za kwotę 50.\",\"itemId\":7,\"itemName\":\"Mikstura zdrowia\",\"price\":50,\"isExtraLife\":false,\"storyDescription\":\"Magiczny eliksir przywracający siły.\",\"educationalDescription\":\"Nagradza aktywnego uczestnika.\"}",
     "accountId": 42
   }
 ]
@@ -822,7 +914,7 @@ Requires `SUPER` role or ownership of the group (`teacherAccountId`).
 | ------ | ----------- |
 | `X-Browser-ID` | Browser binding ID for the strong session. |
 
-**Response:** `200 OK` with JSON array of backlog items.
+**Response:** `200 OK` with JSON array of backlog items (same structure as student backlog above).
 
 ---
 
@@ -860,7 +952,7 @@ Manage stages within groups. Each stage belongs to a group and contains activiti
 | ----- | ---- | ----------- |
 | `statusCode` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
 | `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
-| `stage` | integer | For `post`/`modify`: stage DB id (positive); for `remove`: the removed id; for `retrieve`: count of stages returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = invalid request. |
+| `stage` | integer | For `post`/`modify`: stage DB id (positive); for `remove`: the removed id; for `retrieve`: count of stages returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = invalid request. `remove` deletes the stage even when it has no activities; if activities (or activity completion rows) still exist, they are removed in the same transaction so PostgreSQL foreign keys do not block the delete. |
 | `stages` | array (optional) | For `retrieve`: array of `{ id, groupId, name, visibilityStatus }` — `id` is DB id; `groupId` is public (with offset). |
 
 All responses use this flat JSON shape only (no Nest `message` / `error` fields).
@@ -910,6 +1002,18 @@ Content-Type: application/json
     { "id": 2, "groupId": 100001, "name": "Week 2" }
   ]
 }
+```
+
+Remove a stage (also deletes its activities and `analytics.activity_backlog` rows for those activities):
+```http
+POST /api/stages HTTP/1.1
+Content-Type: application/json
+
+{"auth":"<token>","method":"remove","stageId":1}
+```
+
+```json
+{ "statusCode": 200, "method": "remove", "stage": 1 }
 ```
 
 ---
@@ -1587,4 +1691,76 @@ Permanently deletes the template from the database. Does not affect any groups a
 **Errors:**
 - `403 Forbidden` if caller is not the creator.
 - `404 Not Found` if template does not exist.
+
+---
+
+## Bulk lives update (lecturer)
+
+Updates lives for one or more students in a single atomic transaction. Each student's result is
+independently clamped to `[0, group.lives]` (the group's configured maximum).
+
+**Endpoint:** `PATCH /api/groups/:groupId/students/lives/bulk-update`
+
+**Authorization:** **soft** auth (`maq_auth` cookie, `Authorization: Bearer` header, or body `auth`).
+Caller must have the **lecturer** role and must own the group (`education.groups.teacher_account_id`).
+Missing auth → `401 Unauthorized`. Not group owner → `403 Forbidden`.
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `auth` | string (optional) | — | Plaintext bearer token (alternative to `maq_auth` cookie). |
+| `students` | array | non-empty, max 200 items | Array of `{ accountId, delta }` objects. Empty or oversized arrays fail validation (`400`). |
+| `students[].accountId` | integer | — | Student's account ID (`auth.accounts.id`). If not enrolled in the group, the entry is skipped and listed in `skippedAccountIds`. |
+| `students[].delta` | integer | any sign | Value to add to the student's current lives. Positive = add, negative = remove. Result is clamped to `[0, livesMax]`. |
+
+**Response:** `200 OK`
+
+```json
+{
+  "results": [
+    { "accountId": 42, "lives": 5 },
+    { "accountId": 55, "lives": 0 }
+  ],
+  "skippedAccountIds": []
+}
+```
+
+The `results` array contains one entry per successfully processed student.
+Each entry includes the student's `accountId` and their new `lives` value after applying the delta and clamping.
+`skippedAccountIds` lists `accountId` values that were not enrolled in the group (those rows are not in `results`).
+
+**Backlog:** A `LIVES_CHANGED` event is logged per student in `analytics.backlog` with `{ delta, lives, message }`.
+
+**Example — add 3 lives to two students:**
+
+```http
+PATCH /api/groups/100005/students/lives/bulk-update HTTP/1.1
+Host: 127.0.0.1:8080
+Content-Type: application/json
+Cookie: maq_auth=<token>
+
+{
+  "students": [
+    { "accountId": 42, "delta": 3 },
+    { "accountId": 55, "delta": -2 }
+  ]
+}
+```
+
+```json
+{
+  "results": [
+    { "accountId": 42, "lives": 5 },
+    { "accountId": 55, "lives": 1 }
+  ],
+  "skippedAccountIds": []
+}
+```
+
+> **Legacy endpoints (deprecated, kept for backwards compatibility):**
+> - `POST /api/groups/:groupId/students/:accountId/lives/increment` — adds exactly 1 life (ignores `livesMax`).
+> - `POST /api/groups/:groupId/students/:accountId/lives/decrement` — removes exactly 1 life (clamped to 0).
+>
+> Prefer the bulk endpoint for all new integrations.
 

@@ -15,11 +15,16 @@ import { setupSwagger } from './swagger/swagger-setup';
 
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { LogStoreService } from './ops/logs/log-store.service';
+import { ProductionFileLogger } from './ops/logs/production-file-logger';
 
 assertRequiredEnv();
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const fileLogger = new ProductionFileLogger(new LogStoreService());
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: fileLogger,
+  });
   app.useStaticAssets(join(__dirname, '..', 'assets'), {
     prefix: '/api/assets/',
     setHeaders: (res) => {

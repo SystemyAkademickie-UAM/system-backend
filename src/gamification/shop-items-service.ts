@@ -149,6 +149,7 @@ export class ShopItemsService {
 
       const rankDiscountedPrice = DiscountCalculator.calculateDiscountedPrice(
         listing.basePrice,
+        listing.minPrice,
         [],
         eligibleRanks,
         badgePromotions,
@@ -156,6 +157,7 @@ export class ShopItemsService {
       );
       const discountedPrice = DiscountCalculator.calculateDiscountedPrice(
         listing.basePrice,
+        listing.minPrice,
         earnedBadges,
         eligibleRanks,
         badgePromotions,
@@ -204,6 +206,7 @@ export class ShopItemsService {
     const listing = listingRepo.create({
       itemId: savedItem.id,
       basePrice: EXTRA_LIFE_DEFAULT_BASE_PRICE,
+      minPrice: 0,
       stockQuantity: null,
       perStudentLimit: null,
     });
@@ -231,12 +234,17 @@ export class ShopItemsService {
       }
     }
 
+    if (dto.minPrice !== undefined && dto.minPrice > dto.basePrice) {
+      throw new BadRequestException('Minimalna cena nie może być większa niż cena bazowa przedmiotu.');
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
       const categoryIds = await this.resolveCategoryIds(groupId, dto.categoryIds, dto.categoryId);
+      const isPublished = dto.isPublished !== false;
       const item = this.itemRepository.create({
         groupId,
         name: dto.name.trim(),
@@ -244,7 +252,8 @@ export class ShopItemsService {
         educationalDescription: dto.educationalDescription ?? null,
         imageRef: dto.imageRef ?? null,
         categoryId: categoryIds[0] ?? null,
-        isPublished: true,
+        isPublished,
+        publishedAt: isPublished ? new Date() : null,
       });
 
       const savedItem = await queryRunner.manager.save(item);
@@ -253,6 +262,7 @@ export class ShopItemsService {
       const listing = this.shopListingRepository.create({
         itemId: savedItem.id,
         basePrice: dto.basePrice,
+        minPrice: dto.minPrice ?? 0,
         stockQuantity: dto.stockQuantity ?? null,
         perStudentLimit: dto.perStudentLimit ?? null,
       });
@@ -285,11 +295,15 @@ export class ShopItemsService {
       await queryRunner.commitTransaction();
       this.logger.log(`Shop item "${savedItem.name}" (id=${savedItem.id}) created for group ${groupId}`);
 
-      if (!savedItem.isExtraLife) {
+      if (!savedItem.isExtraLife && savedItem.isPublished) {
         await this.backlogService.notifyEnrolledStudents(groupId, 'SHOP_ITEM_ADDED', {
           message: `Dodano nowy produkt do sklepu: ${savedItem.name}.`,
           itemId: savedItem.id,
           itemName: savedItem.name,
+          basePrice: savedListing.basePrice,
+          price: savedListing.basePrice,
+          storyDescription: savedItem.storyDescription ?? null,
+          educationalDescription: savedItem.educationalDescription ?? null,
         });
       }
 
@@ -341,6 +355,7 @@ export class ShopItemsService {
       const listing = this.shopListingRepository.create({
         itemId: savedItem.id,
         basePrice: dto.basePrice ?? template.basePrice,
+        minPrice: 0,
         stockQuantity: dto.stockQuantity ?? null,
         perStudentLimit: dto.perStudentLimit ?? null,
       });
@@ -387,6 +402,12 @@ export class ShopItemsService {
       }
     }
 
+    const newBasePrice = dto.basePrice !== undefined ? dto.basePrice : listing?.basePrice ?? 0;
+    const newMinPrice = dto.minPrice !== undefined ? dto.minPrice : listing?.minPrice ?? 0;
+    if (newMinPrice > newBasePrice) {
+      throw new BadRequestException('Minimalna cena nie może być większa niż cena bazowa przedmiotu.');
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -417,8 +438,9 @@ export class ShopItemsService {
       let rankPromotions: ShopListingRankPromotionEntity[] = [];
       
       let savedListing = listing;
-      if (listing && (dto.basePrice !== undefined || dto.stockQuantity !== undefined || dto.perStudentLimit !== undefined)) {
+      if (listing && (dto.basePrice !== undefined || dto.minPrice !== undefined || dto.stockQuantity !== undefined || dto.perStudentLimit !== undefined)) {
         if (dto.basePrice !== undefined) listing.basePrice = dto.basePrice;
+        if (dto.minPrice !== undefined) listing.minPrice = dto.minPrice;
         if (dto.stockQuantity !== undefined) listing.stockQuantity = dto.stockQuantity;
         if (dto.perStudentLimit !== undefined) listing.perStudentLimit = dto.perStudentLimit;
         savedListing = await queryRunner.manager.save(listing);

@@ -1,4 +1,4 @@
-import { IsArray, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min, ArrayMinSize } from 'class-validator';
+import { IsArray, IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min, ArrayMinSize } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ValidateNested } from 'class-validator';
 import { GAMIFICATION_BADGE_NAME_MAX_LENGTH, EDUCATION_GROUP_VARCHAR_MAX_LENGTH } from '../../constants/database-entity-constants';
@@ -8,6 +8,10 @@ export class CreateShopItemDto {
   @IsOptional()
   @IsString()
   auth?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPublished?: boolean;
 
   @IsString()
   @IsNotEmpty()
@@ -40,6 +44,11 @@ export class CreateShopItemDto {
   @IsInt()
   @Min(0)
   basePrice: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  minPrice?: number;
 
   @IsInt()
   @IsOptional()

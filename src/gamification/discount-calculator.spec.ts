@@ -25,7 +25,7 @@ describe('DiscountCalculator', () => {
 
   describe('calculateDiscountedPrice', () => {
     it('returns base price when no discounts apply', () => {
-      const actualPrice = DiscountCalculator.calculateDiscountedPrice(basePrice, [], [], [], []);
+      const actualPrice = DiscountCalculator.calculateDiscountedPrice(basePrice, 0, [], [], [], []);
       expect(actualPrice).toBe(100);
     });
 
@@ -33,6 +33,7 @@ describe('DiscountCalculator', () => {
       const earnedBadges = [badge(1, PromotionType.FIXED, 10), badge(2, PromotionType.PERCENT, 20)];
       const actualPrice = DiscountCalculator.calculateDiscountedPrice(
         basePrice,
+        0,
         earnedBadges,
         [],
         [],
@@ -48,6 +49,7 @@ describe('DiscountCalculator', () => {
       ];
       const actualPrice = DiscountCalculator.calculateDiscountedPrice(
         basePrice,
+        0,
         earnedBadges,
         [],
         [],
@@ -63,6 +65,7 @@ describe('DiscountCalculator', () => {
       ];
       const actualPrice = DiscountCalculator.calculateDiscountedPrice(
         basePrice,
+        0,
         [],
         eligibleRanks,
         [],
@@ -76,6 +79,7 @@ describe('DiscountCalculator', () => {
       const rankPromotions = [{ rankId: 1, promotionType: PromotionType.FIXED, value: 30 } as never];
       const actualPrice = DiscountCalculator.calculateDiscountedPrice(
         basePrice,
+        0,
         [],
         eligibleRanks,
         [],
@@ -83,6 +87,20 @@ describe('DiscountCalculator', () => {
       );
       expect(actualPrice).toBe(70);
     });
+
+    it('enforces minPrice when discount pushes price below it', () => {
+      const earnedBadges = [badge(1, PromotionType.PERCENT, 100)]; // 100% discount
+      const actualPrice = DiscountCalculator.calculateDiscountedPrice(
+        basePrice,
+        45, // minPrice
+        earnedBadges,
+        [],
+        [],
+        []
+      );
+      expect(actualPrice).toBe(45);
+    });
+
   });
 
   describe('isItemLocked', () => {

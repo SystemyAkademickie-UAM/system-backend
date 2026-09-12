@@ -81,6 +81,7 @@ export interface GroupTemplateShopListingBadgePromotion {
 
 export interface GroupTemplateShopListing {
   basePrice: number;
+  minPrice?: number;
   stockQuantity: number | null;
   perStudentLimit: number | null;
   rankPromotions: GroupTemplateShopListingRankPromotion[];
@@ -93,6 +94,7 @@ export interface GroupTemplateItem {
   categoryId: number | null;
   imageRef: string | null;
   name: string;
+  storyDescription: string | null;
   educationalDescription: string | null;
   listing: GroupTemplateShopListing | null;
 }
@@ -107,6 +109,7 @@ export interface GroupTemplateActivity {
   currency: number;
   educationalDescription: string;
   storyDescription: string;
+  isVisible?: boolean;
 }
 
 export interface GroupTemplateStage {
