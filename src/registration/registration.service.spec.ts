@@ -103,7 +103,7 @@ describe('RegistrationService', () => {
     });
 
     await expect(
-      service.updateProfile(7, 'a'.repeat(16), 1),
+      service.updateProfile(7, 'a'.repeat(21), 1),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 

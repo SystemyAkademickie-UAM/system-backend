@@ -11,7 +11,7 @@ export class UpdateProfileSettingsDto {
   @IsString()
   auth?: string;
 
-  /** New nickname. Must be non-empty and at most 15 characters. */
+  /** New nickname. Must be non-empty and at most 20 characters. */
   @IsOptional()
   @IsString()
   @IsNotEmpty()
