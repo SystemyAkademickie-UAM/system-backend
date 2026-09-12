@@ -147,15 +147,7 @@ export class ShopItemsService {
         };
       }
 
-      const rankDiscountedPrice = DiscountCalculator.calculateDiscountedPrice(
-        listing.basePrice,
-        listing.minPrice,
-        [],
-        eligibleRanks,
-        badgePromotions,
-        rankPromotions
-      );
-      const discountedPrice = DiscountCalculator.calculateDiscountedPrice(
+      const discountDetails = DiscountCalculator.getDiscountDetails(
         listing.basePrice,
         listing.minPrice,
         earnedBadges,
@@ -170,8 +162,9 @@ export class ShopItemsService {
         categoryIds,
         listing: {
           ...listing,
-          rankDiscountedPrice,
-          discountedPrice,
+          rankDiscountedPrice: discountDetails.rankDiscountedPrice,
+          discountedPrice: discountDetails.finalPrice,
+          appliedDiscounts: discountDetails.appliedDiscounts,
           isLocked
         }
       };
