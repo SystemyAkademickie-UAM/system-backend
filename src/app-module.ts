@@ -21,6 +21,7 @@ import { StudentManagementModule } from './student-management/student-management
 import { ProfileModule } from './profile/profile-module';
 import { AdminModule } from './admin/admin-module';
 import { ProductionLogsModule } from './ops/logs/production-logs.module';
+import { BackupModule } from './admin/backup/backup.module';
 import { BacklogModule } from './backlog/backlog-module';
 import { BannersModule } from './banners/banners-module';
 
@@ -36,6 +37,7 @@ import { BannersModule } from './banners/banners-module';
     LoginModule,
     AdminModule,
     ProductionLogsModule,
+    BackupModule,
     CounterModule,
     GamificationModule,
     GroupsModule,
