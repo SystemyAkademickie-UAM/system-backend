@@ -40,24 +40,28 @@ export class BackupController {
 
   @Get('export')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Export encrypted database backup (super admin only)' })
+  @ApiOperation({ summary: 'Export encrypted database backup stream (super admin only)' })
   @ApiOkResponse({ description: 'Encrypted backup file (.enc)' })
   @ApiForbiddenResponse({ description: 'Caller is not a super admin' })
-  async exportBackup(@Req() req: Request, @Res() res: Response): Promise<void> {
+  async exportBackup(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<import('@nestjs/common').StreamableFile> {
     await this.adminAccessService.assertSuperAdmin(req);
 
     this.logger.log('Super admin initiated database backup export');
 
-    const encryptedBuffer = await this.backupService.createBackup();
+    const stream = await this.backupService.createBackupStream();
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `backup-${timestamp}.enc`;
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', encryptedBuffer.length);
     res.setHeader('Cache-Control', 'no-store');
-    res.end(encryptedBuffer);
+
+    const { StreamableFile } = await import('@nestjs/common');
+    return new StreamableFile(stream);
   }
 
   @Post('import')
