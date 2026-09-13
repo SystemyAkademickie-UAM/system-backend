@@ -71,6 +71,20 @@ function collectProductionSamlJwtSecretIssues(): string[] {
   return [];
 }
 
+function collectProductionBackupKeyIssues(): string[] {
+  const secret = process.env.BACKUP_ENCRYPTION_KEY;
+  if (!isNonEmptyString(secret)) {
+    // It's optional if they don't use backup, but if set, it must be valid.
+    // If we want to require it in production, we can uncomment the below:
+    // if (process.env.NODE_ENV === 'production') return ['BACKUP_ENCRYPTION_KEY'];
+    return [];
+  }
+  if (secret.trim().length < 32) {
+    return [`BACKUP_ENCRYPTION_KEY (min 32 characters)`];
+  }
+  return [];
+}
+
 function throwIfMissing(missing: string[]): void {
   if (missing.length === 0) {
     return;
@@ -90,6 +104,7 @@ export function assertRequiredEnv(): void {
     ...collectMissingStringKeys(REQUIRED_STRING_ENV_KEYS),
     ...collectProductionApiTokenIssues(),
     ...collectProductionSamlJwtSecretIssues(),
+    ...collectProductionBackupKeyIssues(),
   ];
   throwIfMissing(missing);
 }
