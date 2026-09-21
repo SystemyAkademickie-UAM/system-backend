@@ -82,7 +82,7 @@ Register organizations via admin API (no migration seed). Example: UAM — `meta
 
 ## Production logs (super role + file archive)
 
-The API writes Nest and browser-forwarded lines to **plaintext slot files** (`live/YYYY-MM-DDTHH-mm.log`, timezone `Europe/Warsaw`). Each slot is **5 minutes** (local simulation of a “day”). Closed slots are **gzip-compressed** to `archive/YYYY-MM-DDTHH-mm.log.gz`. Files older than `PRODUCTION_LOG_TTL_SLOTS` (default 3 slots) are deleted. Directory: `PRODUCTION_LOG_DIR` or `../logs` (workspace `logs/` next to `system-backend`).
+The API writes Nest and browser-forwarded lines to **one plaintext file per calendar day** (`live/YYYY-MM-DD.log`, timezone `Europe/Warsaw`). Closed days are **gzip-compressed** to `archive/YYYY-MM-DD.log.gz`. After a month ends, those gzip files are packed into `archive/YYYY-MM.zip`. Files older than `PRODUCTION_LOG_TTL_DAYS` (default 90 days; deprecated alias `PRODUCTION_LOG_TTL_SLOTS`) are deleted. There is **no env for rotation interval**. Directory: `PRODUCTION_LOG_DIR` or `../logs` (workspace `logs/` next to `system-backend`).
 
 **List days —** `GET /api/admin/logs`
 
@@ -103,7 +103,7 @@ The HTTP body is **not** log plaintext. The client sends an uncompressed P-256 p
 | Field | Type | Rules | Description |
 | ----- | ---- | ----- | ----------- |
 | `clientPublicKey` | string | base64, 65-byte uncompressed P-256 | Browser ECDH public key |
-| `day` | string (optional) | `today` or `YYYY-MM-DDTHH-mm` | Default `today` (current 5-minute slot) |
+| `day` | string (optional) | `today` or `YYYY-MM-DD` | Default `today` (current Warsaw calendar day) |
 | `auth` | string (optional) | — | Bearer alternative to `maq_session` |
 
 **Response:** `200 OK` — `day`, `algorithm`, `serverPublicKey`, `iv`, `ciphertext`, `authTag` (all secrets as base64). `404` if that day has no file.
