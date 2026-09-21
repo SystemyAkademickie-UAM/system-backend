@@ -103,7 +103,7 @@ describe('Production logs HTTP (supertest)', () => {
       .post('/api/admin/logs/export')
       .send({
         clientPublicKey: client.getPublicKey(undefined, 'uncompressed').toString('base64'),
-        day: '1999-01-01T00-00',
+        day: '1999-01-01',
       })
       .expect(404);
   });
