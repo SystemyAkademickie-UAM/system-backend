@@ -1,4 +1,8 @@
 import { API_TOKEN_HMAC_SECRET_MIN_LENGTH } from './constants/api-token-constants';
+import {
+  BACKUP_ENCRYPTION_KEY_ENV,
+  BACKUP_ENCRYPTION_KEY_MIN_LENGTH,
+} from './constants/backup-constants';
 import { SAML_JWT_SECRET_MIN_LENGTH } from './constants/saml-constants';
 
 const DATABASE_ENV_KEYS = [
@@ -72,15 +76,15 @@ function collectProductionSamlJwtSecretIssues(): string[] {
 }
 
 function collectProductionBackupKeyIssues(): string[] {
-  const secret = process.env.BACKUP_ENCRYPTION_KEY;
-  if (!isNonEmptyString(secret)) {
-    // It's optional if they don't use backup, but if set, it must be valid.
-    // If we want to require it in production, we can uncomment the below:
-    // if (process.env.NODE_ENV === 'production') return ['BACKUP_ENCRYPTION_KEY'];
+  if (process.env.NODE_ENV !== 'production') {
     return [];
   }
-  if (secret.trim().length < 32) {
-    return [`BACKUP_ENCRYPTION_KEY (min 32 characters)`];
+  const secret = process.env[BACKUP_ENCRYPTION_KEY_ENV];
+  if (!isNonEmptyString(secret)) {
+    return [BACKUP_ENCRYPTION_KEY_ENV];
+  }
+  if (secret.trim().length < BACKUP_ENCRYPTION_KEY_MIN_LENGTH) {
+    return [`${BACKUP_ENCRYPTION_KEY_ENV} (min ${BACKUP_ENCRYPTION_KEY_MIN_LENGTH} characters in production)`];
   }
   return [];
 }

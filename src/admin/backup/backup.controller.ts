@@ -1,15 +1,16 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   Post,
   Req,
   Res,
+  StreamableFile,
   UploadedFile,
   UseInterceptors,
-  BadRequestException,
-  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -22,11 +23,14 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
+import {
+  BACKUP_CONTENT_TYPE,
+  BACKUP_FILE_EXTENSION,
+  BACKUP_MAX_UPLOAD_BYTES,
+} from '../../constants/backup-constants';
 import { MAQ_SESSION_COOKIE_NAME } from '../../constants/session-constants';
 import { AdminAccessService } from '../admin-access.service';
 import { BackupService } from './backup.service';
-
-const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
 
 @ApiTags('Admin backup')
 @ApiCookieAuth(MAQ_SESSION_COOKIE_NAME)
@@ -46,30 +50,23 @@ export class BackupController {
   async exportBackup(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<import('@nestjs/common').StreamableFile> {
+  ): Promise<StreamableFile> {
     await this.adminAccessService.assertSuperAdmin(req);
-
     this.logger.log('Super admin initiated database backup export');
-
     const stream = await this.backupService.createBackupStream();
-
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `backup-${timestamp}.enc`;
-
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', BACKUP_CONTENT_TYPE);
+    res.setHeader('Content-Disposition', `attachment; filename="backup-${timestamp}${BACKUP_FILE_EXTENSION}"`);
     res.setHeader('Cache-Control', 'no-store');
-
-    const { StreamableFile } = await import('@nestjs/common');
     return new StreamableFile(stream);
   }
 
   @Post('import')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file', {
-    limits: { fileSize: MAX_UPLOAD_BYTES },
+    limits: { fileSize: BACKUP_MAX_UPLOAD_BYTES },
     fileFilter: (_req, file, callback) => {
-      if (!file.originalname.endsWith('.enc')) {
+      if (!file.originalname.endsWith(BACKUP_FILE_EXTENSION)) {
         callback(new BadRequestException('Only .enc backup files are accepted'), false);
         return;
       }
@@ -82,21 +79,14 @@ export class BackupController {
   @ApiForbiddenResponse({ description: 'Caller is not a super admin' })
   async importBackup(
     @Req() req: Request,
-    @UploadedFile() file: Express.Multer.File) {
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<{ restored: true; message: string }> {
     await this.adminAccessService.assertSuperAdmin(req);
-
-    if (!file || !file.buffer) {
+    if (file === undefined || file.buffer === undefined) {
       throw new BadRequestException('No backup file provided');
     }
-
-    this.logger.warn(
-      `Super admin initiated database RESTORE from file "${file.originalname}" (${(file.size / 1024 / 1024).toFixed(2)} MB)`,
-    );
-
+    this.logger.warn(`Super admin initiated database restore (${file.size} bytes)`);
     await this.backupService.restoreBackup(file.buffer);
-
-    this.logger.log('Database restore completed successfully');
-
     return { restored: true, message: 'Database restored successfully' };
   }
 }

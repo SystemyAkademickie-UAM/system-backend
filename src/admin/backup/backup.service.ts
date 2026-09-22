@@ -1,18 +1,27 @@
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { spawn } from 'node:child_process';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { createGzip, createGunzip } from 'node:zlib';
-import { PassThrough, Readable, Writable } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import type { Transform } from 'node:stream';
+import { createGunzip, createGzip } from 'node:zlib';
 
+import {
+  BACKUP_AES_ALGORITHM,
+  BACKUP_AES_AUTH_TAG_LENGTH,
+  BACKUP_AES_IV_LENGTH,
+  BACKUP_ENCRYPTION_KEY_ENV,
+  BACKUP_GZIP_LEVEL,
+  BACKUP_PG_RESTORE_WARNING_EXIT_CODE,
+} from '../../constants/backup-constants';
 import { resolvePostgresSslOption } from '../../database/postgres-ssl.config';
-
-/** Header layout: 16-byte IV + 16-byte auth tag placeholder (written after encryption). */
-const IV_LENGTH = 16;
-const AUTH_TAG_LENGTH = 16;
-const ALGORITHM = 'aes-256-gcm';
-const MIN_KEY_LENGTH = 32;
+import { deriveBackupEncryptionKey } from './backup-crypto';
 
 @Injectable()
 export class BackupService {
@@ -21,152 +30,129 @@ export class BackupService {
   constructor(private readonly configService: ConfigService) {}
 
   /**
-   * Creates an encrypted, compressed database backup stream.
-   * Pipeline: pg_dump → gzip → AES-256-GCM encrypt → output stream.
-   * File format: [IV (16)] [Encrypted data (...)] [AuthTag (16)]
+   * Streams pg_dump → gzip → AES-256-GCM.
+   * File layout: IV (16) + ciphertext + auth tag (16).
    */
   async createBackupStream(): Promise<Readable> {
-    const key = this.getEncryptionKey();
-    const pgEnv = this.getPgEnv();
-
-    const args = [
-      '--format=custom',
-      '--no-owner',
-      '--no-privileges',
-      `--dbname=${pgEnv.PGDATABASE}`,
-    ];
-
-    const child = spawn('pg_dump', args, {
-      env: { ...process.env, ...pgEnv },
-      stdio: ['ignore', 'pipe', 'pipe'],
+    const key = this.readEncryptionKey();
+    const pgEnv = this.buildPgEnv();
+    const child = spawn(
+      'pg_dump',
+      ['--format=custom', '--no-owner', '--no-privileges', `--dbname=${pgEnv.PGDATABASE}`],
+      { env: { ...process.env, ...pgEnv }, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    child.on('error', (err: Error) => {
+      this.logger.error(`pg_dump spawn failed: ${err.message}`);
     });
-
     let stderr = '';
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
-
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
     child.on('close', (code) => {
       if (code !== 0) {
         this.logger.error(`pg_dump exited with code ${code}: ${stderr}`);
       }
     });
-
-    const gzip = createGzip({ level: 9 });
-    const iv = randomBytes(IV_LENGTH);
-    const cipher = createCipheriv(ALGORITHM, key, iv);
-
+    if (child.stdout === null) {
+      throw new InternalServerErrorException('Failed to start pg_dump');
+    }
+    const gzip = createGzip({ level: BACKUP_GZIP_LEVEL });
+    const iv = randomBytes(BACKUP_AES_IV_LENGTH);
+    const cipher = createCipheriv(BACKUP_AES_ALGORITHM, key, iv);
     const passThrough = new PassThrough();
-    passThrough.write(iv); // write IV at the beginning
-
-    // Start pipeline
+    passThrough.write(iv);
     pipeline(
       child.stdout,
       gzip,
       cipher,
-      async function* (source) {
+      async function* appendAuthTag(source) {
         for await (const chunk of source) {
           yield chunk;
         }
-        // Yield auth tag at the very end
         yield cipher.getAuthTag();
       },
       passThrough,
-    ).catch((err) => {
-      this.logger.error('Backup export pipeline failed', err);
+    ).catch((err: Error) => {
+      this.logger.error(`Backup export pipeline failed: ${err.message}`);
       passThrough.destroy(err);
     });
-
     return passThrough;
   }
 
   /**
-   * Restores a database from an encrypted backup file buffer.
-   * Pipeline: decipher → gunzip → pg_restore.
+   * Restores from an encrypted backup buffer (pg_restore --clean --if-exists).
    */
   async restoreBackup(encryptedData: Buffer): Promise<void> {
-    if (encryptedData.length < IV_LENGTH + AUTH_TAG_LENGTH + 1) {
-      throw new InternalServerErrorException('Invalid backup file: too short');
+    const minLength = BACKUP_AES_IV_LENGTH + BACKUP_AES_AUTH_TAG_LENGTH + 1;
+    if (encryptedData.length < minLength) {
+      throw new BadRequestException('Invalid backup file: too short');
     }
-
-    const key = this.getEncryptionKey();
-    const pgEnv = this.getPgEnv();
-
-    const iv = encryptedData.subarray(0, IV_LENGTH);
-    const authTag = encryptedData.subarray(encryptedData.length - AUTH_TAG_LENGTH);
-    const ciphertext = encryptedData.subarray(IV_LENGTH, encryptedData.length - AUTH_TAG_LENGTH);
-
-    const decipher = createDecipheriv(ALGORITHM, key, iv);
+    const key = this.readEncryptionKey();
+    const iv = encryptedData.subarray(0, BACKUP_AES_IV_LENGTH);
+    const authTag = encryptedData.subarray(encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH);
+    const ciphertext = encryptedData.subarray(
+      BACKUP_AES_IV_LENGTH,
+      encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
+    );
+    const decipher = createDecipheriv(BACKUP_AES_ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);
-    const gunzip = createGunzip();
-
-    await this.runPgRestoreStream(Readable.from(ciphertext), decipher, gunzip, pgEnv);
+    await this.runPgRestoreStream(Readable.from(ciphertext), decipher, createGunzip(), this.buildPgEnv());
   }
 
   private async runPgRestoreStream(
     sourceStream: Readable,
-    decipher: import('stream').Transform,
-    gunzip: import('stream').Transform,
+    decipher: Transform,
+    gunzip: Transform,
     pgEnv: Record<string, string>,
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      const args = [
-        '--format=custom',
-        '--clean',
-        '--if-exists',
-        '--no-owner',
-        '--no-privileges',
-        `--dbname=${pgEnv.PGDATABASE}`,
-      ];
-
-      const child = spawn('pg_restore', args, {
-        env: { ...process.env, ...pgEnv },
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
+      const child = spawn(
+        'pg_restore',
+        [
+          '--format=custom',
+          '--clean',
+          '--if-exists',
+          '--no-owner',
+          '--no-privileges',
+          `--dbname=${pgEnv.PGDATABASE}`,
+        ],
+        { env: { ...process.env, ...pgEnv }, stdio: ['pipe', 'pipe', 'pipe'] },
+      );
       let stderr = '';
-      child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
-
-      child.on('error', (err) => {
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+      child.on('error', (err: Error) => {
         this.logger.error(`pg_restore spawn error: ${err.message}`);
         reject(new InternalServerErrorException('Failed to start pg_restore'));
       });
-
       child.on('close', (code) => {
-        if (code !== 0 && code !== 1) {
+        if (code !== 0 && code !== BACKUP_PG_RESTORE_WARNING_EXIT_CODE) {
           this.logger.error(`pg_restore exited with code ${code}: ${stderr}`);
           reject(new InternalServerErrorException('pg_restore failed'));
           return;
         }
-        if (stderr) {
-          this.logger.warn(`pg_restore warnings: ${stderr}`);
-        }
         resolve();
       });
-
-      pipeline(sourceStream, decipher, gunzip, child.stdin).catch((err) => {
-        this.logger.error('Restore pipeline failed', err);
+      pipeline(sourceStream, decipher, gunzip, child.stdin).catch((err: Error) => {
+        this.logger.error(`Restore pipeline failed: ${err.message}`);
         reject(new InternalServerErrorException('Restore pipeline failed'));
       });
     });
   }
 
-  private getEncryptionKey(): Buffer {
-    const rawKey = this.configService.get<string>('BACKUP_ENCRYPTION_KEY', '');
-    if (!rawKey || rawKey.trim().length < MIN_KEY_LENGTH) {
+  private readEncryptionKey(): Buffer {
+    const rawKey = this.configService.get<string>(BACKUP_ENCRYPTION_KEY_ENV, '');
+    try {
+      return deriveBackupEncryptionKey(rawKey);
+    } catch {
       throw new InternalServerErrorException(
-        `BACKUP_ENCRYPTION_KEY must be at least ${MIN_KEY_LENGTH} characters`,
+        `${BACKUP_ENCRYPTION_KEY_ENV} must be at least 32 characters`,
       );
     }
-    // Derive a 32-byte key by taking first 32 bytes of the raw string (UTF-8)
-    // For production, consider using a proper KDF (PBKDF2/scrypt), but raw key is acceptable
-    // when the user controls the key length and entropy.
-    const keyBuffer = Buffer.from(rawKey.trim(), 'utf8');
-    if (keyBuffer.length < 32) {
-      throw new InternalServerErrorException('BACKUP_ENCRYPTION_KEY must yield at least 32 bytes');
-    }
-    return keyBuffer.subarray(0, 32);
   }
 
-  private getPgEnv(): Record<string, string> {
+  private buildPgEnv(): Record<string, string> {
     const env: Record<string, string> = {
       PGHOST: this.configService.get<string>('DATABASE_HOST', '127.0.0.1'),
       PGPORT: this.configService.get<string>('DATABASE_PORT', '5432'),
@@ -174,12 +160,10 @@ export class BackupService {
       PGPASSWORD: this.configService.get<string>('DATABASE_PASSWORD', ''),
       PGDATABASE: this.configService.get<string>('DATABASE_NAME', ''),
     };
-
     const sslConfig = resolvePostgresSslOption((key) => this.configService.get<string>(key));
     if (sslConfig !== false) {
       env.PGSSLMODE = sslConfig.rejectUnauthorized ? 'verify-full' : 'require';
     }
-
     return env;
   }
 }

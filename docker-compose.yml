@@ -16,7 +16,6 @@ services:
     volumes:
       - ../secrets:/app/secrets:ro
       - production_logs:/app/var/logs
-      - ./dist:/app/dist
     networks:
       - academy-network
 

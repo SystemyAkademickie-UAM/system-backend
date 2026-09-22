@@ -108,6 +108,30 @@ The HTTP body is **not** log plaintext. The client sends an uncompressed P-256 p
 
 **Response:** `200 OK` — `day`, `algorithm`, `serverPublicKey`, `iv`, `ciphertext`, `authTag` (all secrets as base64). `404` if that day has no file.
 
+## Admin database backup (super role)
+
+Encrypted `pg_dump` (custom format) wrapped in gzip + AES-256-GCM. Super role only. File layout: 16-byte IV, ciphertext, 16-byte auth tag. Key: `BACKUP_ENCRYPTION_KEY` (min 32 characters; SHA-256 derived). Required when `NODE_ENV=production`.
+
+**Export —** `GET /api/admin/backup/export`
+
+**Authorization:** **super** role (`maq_session`). Missing or non-super → `403 Forbidden`. Missing/short key → `500`.
+
+**Response:** `200 OK` — `application/octet-stream` attachment (`backup-<iso>.enc`). Streamed; do not buffer the whole dump in the browser when possible.
+
+**Import —** `POST /api/admin/backup/import`
+
+**Content-Type:** `multipart/form-data` field `file` (`.enc` only, max 100 MiB).
+
+**Authorization:** **super** role. Invalid file → `400`. Restore runs `pg_restore --clean --if-exists` against the configured `DATABASE_*` (destructive).
+
+**Response:** `200 OK`
+
+```json
+{ "restored": true, "message": "Database restored successfully" }
+```
+
+---
+
 **Browser ingest —** `POST /api/client-logs`
 
 **Authorization:** any valid session. No session → `403`.
