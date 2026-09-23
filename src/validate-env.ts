@@ -1,4 +1,8 @@
 import { API_TOKEN_HMAC_SECRET_MIN_LENGTH } from './constants/api-token-constants';
+import {
+  BACKUP_ENCRYPTION_KEY_ENV,
+  BACKUP_ENCRYPTION_KEY_MIN_LENGTH,
+} from './constants/backup-constants';
 import { SAML_JWT_SECRET_MIN_LENGTH } from './constants/saml-constants';
 
 const DATABASE_ENV_KEYS = [
@@ -71,6 +75,20 @@ function collectProductionSamlJwtSecretIssues(): string[] {
   return [];
 }
 
+function collectProductionBackupKeyIssues(): string[] {
+  if (process.env.NODE_ENV !== 'production') {
+    return [];
+  }
+  const secret = process.env[BACKUP_ENCRYPTION_KEY_ENV];
+  if (!isNonEmptyString(secret)) {
+    return [BACKUP_ENCRYPTION_KEY_ENV];
+  }
+  if (secret.trim().length < BACKUP_ENCRYPTION_KEY_MIN_LENGTH) {
+    return [`${BACKUP_ENCRYPTION_KEY_ENV} (min ${BACKUP_ENCRYPTION_KEY_MIN_LENGTH} characters in production)`];
+  }
+  return [];
+}
+
 function throwIfMissing(missing: string[]): void {
   if (missing.length === 0) {
     return;
@@ -90,6 +108,7 @@ export function assertRequiredEnv(): void {
     ...collectMissingStringKeys(REQUIRED_STRING_ENV_KEYS),
     ...collectProductionApiTokenIssues(),
     ...collectProductionSamlJwtSecretIssues(),
+    ...collectProductionBackupKeyIssues(),
   ];
   throwIfMissing(missing);
 }
