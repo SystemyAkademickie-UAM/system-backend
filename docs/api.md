@@ -187,6 +187,18 @@ Configure **`API_TOKEN_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=
 
 ---
 
+## Magic-link login (email)
+
+**Request —** `POST /api/login/magic-link/request`
+
+Body: `{ "email": "…", "organizationId": 11 }` (`organizationId` optional). Super role on org 1 is allowed without an email tenant.
+
+The email **verify URL** uses the requesting SPA origin (`Origin` / `X-Forwarded-Host`) when it matches this API host, otherwise `MAGIC_LINK_VERIFY_BASE_URL`. That way WMI production and the testing playground can share one backend image.
+
+**Verify —** `POST /api/login/magic-link/verify` body `{ "token": "…" }` — consumes the one-time token and sets the session cookie.
+
+---
+
 ## Login session (API token cookie)
 
 Browser clients that already hold **`maq_auth`** (e.g. after SAML ACS mint with RelayState browser id) can verify the session without a live SAML cookie.
