@@ -125,6 +125,26 @@ describe('MagicLinkService', () => {
     expect(magicLinkTokenRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ email: 'player@example.com', organizationId: clientOrgId }),
     );
+    expect(magicLinkEmailService.sendMagicLinkEmail).toHaveBeenCalledWith(
+      'player@example.com',
+      expect.stringMatching(/^http:\/\/127\.0\.0\.1:3000\/login\/magic\?token=/),
+    );
+  });
+
+  it('should put the requesting playground origin in the email link', async () => {
+    magicLinkTokenRepository.findOne.mockResolvedValue(null);
+    const playgroundRequest = {
+      headers: {
+        origin: 'https://maq.projektstudencki.pl',
+        'x-forwarded-host': 'maq.projektstudencki.pl',
+        'x-forwarded-proto': 'https',
+      },
+    } as unknown as Request;
+    await service.requestMagicLink('player@example.com', clientOrgId, playgroundRequest);
+    expect(magicLinkEmailService.sendMagicLinkEmail).toHaveBeenCalledWith(
+      'player@example.com',
+      expect.stringMatching(/^https:\/\/maq\.projektstudencki\.pl\/login\/magic\?token=/),
+    );
   });
 
   it('should resolve organization from email when organizationId is omitted', async () => {

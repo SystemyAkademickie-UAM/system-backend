@@ -108,6 +108,30 @@ The HTTP body is **not** log plaintext. The client sends an uncompressed P-256 p
 
 **Response:** `200 OK` — `day`, `algorithm`, `serverPublicKey`, `iv`, `ciphertext`, `authTag` (all secrets as base64). `404` if that day has no file.
 
+## Admin database backup (super role)
+
+Encrypted `pg_dump` (custom format) wrapped in gzip + AES-256-GCM. Super role only. File layout: 16-byte IV, ciphertext, 16-byte auth tag. Key: `BACKUP_ENCRYPTION_KEY` (min 32 characters; SHA-256 derived). Required when `NODE_ENV=production`.
+
+**Export —** `GET /api/admin/backup/export`
+
+**Authorization:** **super** role (`maq_session`). Missing or non-super → `403 Forbidden`. Missing/short key → `500`.
+
+**Response:** `200 OK` — `application/octet-stream` attachment (`backup-<iso>.enc`). Streamed; do not buffer the whole dump in the browser when possible.
+
+**Import —** `POST /api/admin/backup/import`
+
+**Content-Type:** `multipart/form-data` field `file` (`.enc` only, max 100 MiB).
+
+**Authorization:** **super** role. Invalid file → `400`. Restore runs `pg_restore --clean --if-exists` against the configured `DATABASE_*` (destructive).
+
+**Response:** `200 OK`
+
+```json
+{ "restored": true, "message": "Database restored successfully" }
+```
+
+---
+
 **Browser ingest —** `POST /api/client-logs`
 
 **Authorization:** any valid session. No session → `403`.
@@ -160,6 +184,18 @@ Configure **`API_TOKEN_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=
 **Session lifetime:** `maq_auth` and `saml_session` are **session cookies** (no `Max-Age`) — dropped on browser close. Server-side `expired_at` is the source of truth: a sliding idle window is refreshed on each authenticated request, never past the absolute cap measured from `created_at`. After idle expiry or the cap, the token is rejected and the user must re-authenticate.
 
 **Rate limiting:** `POST /api/login`, `POST /api/login/active-role`, and `GET /api/auth/saml/login` are throttled per client IP (`@nestjs/throttler`); exceeding the limit returns `429 Too Many Requests`.
+
+---
+
+## Magic-link login (email)
+
+**Request —** `POST /api/login/magic-link/request`
+
+Body: `{ "email": "…", "organizationId": 11 }` (`organizationId` optional). Super role on org 1 is allowed without an email tenant.
+
+The email **verify URL** uses the requesting SPA origin (`Origin` / `X-Forwarded-Host`) when it matches this API host, otherwise `MAGIC_LINK_VERIFY_BASE_URL`. That way WMI production and the testing playground can share one backend image.
+
+**Verify —** `POST /api/login/magic-link/verify` body `{ "token": "…" }` — consumes the one-time token and sets the session cookie.
 
 ---
 

@@ -11,6 +11,7 @@ FROM node:24.14.1-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
+RUN apk add --no-cache postgresql-client
 COPY package*.json ./
 RUN npm install -g npm@11.11.0 && npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
