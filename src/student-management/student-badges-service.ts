@@ -4,7 +4,7 @@ import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
-import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { BadgeEntity } from '../database/entities/badge.entity';
 import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
@@ -49,7 +49,7 @@ export class StudentBadgesService {
 
   /** GET /groups/:groupId/students/:accountId/badges */
   async getStudentBadges(req: Request, groupId: number, accountId: number): Promise<{ badges: StudentBadgeItem[] }> {
-    await this.groupAuthorizationService.assertLecturerOwnsGroupFromRequest(req, groupId);
+    await this.assertCanReadStudentBadges(req, groupId);
     const enrollment = await this.findEnrollmentOrFail(groupId, accountId);
     const badges = await this.badgeRepository.find({ where: { groupId } });
     const earnedBadges = await this.earnedBadgeRepository.find({
@@ -152,5 +152,40 @@ export class StudentBadgesService {
         `Student with accountId ${accountId} is not enrolled in group ${groupId}`);
     }
     return enrollment;
+  }
+
+  private async assertCanReadStudentBadges(req: Request, groupId: number): Promise<void> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      throw new ForbiddenException('Not authorized');
+    }
+    const isOwner = await this.groupAuthorizationService.isLecturerOwner(
+      subject.userId,
+      groupId,
+      subject.organizationId
+    );
+    if (isOwner) {
+      return;
+    }
+
+    const studentAccountId =
+      subject.organizationId != null
+        ? await this.userRolesService.findAccountIdForRoleInOrganization(
+            subject.userId,
+            subject.organizationId,
+            STUDENT_ROLE_NAME
+          )
+        : await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
+
+    if (studentAccountId !== null) {
+      const isEnrolled = await this.enrollmentRepository.exist({
+        where: { groupId, studentAccountId },
+      });
+      if (isEnrolled) {
+        return;
+      }
+    }
+
+    throw new ForbiddenException('Not authorized to access badges in this group');
   }
 }
