@@ -10,7 +10,7 @@
             ],
             "eduPersonPrincipalName": "student1@localhost.invalid",
             "mail": "student1@localhost.invalid",
-            "displayName": "Student One"
+            "displayName": "Student 1"
         },
         {
             "username": "student2",
@@ -22,7 +22,7 @@
             ],
             "eduPersonPrincipalName": "student2@localhost.invalid",
             "mail": "student2@localhost.invalid",
-            "displayName": "Student Two"
+            "displayName": "Student 2"
         },
         {
             "username": "student3",
@@ -34,7 +34,151 @@
             ],
             "eduPersonPrincipalName": "student3@localhost.invalid",
             "mail": "student3@localhost.invalid",
-            "displayName": "Student Three"
+            "displayName": "Student 3"
+        },
+        {
+            "username": "student4",
+            "password": "student4",
+            "uid": "student4",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student4@localhost.invalid",
+            "mail": "student4@localhost.invalid",
+            "displayName": "Student 4"
+        },
+        {
+            "username": "student5",
+            "password": "student5",
+            "uid": "student5",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student5@localhost.invalid",
+            "mail": "student5@localhost.invalid",
+            "displayName": "Student 5"
+        },
+        {
+            "username": "student6",
+            "password": "student6",
+            "uid": "student6",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student6@localhost.invalid",
+            "mail": "student6@localhost.invalid",
+            "displayName": "Student 6"
+        },
+        {
+            "username": "student7",
+            "password": "student7",
+            "uid": "student7",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student7@localhost.invalid",
+            "mail": "student7@localhost.invalid",
+            "displayName": "Student 7"
+        },
+        {
+            "username": "student8",
+            "password": "student8",
+            "uid": "student8",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student8@localhost.invalid",
+            "mail": "student8@localhost.invalid",
+            "displayName": "Student 8"
+        },
+        {
+            "username": "student9",
+            "password": "student9",
+            "uid": "student9",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student9@localhost.invalid",
+            "mail": "student9@localhost.invalid",
+            "displayName": "Student 9"
+        },
+        {
+            "username": "student10",
+            "password": "student10",
+            "uid": "student10",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student10@localhost.invalid",
+            "mail": "student10@localhost.invalid",
+            "displayName": "Student 10"
+        },
+        {
+            "username": "student11",
+            "password": "student11",
+            "uid": "student11",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student11@localhost.invalid",
+            "mail": "student11@localhost.invalid",
+            "displayName": "Student 11"
+        },
+        {
+            "username": "student12",
+            "password": "student12",
+            "uid": "student12",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student12@localhost.invalid",
+            "mail": "student12@localhost.invalid",
+            "displayName": "Student 12"
+        },
+        {
+            "username": "student13",
+            "password": "student13",
+            "uid": "student13",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student13@localhost.invalid",
+            "mail": "student13@localhost.invalid",
+            "displayName": "Student 13"
+        },
+        {
+            "username": "student14",
+            "password": "student14",
+            "uid": "student14",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student14@localhost.invalid",
+            "mail": "student14@localhost.invalid",
+            "displayName": "Student 14"
+        },
+        {
+            "username": "student15",
+            "password": "student15",
+            "uid": "student15",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "student15@localhost.invalid",
+            "mail": "student15@localhost.invalid",
+            "displayName": "Student 15"
         },
         {
             "username": "lecturer1",
