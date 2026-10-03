@@ -106,6 +106,7 @@ describe('BacklogService', () => {
         groupId: 5,
         accountId: 10,
         type: 'SHOP_PURCHASE',
+        date: expect.any(Date),
         value: 'item_1',
       });
       expect(backlogRepository.save).toHaveBeenCalledWith(mockEntry);
@@ -123,7 +124,13 @@ describe('BacklogService', () => {
       await service.logEvent(5, 10, 'ITEM_USED');
 
       // Assert
-      expect(backlogRepository.create).toHaveBeenCalledWith(mockEntry);
+      expect(backlogRepository.create).toHaveBeenCalledWith({
+        groupId: 5,
+        accountId: 10,
+        type: 'ITEM_USED',
+        date: expect.any(Date),
+        value: null,
+      });
     });
 
     it('should propagate database constraint errors (e.g., invalid groupId)', async () => {
@@ -162,6 +169,7 @@ describe('BacklogService', () => {
         groupId: 5,
         accountId: 10,
         type: 'SHOP_PURCHASE',
+        date: expect.any(Date),
         value: 'item_1',
       });
       expect(managerRepo.save).toHaveBeenCalledWith(mockEntry);

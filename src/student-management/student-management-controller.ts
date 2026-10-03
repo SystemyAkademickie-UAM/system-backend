@@ -65,6 +65,17 @@ export class StudentManagementController {
   }
 
   /**
+   * Alias endpoint for rank path members accessible to enrolled students and lecturers.
+   */
+  @Get(':groupId/rank-path-members')
+  @ApiOperation({ summary: 'List rank path members for enrolled students and lecturers (alias)' })
+  getRankPathMembers(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request) {
+    return this.studentManagementService.getParticipants(req, toInternalGroupId(publicGroupId));
+  }
+
+  /**
    * Bulk-updates student stats (currency, totalEarned, rankId) from the table save button.
    */
   @Patch(':groupId/students/bulk-update')

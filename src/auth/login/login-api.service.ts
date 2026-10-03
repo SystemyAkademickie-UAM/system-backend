@@ -7,6 +7,7 @@ import {
   LEGACY_MAQ_ACTIVE_ROLE_COOKIE_NAME,
   LEGACY_MAQ_AUTH_COOKIE_NAME,
   MAQ_SESSION_COOKIE_NAME,
+  SESSION_ABSOLUTE_MAX_DEFAULT_SECONDS,
 } from '../../constants/session-constants';
 import { SAML_PENDING_ORG_COOKIE_NAME, SAML_SESSION_COOKIE_NAME } from '../../constants/saml-constants';
 import { buildSamlSessionCookieOptions, buildClearSamlCookieOptions, resolvePendingOrgCookieSameSite } from '../saml/saml-cookie-options.util';
@@ -37,6 +38,7 @@ export type EstablishSessionOptions = {
   samlNameId?: string | null;
   samlNameIdFormat?: string | null;
   samlSessionIndex?: string | null;
+  rememberMe?: boolean;
 };
 
 /**
@@ -70,7 +72,10 @@ export class LoginApiService {
       samlSessionIndex: options.samlSessionIndex ?? null,
     };
     const plaintext = await this.sessionIssuanceService.mintSession(sessionOptions);
-    res.cookie(MAQ_SESSION_COOKIE_NAME, plaintext, buildSamlSessionCookieOptions(req));
+    const rawRemember = req.cookies?.['maq_remember_me'];
+    const isRememberMe = options.rememberMe ?? (rawRemember === '1' || rawRemember === 'true');
+    const maxAgeMs = isRememberMe ? SESSION_ABSOLUTE_MAX_DEFAULT_SECONDS * 1000 : undefined;
+    res.cookie(MAQ_SESSION_COOKIE_NAME, plaintext, buildSamlSessionCookieOptions(req, maxAgeMs));
     return { session: plaintext };
   }
 
