@@ -107,6 +107,7 @@ export class BacklogService {
       groupId: internalGroupId,
       accountId,
       type,
+      date: new Date(),
       value: serializeBacklogPayload(payloadToLog),
     });
     return repo.save(entry);

@@ -10,18 +10,26 @@ import {
   PRODUCTION_LOG_GZIP_EXTENSION,
   PRODUCTION_LOG_LINE_MAX_CHARS,
   PRODUCTION_LOG_LIVE_DIR_NAME,
-  PRODUCTION_LOG_SLOT_MS,
+  PRODUCTION_LOG_MONTH_PATTERN,
+  PRODUCTION_LOG_ZIP_EXTENSION,
 } from '../../constants/production-log-constants';
-import { formatLogCalendarDate, formatLogLineTimestamp } from './log-calendar';
+import {
+  formatLogCalendarDate,
+  formatLogLineTimestamp,
+  formatLogMonthKey,
+  formatLogRetentionCutoffDate,
+} from './log-calendar';
 import {
   resolveArchiveLogFilePath,
   resolveLiveLogFilePath,
+  resolveMonthlyArchiveZipPath,
   resolveProductionLogDirectory,
-  resolveProductionLogTtlSlots,
+  resolveProductionLogTtlDays,
 } from './log-directory';
+import { LogZipStore, type ZipStoreEntry } from './log-zip-store';
 
 /**
- * Writes daily plaintext logs, gzips closed days, deletes files past TTL.
+ * Writes daily plaintext logs, gzips closed days, zips closed months, deletes past TTL.
  */
 @Injectable()
 export class LogStoreService {
@@ -40,6 +48,7 @@ export class LogStoreService {
     const dates = new Set<string>();
     this.collectLiveDates(rootDir, dates);
     this.collectArchiveDates(rootDir, dates);
+    this.collectMonthlyZipDates(rootDir, dates);
     return [...dates].sort();
   }
 
@@ -52,6 +61,10 @@ export class LogStoreService {
     const archivePath = resolveArchiveLogFilePath(rootDir, calendarDate);
     if (existsSync(archivePath)) {
       return gunzipSync(readFileSync(archivePath));
+    }
+    const fromZip = this.readDayFromMonthlyZip(rootDir, calendarDate);
+    if (fromZip !== null) {
+      return fromZip;
     }
     throw new NotFoundException(`No logs for ${calendarDate}`);
   }
@@ -72,31 +85,39 @@ export class LogStoreService {
       const livePath = resolveLiveLogFilePath(rootDir, calendarDate);
       const archivePath = resolveArchiveLogFilePath(rootDir, calendarDate);
       mkdirSync(dirname(archivePath), { recursive: true });
-      const gzipped = gzipSync(readFileSync(livePath));
-      writeFileSync(archivePath, gzipped);
+      writeFileSync(archivePath, gzipSync(readFileSync(livePath)));
       unlinkSync(livePath);
       archived.push(calendarDate);
     }
     return archived;
   }
 
+  packClosedMonths(now = new Date()): string[] {
+    const rootDir = resolveProductionLogDirectory();
+    const currentMonth = formatLogMonthKey(formatLogCalendarDate(now));
+    const archiveDir = join(rootDir, PRODUCTION_LOG_ARCHIVE_DIR_NAME);
+    if (!existsSync(archiveDir)) {
+      return [];
+    }
+    const byMonth = this.groupClosedGzipFilesByMonth(archiveDir, currentMonth);
+    const packed: string[] = [];
+    for (const [monthKey, gzipNames] of byMonth) {
+      this.writeMonthZip(rootDir, monthKey, gzipNames);
+      packed.push(monthKey);
+    }
+    return packed;
+  }
+
   purgeExpired(now = new Date()): string[] {
     const rootDir = resolveProductionLogDirectory();
-    const ttlSlots = resolveProductionLogTtlSlots();
-    const cutoff = formatLogCalendarDate(new Date(now.getTime() - ttlSlots * PRODUCTION_LOG_SLOT_MS));
+    const cutoff = formatLogRetentionCutoffDate(
+      formatLogCalendarDate(now),
+      resolveProductionLogTtlDays(),
+    );
     const removed: string[] = [];
-    this.purgeDirByDate(
-      join(rootDir, PRODUCTION_LOG_LIVE_DIR_NAME),
-      PRODUCTION_LOG_FILE_EXTENSION,
-      cutoff,
-      removed,
-    );
-    this.purgeDirByDate(
-      join(rootDir, PRODUCTION_LOG_ARCHIVE_DIR_NAME),
-      PRODUCTION_LOG_GZIP_EXTENSION,
-      cutoff,
-      removed,
-    );
+    this.purgeDirByDate(join(rootDir, PRODUCTION_LOG_LIVE_DIR_NAME), PRODUCTION_LOG_FILE_EXTENSION, cutoff, removed);
+    this.purgeDirByDate(join(rootDir, PRODUCTION_LOG_ARCHIVE_DIR_NAME), PRODUCTION_LOG_GZIP_EXTENSION, cutoff, removed);
+    this.purgeExpiredZipEntries(rootDir, cutoff, removed);
     return removed;
   }
 
@@ -134,6 +155,77 @@ export class LogStoreService {
     }
   }
 
+  private collectMonthlyZipDates(rootDir: string, dates: Set<string>): void {
+    const archiveDir = join(rootDir, PRODUCTION_LOG_ARCHIVE_DIR_NAME);
+    if (!existsSync(archiveDir)) {
+      return;
+    }
+    for (const name of readdirSync(archiveDir)) {
+      const monthKey = this.parseMonthZipName(name);
+      if (monthKey === null) {
+        continue;
+      }
+      const zip = readFileSync(join(archiveDir, name));
+      for (const entryName of LogZipStore.listNames(zip)) {
+        const calendarDate = this.parseArchiveFileDate(entryName);
+        if (calendarDate !== null) {
+          dates.add(calendarDate);
+        }
+      }
+    }
+  }
+
+  private readDayFromMonthlyZip(rootDir: string, calendarDate: string): Buffer | null {
+    const zipPath = resolveMonthlyArchiveZipPath(rootDir, formatLogMonthKey(calendarDate));
+    if (!existsSync(zipPath)) {
+      return null;
+    }
+    const gzipped = LogZipStore.readEntry(readFileSync(zipPath), `${calendarDate}${PRODUCTION_LOG_GZIP_EXTENSION}`);
+    if (gzipped === null) {
+      return null;
+    }
+    return gunzipSync(gzipped);
+  }
+
+  private groupClosedGzipFilesByMonth(archiveDir: string, currentMonth: string): Map<string, string[]> {
+    const byMonth = new Map<string, string[]>();
+    for (const name of readdirSync(archiveDir)) {
+      const calendarDate = this.parseArchiveFileDate(name);
+      if (calendarDate === null) {
+        continue;
+      }
+      const monthKey = formatLogMonthKey(calendarDate);
+      if (monthKey >= currentMonth) {
+        continue;
+      }
+      const existing = byMonth.get(monthKey) ?? [];
+      existing.push(name);
+      byMonth.set(monthKey, existing);
+    }
+    return byMonth;
+  }
+
+  private writeMonthZip(rootDir: string, monthKey: string, gzipNames: string[]): void {
+    const zipPath = resolveMonthlyArchiveZipPath(rootDir, monthKey);
+    const archiveDir = dirname(zipPath);
+    const merged = new Map<string, Buffer>();
+    if (existsSync(zipPath)) {
+      for (const entry of LogZipStore.readAllEntries(readFileSync(zipPath))) {
+        merged.set(entry.name, entry.data);
+      }
+    }
+    for (const gzipName of gzipNames) {
+      merged.set(gzipName, readFileSync(join(archiveDir, gzipName)));
+    }
+    const entries: ZipStoreEntry[] = [...merged.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, data]) => ({ name, data }));
+    writeFileSync(zipPath, LogZipStore.build(entries));
+    for (const gzipName of gzipNames) {
+      unlinkSync(join(archiveDir, gzipName));
+    }
+  }
+
   private parseLiveFileDate(fileName: string): string | null {
     if (!fileName.endsWith(PRODUCTION_LOG_FILE_EXTENSION) || fileName.endsWith(PRODUCTION_LOG_GZIP_EXTENSION)) {
       return null;
@@ -150,12 +242,15 @@ export class LogStoreService {
     return PRODUCTION_LOG_DATE_PATTERN.test(calendarDate) ? calendarDate : null;
   }
 
-  private purgeDirByDate(
-    dirPath: string,
-    extension: string,
-    cutoff: string,
-    removed: string[],
-  ): void {
+  private parseMonthZipName(fileName: string): string | null {
+    if (!fileName.endsWith(PRODUCTION_LOG_ZIP_EXTENSION)) {
+      return null;
+    }
+    const monthKey = fileName.slice(0, -PRODUCTION_LOG_ZIP_EXTENSION.length);
+    return PRODUCTION_LOG_MONTH_PATTERN.test(monthKey) ? monthKey : null;
+  }
+
+  private purgeDirByDate(dirPath: string, extension: string, cutoff: string, removed: string[]): void {
     if (!existsSync(dirPath)) {
       return;
     }
@@ -169,6 +264,33 @@ export class LogStoreService {
       }
       unlinkSync(join(dirPath, name));
       removed.push(calendarDate);
+    }
+  }
+
+  private purgeExpiredZipEntries(rootDir: string, cutoff: string, removed: string[]): void {
+    const archiveDir = join(rootDir, PRODUCTION_LOG_ARCHIVE_DIR_NAME);
+    if (!existsSync(archiveDir)) {
+      return;
+    }
+    for (const name of readdirSync(archiveDir)) {
+      const monthKey = this.parseMonthZipName(name);
+      if (monthKey === null) {
+        continue;
+      }
+      const zipPath = join(archiveDir, name);
+      const kept = LogZipStore.readAllEntries(readFileSync(zipPath)).filter((entry) => {
+        const calendarDate = this.parseArchiveFileDate(entry.name);
+        if (calendarDate === null || calendarDate >= cutoff) {
+          return true;
+        }
+        removed.push(calendarDate);
+        return false;
+      });
+      if (kept.length === 0) {
+        unlinkSync(zipPath);
+        continue;
+      }
+      writeFileSync(zipPath, LogZipStore.build(kept));
     }
   }
 }

@@ -22,6 +22,6 @@ export class ActivityBacklogEntity {
   @Column({ name: 'account_id', type: 'integer', nullable: true })
   accountId: number | null;
 
-  @Column({ name: 'date', type: 'timestamp', nullable: true, default: () => 'CURRENT_TIMESTAMP' })
+  @Column({ name: 'date', type: 'timestamp with time zone', nullable: true, default: () => 'CURRENT_TIMESTAMP' })
   date: Date | null;
 }

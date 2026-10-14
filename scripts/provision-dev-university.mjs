@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Provisions the local dev university: Localhost IdP + 7 IdP test accounts.
+ * Provisions the local dev university: Localhost IdP + 19 IdP test accounts (15 students, 3 lecturers, 1 admin).
  *
  * Usage:
  *   node scripts/node-cli.mjs scripts/provision-dev-university.mjs
@@ -8,7 +8,7 @@
  *   provision-dev-university.bat   (Windows, from MyAcademyQuest1/)
  *
  * Creates:
- *   1. idp/data/users.json — 7 accounts in academy-idp (university identity only)
+ *   1. idp/data/users.json — 19 accounts in academy-idp (university identity only)
  *   2. SAML tenant "Localhost IdP" in PostgreSQL (register-org.mjs)
  *
  * Does NOT create auth.users / auth.accounts or complete in-app registration.
@@ -18,7 +18,7 @@
  * Docker: main docker-compose.yml service `idp` (container academy-idp).
  *
  * Test accounts (PIONIER.id -> Localhost IdP):
- *   student1/student1, student2/student2, student3/student3
+ *   student1/student1 ... student15/student15
  *   lecturer1/lecturer1, lecturer2/lecturer2, lecturer3/lecturer3
  *   administrator/administrator
  */
@@ -43,27 +43,17 @@ const LEGACY_IDP_COMPOSE_FILE = 'idp/docker-compose.yml';
 
 /** @type {DevUserSpec[]} */
 const DEV_UNIVERSITY_USERS = [
-  {
-    email: 'student1@localhost.invalid',
-    username: 'student1',
-    password: 'student1',
-    displayName: 'Student One',
-    eduPersonAffiliation: ['student', 'member'],
-  },
-  {
-    email: 'student2@localhost.invalid',
-    username: 'student2',
-    password: 'student2',
-    displayName: 'Student Two',
-    eduPersonAffiliation: ['student', 'member'],
-  },
-  {
-    email: 'student3@localhost.invalid',
-    username: 'student3',
-    password: 'student3',
-    displayName: 'Student Three',
-    eduPersonAffiliation: ['student', 'member'],
-  },
+  ...Array.from({ length: 15 }, (_, i) => {
+    const num = i + 1;
+    const username = `student${num}`;
+    return {
+      email: `${username}@localhost.invalid`,
+      username,
+      password: username,
+      displayName: `Student ${num}`,
+      eduPersonAffiliation: ['student', 'member'],
+    };
+  }),
   {
     email: 'lecturer1@localhost.invalid',
     username: 'lecturer1',

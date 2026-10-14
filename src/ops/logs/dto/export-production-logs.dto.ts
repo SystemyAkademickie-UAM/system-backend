@@ -11,7 +11,7 @@ export class ExportProductionLogsDto {
 
   @IsOptional()
   @IsString()
-  @Matches(new RegExp(`^(${PRODUCTION_LOG_TODAY_ALIAS}|\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2})$`))
+  @Matches(new RegExp(`^(${PRODUCTION_LOG_TODAY_ALIAS}|\\d{4}-\\d{2}-\\d{2})$`))
   day?: string;
 
   @IsOptional()

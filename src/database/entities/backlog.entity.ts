@@ -22,7 +22,7 @@ export class BacklogEntity {
   @Column({ name: 'type', type: 'varchar', length: 100, nullable: true })
   type: string | null;
 
-  @Column({ name: 'date', type: 'timestamp', nullable: true, default: () => 'CURRENT_TIMESTAMP' })
+  @Column({ name: 'date', type: 'timestamp with time zone', nullable: true, default: () => 'CURRENT_TIMESTAMP' })
   date: Date | null;
 
   /** Detailed value or JSON string regarding the event */

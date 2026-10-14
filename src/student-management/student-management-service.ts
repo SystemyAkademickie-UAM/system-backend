@@ -45,6 +45,10 @@ export interface ParticipantListItem {
   avatarUrl: string | null;
   name?: string;
   surname?: string;
+  rankId?: number | null;
+  currency?: number;
+  totalEarned?: number;
+  autoRankEnabled?: boolean;
 }
 
 /**
@@ -117,12 +121,24 @@ export class StudentManagementService {
     await this.assertGroupExists(groupId);
 
     let authorized = false;
-    const lecturerAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
+    const lecturerAccountId =
+      subject.organizationId != null
+        ? await this.userRolesService.findAccountIdForRoleInOrganization(
+            subject.userId,
+            subject.organizationId,
+            LECTURER_ROLE_NAME)
+        : await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
     if (lecturerAccountId !== null) {
       authorized = await this.groupRepository.exist({ where: { id: groupId, teacherAccountId: lecturerAccountId } });
     }
     if (!authorized) {
-      const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
+      const studentAccountId =
+        subject.organizationId != null
+          ? await this.userRolesService.findAccountIdForRoleInOrganization(
+              subject.userId,
+              subject.organizationId,
+              STUDENT_ROLE_NAME)
+          : await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
       if (studentAccountId !== null) {
         authorized = await this.enrollmentRepository.exist({ where: { groupId, studentAccountId } });
       }
@@ -133,15 +149,20 @@ export class StudentManagementService {
 
     const rows = await this.dataSource.query<ParticipantListItem[]>(
       `SELECT
-         a.id            AS "accountId",
-         u.nickname      AS "nickname",
-         av.image_url    AS "avatarUrl",
-         u.name          AS "name",
-         u.surname       AS "surname"
+         a.id                         AS "accountId",
+         u.nickname                   AS "nickname",
+         av.image_url                 AS "avatarUrl",
+         u.name                       AS "name",
+         u.surname                    AS "surname",
+         ss.rank_id                   AS "rankId",
+         COALESCE(ss.currency, 0)     AS "currency",
+         COALESCE(ss.total_earned, 0) AS "totalEarned",
+         COALESCE(ss.auto_rank_enabled, true) AS "autoRankEnabled"
        FROM gamification.enrollments e
        JOIN auth.accounts a  ON a.id = e.student_account_id
        JOIN auth.users u     ON u.id = a.user_id
        LEFT JOIN auth.avatars av ON av.id = u.avatar_id
+       LEFT JOIN gamification.student_stats ss ON ss.enrollment_id = e.id
        WHERE e.group_id = $1
        ORDER BY e.id ASC`,
       [groupId]);

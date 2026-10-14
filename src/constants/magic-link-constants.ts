@@ -13,6 +13,9 @@ export const MAGIC_LINK_COOLDOWN_DEFAULT_SECONDS = 300;
 /** Env key: SPA URL prefix for verify route (no trailing slash), e.g. `http://127.0.0.1:3000/login/magic`. */
 export const MAGIC_LINK_VERIFY_BASE_URL_ENV_KEY = 'MAGIC_LINK_VERIFY_BASE_URL';
 
+/** SPA path that consumes `?token=` (must match the frontend route). */
+export const MAGIC_LINK_VERIFY_PATH = '/login/magic';
+
 /** Env key: default organization id for `register:user` CLI provisioning (private org 1). */
 export const MAGIC_LINK_ORGANIZATION_ID_ENV_KEY = 'MAGIC_LINK_ORGANIZATION_ID';
 

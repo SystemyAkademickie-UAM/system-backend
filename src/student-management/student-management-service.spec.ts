@@ -82,7 +82,11 @@ describe('StudentManagementService', () => {
         { provide: SessionService, useValue: { resolveSubjectFromRequest: jest.fn() } },
         {
           provide: UserRolesService,
-          useValue: { userHasRole: jest.fn(), findAccountIdForRole: jest.fn() },
+          useValue: {
+            userHasRole: jest.fn(),
+            findAccountIdForRole: jest.fn(),
+            findAccountIdForRoleInOrganization: jest.fn(),
+          },
         },
         { provide: BacklogService, useValue: backlogService },
         { provide: DataSource, useValue: dataSource },
@@ -109,6 +113,7 @@ describe('StudentManagementService', () => {
     it('should throw ForbiddenException when caller is neither owner nor enrolled', async () => {
       sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
       userRolesService.findAccountIdForRole.mockResolvedValue(null);
+      userRolesService.findAccountIdForRoleInOrganization.mockResolvedValue(null);
       enrollmentRepository.exist.mockResolvedValue(false);
 
       await expect(service.getParticipants(mockRequest, groupId)).rejects.toThrow(ForbiddenException);
@@ -116,12 +121,12 @@ describe('StudentManagementService', () => {
 
     it('should return participant rows for enrolled student', async () => {
       sessionService.resolveSubjectFromRequest.mockResolvedValue(mockSubject(1));
-      userRolesService.findAccountIdForRole.mockImplementation(async (_userId, role) =>
+      userRolesService.findAccountIdForRoleInOrganization.mockImplementation(async (_userId, _orgId, role) =>
         role === STUDENT_ROLE_NAME ? 20 : null,
       );
       enrollmentRepository.exist.mockResolvedValue(true);
       dataSource.query.mockResolvedValue([
-        { accountId: 20, nickname: 'hero', avatarUrl: null, name: 'Jan', surname: 'Kowalski' },
+        { accountId: 20, nickname: 'hero', avatarUrl: null, name: 'Jan', surname: 'Kowalski', rankId: 1, totalEarned: 100, autoRankEnabled: true },
       ]);
 
       const actualRows = await service.getParticipants(mockRequest, groupId);

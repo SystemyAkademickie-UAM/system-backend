@@ -1,15 +1,9 @@
-import {
-  PRODUCTION_LOG_SLOT_MINUTES,
-  PRODUCTION_LOG_SLOT_MS,
-  PRODUCTION_LOG_TIMEZONE,
-} from '../../constants/production-log-constants';
+import { PRODUCTION_LOG_TIMEZONE } from '../../constants/production-log-constants';
 
 type ZonedDateTimeParts = {
   year: string;
   month: string;
   day: string;
-  hour: string;
-  minute: string;
 };
 
 function readZonedParts(instant: Date): ZonedDateTimeParts {
@@ -18,16 +12,11 @@ function readZonedParts(instant: Date): ZonedDateTimeParts {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
   }).formatToParts(instant);
   const year = parts.find((part) => part.type === 'year')?.value ?? '0000';
   const month = parts.find((part) => part.type === 'month')?.value ?? '01';
   const day = parts.find((part) => part.type === 'day')?.value ?? '01';
-  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
-  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
-  return { year, month, day, hour, minute };
+  return { year, month, day };
 }
 
 function padTwoDigits(value: number): string {
@@ -35,13 +24,34 @@ function padTwoDigits(value: number): string {
 }
 
 /**
- * Simulation slot id `YYYY-MM-DDTHH-mm` (5-minute buckets, Europe/Warsaw).
+ * Calendar day `YYYY-MM-DD` in {@link PRODUCTION_LOG_TIMEZONE}.
  */
 export function formatLogCalendarDate(instant: Date): string {
   const parts = readZonedParts(instant);
-  const minuteNumber = Number.parseInt(parts.minute, 10);
-  const slottedMinute = Math.floor(minuteNumber / PRODUCTION_LOG_SLOT_MINUTES) * PRODUCTION_LOG_SLOT_MINUTES;
-  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}-${padTwoDigits(slottedMinute)}`;
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+/**
+ * Adds (or subtracts) civil days on a `YYYY-MM-DD` string.
+ */
+export function addLogCalendarDays(calendarDate: string, deltaDays: number): string {
+  const [year, month, day] = calendarDate.split('-').map((part) => Number.parseInt(part, 10));
+  const shifted = new Date(Date.UTC(year, month - 1, day + deltaDays));
+  return `${shifted.getUTCFullYear()}-${padTwoDigits(shifted.getUTCMonth() + 1)}-${padTwoDigits(shifted.getUTCDate())}`;
+}
+
+/**
+ * Month folder key `YYYY-MM` for a calendar day.
+ */
+export function formatLogMonthKey(calendarDate: string): string {
+  return calendarDate.slice(0, 7);
+}
+
+/**
+ * Oldest calendar day still retained when keeping `ttlDays` days including today.
+ */
+export function formatLogRetentionCutoffDate(today: string, ttlDays: number): string {
+  return addLogCalendarDays(today, -(ttlDays - 1));
 }
 
 /**
@@ -55,9 +65,8 @@ export function formatLogLineTimestamp(instant: Date): string {
 }
 
 /**
- * Previous 5-minute slot (for gzip of the closed window).
+ * Previous calendar day in Warsaw (closed daily file).
  */
 export function formatPreviousLogCalendarDate(instant: Date): string {
-  const shifted = new Date(instant.getTime() - PRODUCTION_LOG_SLOT_MS);
-  return formatLogCalendarDate(shifted);
+  return addLogCalendarDays(formatLogCalendarDate(instant), -1);
 }

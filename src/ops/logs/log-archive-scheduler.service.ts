@@ -4,7 +4,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { LogStoreService } from './log-store.service';
 
 /**
- * Gzip closed 5-minute slots and delete files past TTL.
+ * Gzip closed days, zip closed months, delete files past TTL.
  */
 @Injectable()
 export class LogArchiveSchedulerService {
@@ -12,17 +12,17 @@ export class LogArchiveSchedulerService {
 
   constructor(private readonly logStore: LogStoreService) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_HOUR)
   handleArchiveAndPurge(): void {
     try {
-      this.logger.log('Log slot tick');
       const archived = this.logStore.archiveClosedDays();
+      const packed = this.logStore.packClosedMonths();
       const removed = this.logStore.purgeExpired();
-      if (archived.length === 0 && removed.length === 0) {
+      if (archived.length === 0 && packed.length === 0 && removed.length === 0) {
         return;
       }
       this.logger.log(
-        `Log archive: gziped ${archived.length} slot(s), purged ${removed.length} expired file(s)`,
+        `Log archive: gzipped ${archived.length} day(s), zipped ${packed.length} month(s), purged ${removed.length} expired file(s)`,
       );
     } catch (err: unknown) {
       this.logger.error(`Log archive failed: ${String(err)}`);

@@ -5,6 +5,7 @@ export const PUBLIC_APP_ORIGIN = 'https://maq.projektstudencki.pl';
 
 /** Used when `CORS_ORIGIN` is not set. */
 export const DEFAULT_CORS_ORIGINS: readonly string[] = [
+  'https://maq.wmi.amu.edu.pl',
   PUBLIC_APP_ORIGIN,
   'http://maq.projektstudencki.pl',
   'http://localhost:3000',

@@ -171,8 +171,8 @@ export class LoginController {
     default: { limit: MAGIC_LINK_REQUEST_THROTTLE_LIMIT, ttl: seconds(AUTH_THROTTLE_TTL_SECONDS) },
   })
   @ApiOperation({ summary: 'Request email magic link for passwordless login' })
-  async requestMagicLink(@Body() body: RequestMagicLinkDto) {
-    return this.magicLinkService.requestMagicLink(body.email, body.organizationId);
+  async requestMagicLink(@Req() req: Request, @Body() body: RequestMagicLinkDto) {
+    return this.magicLinkService.requestMagicLink(body.email, body.organizationId, req);
   }
 
   /**

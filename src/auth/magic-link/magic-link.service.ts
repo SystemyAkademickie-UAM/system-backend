@@ -24,6 +24,7 @@ import {
   MAGIC_LINK_TOKEN_RANDOM_BYTE_LENGTH,
   MAGIC_LINK_VERIFY_BASE_URL_ENV_KEY,
 } from '../../constants/magic-link-constants';
+import { resolveMagicLinkVerifyBaseUrl } from './magic-link-verify-url';
 import { SUPERADMIN_BOOTSTRAP_EMAIL_ENV_KEY } from '../../constants/super-admin-bootstrap-constants';
 import { MagicLinkTokenEntity } from '../../database/entities/magic-link-token.entity';
 import { MagicLinkEmailService } from './magic-link-email.service';
@@ -70,9 +71,10 @@ export class MagicLinkService {
   async requestMagicLink(
     emailRaw: string,
     organizationId?: number,
+    req?: Request,
   ): Promise<RequestMagicLinkResponse> {
     this.magicLinkEmailService.assertSmtpConfigured();
-    await this.assertMagicLinkRoutingConfigured();
+    this.assertMagicLinkRoutingConfigured(req);
     const email = emailRaw.trim().toLowerCase();
     const bootstrapEmail = this.readBootstrapEmail();
     const target =
@@ -98,7 +100,7 @@ export class MagicLinkService {
         consumedAt: null,
         createdAt: now,
       }));
-    const verifyUrl = this.buildVerifyUrl(plaintext);
+    const verifyUrl = this.buildVerifyUrl(plaintext, req);
     this.magicLinkEmailService.sendMagicLinkEmail(email, verifyUrl);
     return {
       sent: true,
@@ -186,8 +188,8 @@ export class MagicLinkService {
       HttpStatus.TOO_MANY_REQUESTS);
   }
 
-  private buildVerifyUrl(tokenPlaintext: string): string {
-    const baseUrl = this.configService.get<string>(MAGIC_LINK_VERIFY_BASE_URL_ENV_KEY, '').trim();
+  private buildVerifyUrl(tokenPlaintext: string, req?: Request): string {
+    const baseUrl = this.resolveVerifyBaseUrl(req);
     if (baseUrl === '') {
       throw new Error(`${MAGIC_LINK_VERIFY_BASE_URL_ENV_KEY} is not configured`);
     }
@@ -195,14 +197,22 @@ export class MagicLinkService {
     return `${baseUrl}${separator}token=${encodeURIComponent(tokenPlaintext)}`;
   }
 
-  private async assertMagicLinkRoutingConfigured(): Promise<void> {
-    const baseUrl = this.configService.get<string>(MAGIC_LINK_VERIFY_BASE_URL_ENV_KEY, '').trim();
-    if (baseUrl === '') {
-      throw new ServiceUnavailableException({
-        error: 'MAGIC_LINK_NOT_CONFIGURED',
-        message: `${MAGIC_LINK_VERIFY_BASE_URL_ENV_KEY} is not configured`,
-      });
+  private assertMagicLinkRoutingConfigured(req?: Request): void {
+    if (this.resolveVerifyBaseUrl(req) !== '') {
+      return;
     }
+    throw new ServiceUnavailableException({
+      error: 'MAGIC_LINK_NOT_CONFIGURED',
+      message: `${MAGIC_LINK_VERIFY_BASE_URL_ENV_KEY} is not configured`,
+    });
+  }
+
+  private resolveVerifyBaseUrl(req?: Request): string {
+    const envBase = this.configService.get<string>(MAGIC_LINK_VERIFY_BASE_URL_ENV_KEY, '').trim();
+    if (req === undefined) {
+      return envBase.replace(/\/+$/, '');
+    }
+    return resolveMagicLinkVerifyBaseUrl(req, envBase);
   }
 
   private resolveExpirySeconds(): number {
