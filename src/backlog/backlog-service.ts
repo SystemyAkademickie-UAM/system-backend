@@ -76,21 +76,32 @@ export class BacklogService {
     accountId: number,
     type: BacklogEventType,
     value: BacklogPayload | string | null = null,
-    manager?: EntityManager): Promise<BacklogEntity> {
-    
+    manager?: EntityManager,
+  ): Promise<BacklogEntity> {
     let studentNickname: string | undefined;
-    try {
-      const accountRepo = manager ? manager.getRepository(AccountEntity) : this.accountRepository;
-      const userRepo = manager ? manager.getRepository(UserEntity) : this.userRepository;
-      const account = await accountRepo.findOne({ where: { id: accountId } });
-      if (account) {
-        const user = await userRepo.findOne({ where: { id: account.userId } });
-        if (user) {
-          studentNickname = user.nickname;
-        }
+
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      if (typeof value.studentNickname === 'string' && value.studentNickname.trim().length > 0) {
+        studentNickname = value.studentNickname.trim();
+      } else if (typeof value.nickname === 'string' && value.nickname.trim().length > 0) {
+        studentNickname = value.nickname.trim();
       }
-    } catch (err) {
-      // ignore
+    }
+
+    if (!studentNickname) {
+      try {
+        const accountRepo = manager ? manager.getRepository(AccountEntity) : this.accountRepository;
+        const userRepo = manager ? manager.getRepository(UserEntity) : this.userRepository;
+        const account = await accountRepo.findOne({ where: { id: accountId }, select: ['userId'] });
+        if (account?.userId != null) {
+          const user = await userRepo.findOne({ where: { id: account.userId }, select: ['nickname'] });
+          if (user?.nickname) {
+            studentNickname = user.nickname;
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
     }
 
     let payloadToLog = value;
@@ -127,12 +138,34 @@ export class BacklogService {
       select: ['studentAccountId'],
     });
 
-    for (const enrollment of enrollments) {
-      if (enrollment.studentAccountId == null) {
-        continue;
-      }
-      await this.logEvent(internalGroupId, enrollment.studentAccountId, type, payload, manager);
+    const studentAccountIds = Array.from(
+      new Set(
+        enrollments
+          .map((e) => e.studentAccountId)
+          .filter((id): id is number => id != null),
+      ),
+    );
+
+    if (studentAccountIds.length === 0) {
+      return;
     }
+
+    const repo = manager ? manager.getRepository(BacklogEntity) : this.backlogRepository;
+    const serializedPayload = serializeBacklogPayload(payload);
+    const now = new Date();
+
+    const entries = studentAccountIds.map((studentAccountId) =>
+      repo.create({
+        groupId: internalGroupId,
+        accountId: studentAccountId,
+        type,
+        date: now,
+        value: serializedPayload,
+        isRead: false,
+      }),
+    );
+
+    await repo.save(entries, { chunk: 100 });
   }
 
   async getStudentBacklog(

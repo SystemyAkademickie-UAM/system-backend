@@ -37,6 +37,7 @@ describe('BacklogService', () => {
     };
     enrollmentRepository = {
       exist: jest.fn(),
+      find: jest.fn(),
     };
     accountRepository = {
       findOne: jest.fn(),
@@ -177,6 +178,161 @@ describe('BacklogService', () => {
 
       // Assert — the default backlogRepository was NOT used
       expect(backlogRepository.create).not.toHaveBeenCalled();
+      expect(backlogRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should skip account and user queries when studentNickname is already present in payload', async () => {
+      // Arrange
+      const mockEntry = { groupId: 5, accountId: 10, type: 'BADGE_EARNED', value: JSON.stringify({ studentNickname: 'Kasia' }) };
+      backlogRepository.create.mockReturnValue(mockEntry);
+      backlogRepository.save.mockResolvedValue(mockEntry);
+
+      // Act
+      await service.logEvent(5, 10, 'BADGE_EARNED', { badgeId: 1, studentNickname: 'Kasia' });
+
+      // Assert
+      expect(accountRepository.findOne).not.toHaveBeenCalled();
+      expect(userRepository.findOne).not.toHaveBeenCalled();
+      expect(backlogRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          groupId: 5,
+          accountId: 10,
+          type: 'BADGE_EARNED',
+          value: expect.stringContaining('"studentNickname":"Kasia"'),
+        }),
+      );
+    });
+
+    it('should query account and user when studentNickname is not present in payload', async () => {
+      // Arrange
+      accountRepository.findOne.mockResolvedValue({ userId: 42 });
+      userRepository.findOne.mockResolvedValue({ nickname: 'Adam' });
+      const mockEntry = { groupId: 5, accountId: 10, type: 'BADGE_EARNED', value: null };
+      backlogRepository.create.mockReturnValue(mockEntry);
+      backlogRepository.save.mockResolvedValue(mockEntry);
+
+      // Act
+      await service.logEvent(5, 10, 'BADGE_EARNED', { badgeId: 1 });
+
+      // Assert
+      expect(accountRepository.findOne).toHaveBeenCalledWith({ where: { id: 10 }, select: ['userId'] });
+      expect(userRepository.findOne).toHaveBeenCalledWith({ where: { id: 42 }, select: ['nickname'] });
+      expect(backlogRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          value: expect.stringContaining('"studentNickname":"Adam"'),
+        }),
+      );
+    });
+  });
+
+  describe('notifyEnrolledStudents', () => {
+    it('should return immediately when no students are enrolled', async () => {
+      // Arrange
+      enrollmentRepository.find.mockResolvedValue([]);
+
+      // Act
+      await service.notifyEnrolledStudents(5, 'POST_ADDED', { message: 'Nowy wpis' });
+
+      // Assert
+      expect(enrollmentRepository.find).toHaveBeenCalledWith({
+        where: { groupId: 5 },
+        select: ['studentAccountId'],
+      });
+      expect(backlogRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should return immediately when enrollments only have null studentAccountIds', async () => {
+      // Arrange
+      enrollmentRepository.find.mockResolvedValue([
+        { studentAccountId: null },
+        { studentAccountId: undefined },
+      ]);
+
+      // Act
+      await service.notifyEnrolledStudents(5, 'STAGE_ADDED', { message: 'Nowy etap' });
+
+      // Assert
+      expect(backlogRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should batch insert backlog entries for unique enrolled students', async () => {
+      // Arrange
+      enrollmentRepository.find.mockResolvedValue([
+        { studentAccountId: 101 },
+        { studentAccountId: 102 },
+        { studentAccountId: 101 }, // duplicate
+        { studentAccountId: null },
+      ]);
+      backlogRepository.create.mockImplementation((entry: any) => entry);
+      backlogRepository.save.mockResolvedValue([]);
+
+      // Act
+      await service.notifyEnrolledStudents(5, 'POST_ADDED', {
+        message: 'Opublikowano nowy wpis: Temat 1',
+        postId: 10,
+      });
+
+      // Assert
+      expect(backlogRepository.create).toHaveBeenCalledTimes(2);
+      expect(backlogRepository.save).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            groupId: 5,
+            accountId: 101,
+            type: 'POST_ADDED',
+            isRead: false,
+            date: expect.any(Date),
+            value: expect.stringContaining('Opublikowano nowy wpis: Temat 1'),
+          }),
+          expect.objectContaining({
+            groupId: 5,
+            accountId: 102,
+            type: 'POST_ADDED',
+            isRead: false,
+            date: expect.any(Date),
+            value: expect.stringContaining('Opublikowano nowy wpis: Temat 1'),
+          }),
+        ],
+        { chunk: 100 },
+      );
+    });
+
+    it('should use provided EntityManager repository when manager is passed', async () => {
+      // Arrange
+      const managerEnrollmentRepo = {
+        find: jest.fn().mockResolvedValue([{ studentAccountId: 201 }]),
+      };
+      const managerBacklogRepo = {
+        create: jest.fn((e) => e),
+        save: jest.fn().mockResolvedValue([]),
+      };
+      const mockManager = {
+        getRepository: jest.fn((entity) => {
+          if (entity === EnrollmentEntity) return managerEnrollmentRepo;
+          if (entity === BacklogEntity) return managerBacklogRepo;
+          return null;
+        }),
+      } as unknown as import('typeorm').EntityManager;
+
+      // Act
+      await service.notifyEnrolledStudents(7, 'SHOP_STATUS_CHANGED', { isOpen: true }, mockManager);
+
+      // Assert
+      expect(managerEnrollmentRepo.find).toHaveBeenCalledWith({
+        where: { groupId: 7 },
+        select: ['studentAccountId'],
+      });
+      expect(managerBacklogRepo.save).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            groupId: 7,
+            accountId: 201,
+            type: 'SHOP_STATUS_CHANGED',
+            isRead: false,
+          }),
+        ],
+        { chunk: 100 },
+      );
       expect(backlogRepository.save).not.toHaveBeenCalled();
     });
   });
