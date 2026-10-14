@@ -4,7 +4,20 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import {
+  DATABASE_CONNECTION_TIMEOUT_MS_DEFAULT,
+  DATABASE_IDLE_TIMEOUT_MS_DEFAULT,
+  DATABASE_POOL_MAX_DEFAULT,
+} from '../constants/database-pool-constants';
 import { resolvePostgresSslOption } from './postgres-ssl.config';
+
+function readPositiveInt(raw: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(raw ?? '', 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
 
 /**
  * Registers TypeORM against PostgreSQL (`DATABASE_*`, `TYPEORM_SYNC`).
@@ -32,6 +45,20 @@ import { resolvePostgresSslOption } from './postgres-ssl.config';
           synchronize: typeOrmSync === 'true',
           migrations: [join(__dirname, 'migrations', '*.js')],
           migrationsRun,
+          extra: {
+            max: readPositiveInt(
+              configService.get<string>('DATABASE_POOL_MAX'),
+              DATABASE_POOL_MAX_DEFAULT,
+            ),
+            connectionTimeoutMillis: readPositiveInt(
+              configService.get<string>('DATABASE_CONNECTION_TIMEOUT_MS'),
+              DATABASE_CONNECTION_TIMEOUT_MS_DEFAULT,
+            ),
+            idleTimeoutMillis: readPositiveInt(
+              configService.get<string>('DATABASE_IDLE_TIMEOUT_MS'),
+              DATABASE_IDLE_TIMEOUT_MS_DEFAULT,
+            ),
+          },
         };
       },
     }),

@@ -1,4 +1,5 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
@@ -10,7 +11,6 @@ import {
   POST_ERROR_CODE_NOT_AUTHORIZED,
   POST_ERROR_CODE_NOT_CREATED,
 } from '../constants/group-api-constants';
-import { SCHEDULED_POST_PUBLISH_POLL_INTERVAL_MS } from '../constants/scheduled-post-constants';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
@@ -37,31 +37,39 @@ export type DeletePostResponseBody = { status: number; deleted: boolean };
 export type UpdatePostResponseBody = { status: number; updated: boolean };
 
 @Injectable()
-export class GroupsPostsService implements OnModuleInit, OnModuleDestroy {
+export class GroupsPostsService {
   private readonly logger = new Logger(GroupsPostsService.name);
-  private intervalHandle?: NodeJS.Timeout;
 
-  onModuleInit() {
-    this.intervalHandle = setInterval(() => {
-      this.publishScheduledPosts().catch((err) => {
-        this.logger.error(`Publish scheduled posts error: ${String(err)}`);
-      });
-    }, SCHEDULED_POST_PUBLISH_POLL_INTERVAL_MS);
-  }
-
-  onModuleDestroy() {
-    if (this.intervalHandle) {
-      clearInterval(this.intervalHandle);
+  /**
+   * Publishes posts whose schedule has passed and notifies enrolled students.
+   */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleScheduledPostPublishing(): Promise<void> {
+    try {
+      await this.publishScheduledPosts();
+    } catch (error: unknown) {
+      this.logger.error(`Publish scheduled posts error: ${String(error)}`);
     }
   }
 
   async publishScheduledPosts(): Promise<void> {
-    await this.postRepository
-      .createQueryBuilder()
-      .update(PostEntity)
-      .set({ isPublished: true, publishedAt: () => 'NOW()', publishAt: null })
-      .where('is_published = :isPub AND publish_at <= NOW()', { isPub: false })
-      .execute();
+    const postsToPublish = await this.postRepository
+      .createQueryBuilder('post')
+      .where('post.isPublished = :isPub AND post.publishAt <= NOW()', { isPub: false })
+      .getMany();
+    if (postsToPublish.length === 0) {
+      return;
+    }
+    for (const post of postsToPublish) {
+      const result = await this.postRepository.update(
+        { id: post.id, isPublished: false },
+        { isPublished: true, publishedAt: new Date(), publishAt: null },
+      );
+      if ((result.affected ?? 0) === 0 || post.groupId === null) {
+        continue;
+      }
+      await this.notifyPostPublished(post.groupId, post.id, post.title);
+    }
   }
 
   constructor(

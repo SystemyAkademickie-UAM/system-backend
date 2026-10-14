@@ -1516,7 +1516,7 @@ Point **`SAML_ACS_URL`** at the **same origin** the browser uses for `/api` (e.g
 
 ### CORS
 
-The API enables **`Access-Control-Allow-Credentials`** so browsers may send cookies when `Origin` is allowlisted and the client uses credentials (see `CORS_ORIGIN`).
+The API enables **`Access-Control-Allow-Credentials`** so browsers may send cookies when `Origin` is allowlisted and the client uses credentials (see `CORS_ORIGIN`). Allowed methods are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS`.
 
 ---
 
