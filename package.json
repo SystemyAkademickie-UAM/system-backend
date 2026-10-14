@@ -65,7 +65,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
     "helmet": "^8.2.0",
-    "nodemailer": "^9.0.1",
+    "nodemailer": "^10.1.1",
     "passport": "^0.7.0",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
@@ -96,7 +96,8 @@
   "overrides": {
     "multer": "2.2.0",
     "form-data": "4.0.6",
-    "js-yaml": "5.0.0"
+    "js-yaml": "5.0.0",
+    "proxy-addr": "2.0.8"
   },
   "jest": {
     "moduleFileExtensions": [

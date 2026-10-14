@@ -136,18 +136,44 @@ describe('GroupsPostsService', () => {
   });
 
   describe('publishScheduledPosts', () => {
-    it('should promote due scheduled posts', async () => {
-      const execute = jest.fn().mockResolvedValue({ affected: 2 });
+    it('publishes each due post and notifies enrolled students', async () => {
+      const getMany = jest.fn().mockResolvedValue([
+        { id: 4, groupId: 9, title: 'Due', isPublished: false },
+        { id: 5, groupId: 9, title: 'Also due', isPublished: false },
+      ]);
       postRepository.createQueryBuilder.mockReturnValue({
-        update: jest.fn().mockReturnThis(),
-        set: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
-        execute,
+        getMany,
       });
+      postRepository.update.mockResolvedValue({ affected: 1 });
 
       await service.publishScheduledPosts();
 
-      expect(execute).toHaveBeenCalled();
+      expect(postRepository.update).toHaveBeenCalledTimes(2);
+      expect(postRepository.update).toHaveBeenCalledWith(
+        { id: 4, isPublished: false },
+        expect.objectContaining({ isPublished: true, publishAt: null }),
+      );
+      expect(backlogService.notifyEnrolledStudents).toHaveBeenCalledTimes(2);
+      expect(backlogService.notifyEnrolledStudents).toHaveBeenCalledWith(
+        9,
+        'POST_ADDED',
+        expect.objectContaining({ postId: 4, postTitle: 'Due' }),
+      );
+    });
+
+    it('does not notify when another worker already published the row', async () => {
+      postRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([
+          { id: 4, groupId: 9, title: 'Due', isPublished: false },
+        ]),
+      });
+      postRepository.update.mockResolvedValue({ affected: 0 });
+
+      await service.publishScheduledPosts();
+
+      expect(backlogService.notifyEnrolledStudents).not.toHaveBeenCalled();
     });
   });
 

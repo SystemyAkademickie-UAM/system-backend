@@ -7,11 +7,6 @@ export enum GroupTemplateScope {
 }
 
 export class GetGroupTemplatesQueryDto {
-  /** Optional when using `maq_auth` cookie (browser clients). */
-  @IsOptional()
-  @IsString()
-  auth?: string;
-
   @IsOptional()
   @IsEnum(GroupTemplateScope)
   scope?: GroupTemplateScope = GroupTemplateScope.PUBLIC;

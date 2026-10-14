@@ -146,6 +146,20 @@ export class ActivitiesService {
     }
     try {
       await this.groupAuthorizationService.assertLecturerOwnsGroup(subject.userId, stage.groupId);
+      if (body.stageId !== undefined && body.stageId !== existing.stageId) {
+        const destinationStage = await this.stageRepository.findOne({
+          where: { id: body.stageId },
+          select: ['id', 'groupId'],
+        });
+        if (!destinationStage) {
+          return {
+            statusCode: ACTIVITY_API_JSON_STATUS_OK,
+            method: 'modify',
+            activity: ACTIVITY_RESPONSE_STAGE_NOT_FOUND_ID,
+          };
+        }
+        await this.groupAuthorizationService.assertLecturerOwnsGroup(subject.userId, destinationStage.groupId);
+      }
       if (body.name !== undefined) {
         existing.name = body.name.trim();
       }

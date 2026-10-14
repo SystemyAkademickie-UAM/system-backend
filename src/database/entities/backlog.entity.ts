@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 import { ANALYTICS_SCHEMA } from '../../constants/database-schema-constants';
 
@@ -6,6 +6,9 @@ import { ANALYTICS_SCHEMA } from '../../constants/database-schema-constants';
  * Tracks general backlog events per group and account (`analytics.backlog`).
  */
 @Entity({ schema: ANALYTICS_SCHEMA, name: 'backlog' })
+@Index('idx_backlog_group_account_unread', ['groupId', 'accountId', 'isRead'])
+@Index('idx_backlog_group_unread', ['groupId', 'isRead'])
+@Index('idx_backlog_group_date', ['groupId', 'date'])
 export class BacklogEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -16,6 +19,7 @@ export class BacklogEntity {
 
   /** FK to `auth.accounts.id`. */
   @Column({ name: 'account_id', type: 'integer', nullable: true })
+  @Index('idx_backlog_account_id')
   accountId: number | null;
 
   /** Event type identifier, e.g., 'SHOP_PURCHASE', 'ACTIVITY_COMPLETED' */

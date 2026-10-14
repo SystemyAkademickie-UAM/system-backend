@@ -25,8 +25,8 @@ export class ProductionLogsService {
     private readonly sessionService: SessionService,
   ) {}
 
-  async listDays(req: Request, queryAuth?: string): Promise<{ days: string[]; timeZone: string }> {
-    await this.adminAccessService.assertSuperAdmin(req, queryAuth);
+  async listDays(req: Request): Promise<{ days: string[]; timeZone: string }> {
+    await this.adminAccessService.assertSuperAdmin(req);
     return { days: this.logStore.listAvailableDates(), timeZone: PRODUCTION_LOG_TIMEZONE };
   }
 

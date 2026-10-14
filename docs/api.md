@@ -86,7 +86,7 @@ The API writes Nest and browser-forwarded lines to **one plaintext file per cale
 
 **List days —** `GET /api/admin/logs`
 
-**Authorization:** **super** role. Missing or non-super → `403 Forbidden`.
+**Authorization:** **super** role via the `maq_session` cookie. A session token in the query string is not accepted. Missing or non-super → `403 Forbidden`.
 
 **Response:** `200 OK`
 
@@ -1516,7 +1516,7 @@ Point **`SAML_ACS_URL`** at the **same origin** the browser uses for `/api` (e.g
 
 ### CORS
 
-The API enables **`Access-Control-Allow-Credentials`** so browsers may send cookies when `Origin` is allowlisted and the client uses credentials (see `CORS_ORIGIN`).
+The API enables **`Access-Control-Allow-Credentials`** so browsers may send cookies when `Origin` is allowlisted and the client uses credentials (see `CORS_ORIGIN`). Allowed methods are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS`.
 
 ---
 

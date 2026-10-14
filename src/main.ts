@@ -7,6 +7,7 @@ import express from 'express';
 import helmet from 'helmet';
 import passport from 'passport';
 import { AppModule } from './app-module';
+import { DatabaseExceptionFilter } from './common/filters/database-exception.filter';
 import { ValidationExceptionFilter } from './common/filters/validation-exception.filter';
 import { DEFAULT_CORS_ORIGINS } from './constants/cors-constants';
 import { HTTP_HOST, HTTP_PORT } from './constants/server-constants';
@@ -57,10 +58,10 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: corsOrigins,
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
   app.setGlobalPrefix('api');
-  app.useGlobalFilters(new ValidationExceptionFilter());
+  app.useGlobalFilters(new DatabaseExceptionFilter(), new ValidationExceptionFilter());
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   setupSwagger(app);
