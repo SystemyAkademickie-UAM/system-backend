@@ -86,7 +86,7 @@ The API writes Nest and browser-forwarded lines to **one plaintext file per cale
 
 **List days —** `GET /api/admin/logs`
 
-**Authorization:** **super** role. Missing or non-super → `403 Forbidden`.
+**Authorization:** **super** role via the `maq_session` cookie. A session token in the query string is not accepted. Missing or non-super → `403 Forbidden`.
 
 **Response:** `200 OK`
 

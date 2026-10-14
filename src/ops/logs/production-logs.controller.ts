@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiForbiddenResponse,
@@ -22,8 +22,8 @@ export class ProductionLogsController {
   @ApiOperation({ summary: 'List dated production log files (super role)' })
   @ApiOkResponse({ description: 'Calendar dates that have live or archived logs' })
   @ApiForbiddenResponse({ description: 'Caller lacks super role' })
-  listDays(@Req() req: Request, @Query('auth') queryAuth?: string) {
-    return this.productionLogsService.listDays(req, queryAuth);
+  listDays(@Req() req: Request) {
+    return this.productionLogsService.listDays(req);
   }
 
   @Post('export')

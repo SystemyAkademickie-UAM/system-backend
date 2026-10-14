@@ -187,6 +187,9 @@ export class DriveService {
     if (trimmedRef === '') {
       throw new BadRequestException('drive.driveRef is required for method remove');
     }
+    if (!DriveService.isValidDriveRef(trimmedRef)) {
+      throw new BadRequestException('Invalid driveRef format — expected UUID v4');
+    }
     const absolutePath = buildAbsoluteDriveObjectPath(organizationId, trimmedRef);
     try {
       await unlink(absolutePath);

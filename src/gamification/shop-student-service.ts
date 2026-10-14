@@ -23,6 +23,9 @@ import { RankEntity } from '../database/entities/rank.entity';
 import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { DiscountCalculator } from './discount-calculator';
 
+/** Row lock held for the whole shop transaction (balance, stock, owned quantity). */
+const SHOP_ROW_WRITE_LOCK = { mode: 'pessimistic_write' as const };
+
 
 @Injectable()
 export class ShopStudentService {
@@ -82,6 +85,7 @@ export class ShopStudentService {
 
       const listing = await manager.findOne(ShopListingEntity, {
         where: { itemId: item.id },
+        lock: SHOP_ROW_WRITE_LOCK,
       });
       if (!listing) {
         throw new NotFoundException('Item is not listed in the shop');
@@ -98,6 +102,7 @@ export class ShopStudentService {
       // 4. Pobranie statystyk studenta (by sprawdzić walutę)
       const stats = await manager.findOne(StudentStatsEntity, {
         where: { enrollmentId: enrollment.id },
+        lock: SHOP_ROW_WRITE_LOCK,
       });
       if (!stats) {
         throw new BadRequestException('Student stats not found');
@@ -161,6 +166,7 @@ export class ShopStudentService {
       // 6. Pobranie aktualnego ekwipunku studenta (by ew. sprawdzić limit)
       let earnedItem = await manager.findOne(EarnedItemEntity, {
         where: { enrollmentId: enrollment.id, itemId: item.id },
+        lock: SHOP_ROW_WRITE_LOCK,
       });
       const currentOwnedQuantity = earnedItem ? earnedItem.quantity : 0;
 
@@ -373,6 +379,7 @@ export class ShopStudentService {
 
       const earnedItem = await manager.findOne(EarnedItemEntity, {
         where: { enrollmentId: enrollment.id, itemId },
+        lock: SHOP_ROW_WRITE_LOCK,
       });
 
       if (!earnedItem || earnedItem.quantity <= 0) {
