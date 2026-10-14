@@ -32,7 +32,7 @@ export class GroupTemplatesCrudController {
   async getTemplates(
     @Query() query: GetGroupTemplatesQueryDto,
     @Req() req: Request) {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req, query.auth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       throw new ForbiddenException('Missing or invalid session');
     }
@@ -69,9 +69,8 @@ export class GroupTemplatesCrudController {
   @Get(':id')
   async getTemplateDetails(
     @Param('id', ParseIntPipe) templateId: number,
-    @Query('auth') auth: string | undefined,
     @Req() req: Request) {
-    const subject = await this.sessionService.resolveSubjectFromRequest(req, auth);
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       throw new ForbiddenException('Missing or invalid session');
     }

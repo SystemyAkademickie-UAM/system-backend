@@ -66,6 +66,9 @@ export class ProductionFileLogger extends ConsoleLogger {
     if (message instanceof Error) {
       return message.stack ?? message.message;
     }
-    return JSON.stringify(message);
+    if (message === undefined || message === null) {
+      return '';
+    }
+    return JSON.stringify(message) ?? '';
   }
 }

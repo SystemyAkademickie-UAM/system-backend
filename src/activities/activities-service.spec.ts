@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import type { Request } from 'express';
@@ -9,6 +10,7 @@ import { StageEntity } from '../database/entities/stage.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { ActivityBacklogEntity } from '../database/entities/activity-backlog.entity';
 import { GroupAuthorizationService } from '../groups/group-authorization.service';
+import { ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID } from '../constants/activity-api-constants';
 
 describe('ActivitiesService', () => {
   let service: ActivitiesService;
@@ -17,7 +19,17 @@ describe('ActivitiesService', () => {
   let activityBacklogRepository: any;
   let sessionService: any;
   let userRolesService: any;
-  let mockQueryBuilder: any;
+  let groupAuthorizationService: {
+    assertLecturerOwnsGroup: jest.Mock;
+    isLecturerOwner: jest.Mock;
+  };
+  let mockQueryBuilder: {
+    select: jest.Mock;
+    addSelect: jest.Mock;
+    where: jest.Mock;
+    groupBy: jest.Mock;
+    getRawMany: jest.Mock;
+  };
 
   beforeEach(async () => {
     sessionService = {
@@ -35,6 +47,7 @@ describe('ActivitiesService', () => {
     
     stageRepository = {
       find: jest.fn(),
+      findOne: jest.fn(),
     };
     
     mockQueryBuilder = {
@@ -48,6 +61,11 @@ describe('ActivitiesService', () => {
     activityBacklogRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     };
+    groupAuthorizationService = {
+      assertLecturerOwnsGroup: jest.fn().mockResolvedValue(10),
+      isLecturerOwner: jest.fn().mockResolvedValue(true),
+    };
+    activityRepository.save = jest.fn();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -60,10 +78,7 @@ describe('ActivitiesService', () => {
         { provide: getRepositoryToken(ActivityBacklogEntity), useValue: activityBacklogRepository },
         {
           provide: GroupAuthorizationService,
-          useValue: {
-            assertLecturerOwnsGroup: jest.fn().mockResolvedValue(10),
-            isLecturerOwner: jest.fn().mockResolvedValue(true),
-          },
+          useValue: groupAuthorizationService,
         },
       ],
     }).compile();
@@ -125,6 +140,28 @@ describe('ActivitiesService', () => {
       expect(result.activities).toBeDefined();
       expect(result.activities?.length).toBe(1);
       expect(result.activities?.[0].id).toBe(1);
+    });
+  });
+
+  describe('modifyActivity', () => {
+    it('refuses a stage move into a group the lecturer does not own', async () => {
+      activityRepository.findOne.mockResolvedValue({ id: 7, stageId: 1, name: 'Quest' });
+      stageRepository.findOne
+        .mockResolvedValueOnce({ id: 1, groupId: 11 })
+        .mockResolvedValueOnce({ id: 2, groupId: 99 });
+      groupAuthorizationService.assertLecturerOwnsGroup
+        .mockResolvedValueOnce(10)
+        .mockRejectedValueOnce(new ForbiddenException('Not authorized to manage this group'));
+
+      const result = await service.handleActivity({} as Request, {
+        method: 'modify',
+        activityId: 7,
+        stageId: 2,
+      });
+
+      expect(result.activity).toBe(ACTIVITY_RESPONSE_NOT_AUTHORIZED_ID);
+      expect(activityRepository.save).not.toHaveBeenCalled();
+      expect(groupAuthorizationService.assertLecturerOwnsGroup).toHaveBeenCalledWith(1, 99);
     });
   });
 });

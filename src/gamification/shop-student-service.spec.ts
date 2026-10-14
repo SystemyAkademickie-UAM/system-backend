@@ -103,6 +103,18 @@ describe('ShopStudentService', () => {
       expect(result).toEqual({ success: true, message: 'Item purchased successfully' });
       expect(statsObj.lives).toBe(3);
       expect(statsObj.currency).toBe(50);
+      expect(manager.findOne).toHaveBeenCalledWith(
+        ShopListingEntity,
+        expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
+      );
+      expect(manager.findOne).toHaveBeenCalledWith(
+        StudentStatsEntity,
+        expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
+      );
+      expect(manager.findOne).toHaveBeenCalledWith(
+        EarnedItemEntity,
+        expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
+      );
     });
 
     it('should allow extra life purchase when group lives cap is null', async () => {
@@ -157,6 +169,10 @@ describe('ShopStudentService', () => {
       const result = await service.useItem(mockRequest, 1, 10);
 
       expect(result).toEqual({ success: true, message: 'Item used successfully' });
+      expect(manager.findOne).toHaveBeenCalledWith(
+        EarnedItemEntity,
+        expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
+      );
       expect(backlogService.logEvent).toHaveBeenCalledWith(
         1,
         100,
