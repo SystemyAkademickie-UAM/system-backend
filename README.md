@@ -80,6 +80,8 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `POST /api/client-logs` — authenticated browser error/warn line into the same daily file
 - `GET /api/admin/organizations/:organizationId/accounts` — list accounts in an organization (super or org administrator)
 - `DELETE /api/admin/organizations/:organizationId/accounts/:accountId` — org administrator or super: remove organization account (see [docs/api.md](./docs/api.md))
+- `POST /api/admin/broadcasts`, `GET /api/admin/broadcasts`, `DELETE /api/admin/broadcasts/:id` — super only: manage platform-wide announcements
+- `GET /api/broadcasts/me`, `POST /api/broadcasts/:id/read` — authenticated: retrieve active announcements and acknowledge receipts
 - Local IdP: [docs/saml-local-idp.md](./docs/saml-local-idp.md) (`npm run provision:dev-university` or `npm run idp:up`, 7 test users)
 
 Details in [docs/api.md](./docs/api.md).
