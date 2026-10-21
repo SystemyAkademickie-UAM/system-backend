@@ -1,9 +1,10 @@
-name: Docker build and push (production)
+name: Docker build and push
 
 on:
   push:
     branches:
       - production
+      - developer
 
 jobs:
   build-and-push:
@@ -15,6 +16,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Choose image tag
+        id: image
+        run: |
+          case "$GITHUB_REF_NAME" in
+            production) echo "tag=stable" >> "$GITHUB_OUTPUT" ;;
+            developer) echo "tag=developer" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Ref $GITHUB_REF_NAME does not publish an image." >&2; exit 1 ;;
+          esac
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -28,6 +38,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/systemyakademickie-uam/system-backend:latest
-            ghcr.io/systemyakademickie-uam/system-backend:production
+          tags: ghcr.io/systemyakademickie-uam/system-backend:${{ steps.image.outputs.tag }}
