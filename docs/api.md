@@ -1849,4 +1849,58 @@ Fetch active announcements directed to the currently authenticated user and ackn
 { "success": true }
 ```
 
+---
+
+## Maintenance mode (super role)
+
+Control global technical break / maintenance screen. Managed as a singleton row in **`services.maintenance_mode`** (`id = 1`). Requires **`super`** role.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/maintenance` | `GET` | Get current maintenance configuration. |
+| `/api/admin/maintenance` | `PUT` | Update maintenance status, message, and expected end timestamp. |
+
+### Update maintenance mode
+
+**Endpoint:** `PUT /api/admin/maintenance`
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `isEnabled` | boolean | `@IsDefined()`, `@IsBoolean()` | Whether maintenance mode is active. |
+| `message` | string | 0–1000 chars (optional) | Informational message displayed to users. |
+| `estimatedEndAt` | string | ISO-8601 date string (optional, nullable) | Anticipated end timestamp. |
+
+**Response:** `200 OK` with updated status.
+
+When maintenance mode is enabled (`isEnabled: true`):
+- All general API requests return **`HTTP 503 Service Unavailable`** with JSON `{ "statusCode": 503, "message": "...", "estimatedEndAt": "..." }`.
+- System probe endpoints (`/api/system/*`), authentication endpoints (`/api/auth/*`), documentation (`/api/docs`), and requests authenticated with **`super`** role are exempted to allow administration and verification.
+
+---
+
+## System status & maintenance probe (public)
+
+Public probe endpoints used by client applications to verify server status and check for technical breaks without requiring authentication.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/system/status` | `GET` | Public status probe returning operational status and maintenance info. |
+| `/api/system/maintenance` | `GET` | Public endpoint returning maintenance mode status. |
+
+**Response:** `200 OK`
+
+```json
+{
+  "status": "ok",
+  "maintenance": {
+    "isEnabled": false,
+    "message": null,
+    "estimatedEndAt": null
+  }
+}
+```
+
+
 

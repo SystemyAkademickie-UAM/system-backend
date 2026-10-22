@@ -25,6 +25,7 @@ import { BackupModule } from './admin/backup/backup.module';
 import { BacklogModule } from './backlog/backlog-module';
 import { BannersModule } from './banners/banners-module';
 import { BroadcastsModule } from './broadcasts/broadcasts-module';
+import { MaintenanceModeModule } from './maintenance/maintenance-mode.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { BroadcastsModule } from './broadcasts/broadcasts-module';
     BacklogModule,
     BannersModule,
     BroadcastsModule,
+    MaintenanceModeModule,
   ],
 })
 export class AppModule {}
