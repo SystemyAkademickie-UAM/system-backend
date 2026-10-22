@@ -1,6 +1,6 @@
 {
   "name": "system-backend",
-  "version": "0.0.2",
+  "version": "1.0.0",
   "description": "NestJS API for Systemy Akademickie UAM",
   "private": true,
   "license": "UNLICENSED",
