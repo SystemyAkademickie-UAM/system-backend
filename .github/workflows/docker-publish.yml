@@ -17,13 +17,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Choose image tag
+      - name: Choose image tags
         id: image
         run: |
+          image=ghcr.io/systemyakademickie-uam/system-backend
           case "$GITHUB_REF_NAME" in
-            production) echo "tag=stable" >> "$GITHUB_OUTPUT" ;;
-            developer) echo "tag=developer" >> "$GITHUB_OUTPUT" ;;
-            *) echo "Ref $GITHUB_REF_NAME does not publish an image." >&2; exit 1 ;;
+            production)
+              {
+                echo "tags<<EOF"
+                echo "${image}:stable"
+                echo "${image}:latest"
+                echo "EOF"
+              } >> "$GITHUB_OUTPUT"
+              ;;
+            developer)
+              echo "tags=${image}:developer" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Ref $GITHUB_REF_NAME does not publish an image." >&2
+              exit 1
+              ;;
           esac
 
       - name: Log in to GitHub Container Registry
@@ -38,4 +51,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/systemyakademickie-uam/system-backend:${{ steps.image.outputs.tag }}
+          tags: ${{ steps.image.outputs.tags }}

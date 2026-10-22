@@ -52,7 +52,7 @@ Optional: set `IMAGE_NAME` to override the image tag. For extra `docker run` fla
 ## CI image
 
 - `.github/workflows/docker-build.yml` — builds this Dockerfile on `push` to `main` (verification only).
-- `.github/workflows/docker-publish.yml` — pushes `ghcr.io/systemyakademickie-uam/system-backend:stable` on `production`, and `:developer` on `developer`. It does not move `:latest`.
+- `.github/workflows/docker-publish.yml` — a `production` push publishes `:stable` and the legacy alias `:latest`. A `developer` push publishes `:developer` and does not move `:latest`.
 
 The process listens on **8080**. The `Dockerfile` uses **Node.js 24.14.1** (Alpine) and **npm 11.11.0** during install, matching [prerequisites.md](./prerequisites.md).
 

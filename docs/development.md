@@ -62,7 +62,7 @@ One-time network setup: see [installation.md](./installation.md#docker-compose-l
 
 - `.github/workflows/ci.yml` — install, test, build on `push` / `pull_request` to `main`.
 - `.github/workflows/docker-build.yml` — verify a Docker image build on `push` to `main` (no registry push).
-- `.github/workflows/docker-publish.yml` — push `:stable` from `production` and `:developer` from `developer` (GHCR). `:latest` is not updated.
+- `.github/workflows/docker-publish.yml` — push `:stable` and legacy `:latest` from `production`, and `:developer` from `developer` (GHCR). A developer push does not move `:latest`.
 
 ## Environment variables
 
