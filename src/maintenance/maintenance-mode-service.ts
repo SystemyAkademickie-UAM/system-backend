@@ -47,12 +47,16 @@ export class MaintenanceModeService {
     dto: UpdateMaintenanceModeDto,
     superAdminUserId: number,
   ): Promise<MaintenanceStatusResponse> {
-    const estimatedEndAt = dto.estimatedEndAt ? new Date(dto.estimatedEndAt) : null;
-    if (estimatedEndAt && Number.isNaN(estimatedEndAt.getTime())) {
-      throw new BadRequestException('Invalid estimatedEndAt date format');
-    }
-
-    const message = dto.message !== undefined ? (dto.message?.trim() || null) : null;
+    const parsedEstimatedEndAt = this.parseEstimatedEndAt(dto.estimatedEndAt);
+    const existing = await this.maintenanceRepository.findOne({
+      where: { id: MAINTENANCE_MODE_SINGLETON_ID },
+    });
+    const message = dto.message !== undefined
+      ? (dto.message?.trim() || null)
+      : (existing?.message ?? null);
+    const estimatedEndAt = parsedEstimatedEndAt !== undefined
+      ? parsedEstimatedEndAt
+      : (existing?.estimatedEndAt ?? null);
 
     const row = await this.maintenanceRepository.save({
       id: MAINTENANCE_MODE_SINGLETON_ID,
@@ -75,6 +79,20 @@ export class MaintenanceModeService {
       select: ['isEnabled'],
     });
     return row?.isEnabled ?? false;
+  }
+
+  private parseEstimatedEndAt(value: string | null | undefined): Date | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value === null || value.trim().length === 0) {
+      return null;
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException('Invalid estimatedEndAt date format');
+    }
+    return parsed;
   }
 
   private mapMaintenanceStatus(row: MaintenanceModeEntity): MaintenanceStatusResponse {

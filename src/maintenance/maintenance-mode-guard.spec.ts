@@ -63,6 +63,7 @@ describe('MaintenanceModeGuard', () => {
     expect(await guard.canActivate(createMockContext('/api/system/status'))).toBe(true);
     expect(await guard.canActivate(createMockContext('/api/auth/saml/login'))).toBe(true);
     expect(await guard.canActivate(createMockContext('/api/docs'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/system/status'))).toBe(true);
   });
 
   it('allows authenticated super-admins to bypass maintenance break', async () => {

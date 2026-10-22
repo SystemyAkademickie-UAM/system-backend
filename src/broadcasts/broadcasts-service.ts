@@ -76,11 +76,12 @@ export class BroadcastsService {
     takeRaw?: number,
     skipRaw?: number,
   ): Promise<BroadcastListResponse> {
-    const take = Math.max(
-      1,
-      Math.min(takeRaw ?? BROADCAST_LIST_DEFAULT_TAKE, BROADCAST_LIST_MAX_TAKE),
-    );
-    const skip = Math.max(0, skipRaw ?? 0);
+    const takeInput = takeRaw !== undefined && Number.isFinite(takeRaw)
+      ? takeRaw
+      : BROADCAST_LIST_DEFAULT_TAKE;
+    const skipInput = skipRaw !== undefined && Number.isFinite(skipRaw) ? skipRaw : 0;
+    const take = Math.max(1, Math.min(takeInput, BROADCAST_LIST_MAX_TAKE));
+    const skip = Math.max(0, skipInput);
 
     const [rows, total] = await this.broadcastRepository.findAndCount({
       order: { createdAt: 'DESC' },

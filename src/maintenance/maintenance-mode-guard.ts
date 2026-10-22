@@ -39,12 +39,8 @@ export class MaintenanceModeGuard implements CanActivate {
 
     const req = context.switchToHttp().getRequest<Request>();
     const path = req.path ?? req.url ?? '';
-
-    // Always allow status probes, auth endpoints, and Swagger UI
-    for (const prefix of MAINTENANCE_BYPASS_PATH_PREFIXES) {
-      if (path.startsWith(prefix)) {
-        return true;
-      }
+    if (this.isBypassPath(path)) {
+      return true;
     }
 
     // Super-administrators bypass maintenance mode to manage and recover the system
@@ -73,6 +69,14 @@ export class MaintenanceModeGuard implements CanActivate {
       error: 'Service Unavailable',
       message: notice,
       maintenance: status,
+    });
+  }
+
+  private isBypassPath(path: string): boolean {
+    const withoutQuery = path.split('?')[0] ?? '';
+    return MAINTENANCE_BYPASS_PATH_PREFIXES.some((prefix) => {
+      const withoutApiPrefix = prefix.startsWith('/api') ? prefix.slice('/api'.length) : prefix;
+      return withoutQuery.startsWith(prefix) || withoutQuery.startsWith(withoutApiPrefix);
     });
   }
 }

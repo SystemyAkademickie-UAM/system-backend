@@ -78,6 +78,28 @@ describe('MaintenanceModeService', () => {
       expect(res.message).toBe('System update');
     });
 
+    it('keeps the stored notice when the update omits it', async () => {
+      const estimatedEndAt = new Date('2026-10-21T10:00:00Z');
+      maintenanceRepo.findOne.mockResolvedValue({
+        id: 1,
+        isEnabled: false,
+        message: 'Keep me',
+        estimatedEndAt,
+        updatedByUserId: 1,
+        updatedAt: new Date('2026-10-20T19:00:00Z'),
+      } as MaintenanceModeEntity);
+
+      await service.updateMaintenanceStatus({ isEnabled: true }, 7);
+
+      expect(maintenanceRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isEnabled: true,
+          message: 'Keep me',
+          estimatedEndAt,
+        }),
+      );
+    });
+
     it('rejects invalid estimatedEndAt date format', async () => {
       await expect(
         service.updateMaintenanceStatus(

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { SessionModule } from '../auth/session/session.module';
@@ -22,6 +23,10 @@ import { SystemStatusController } from './system-status-controller';
   providers: [
     MaintenanceModeService,
     MaintenanceModeGuard,
+    {
+      provide: APP_GUARD,
+      useExisting: MaintenanceModeGuard,
+    },
   ],
   exports: [
     MaintenanceModeService,
