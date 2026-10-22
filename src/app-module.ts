@@ -24,6 +24,7 @@ import { ProductionLogsModule } from './ops/logs/production-logs.module';
 import { BackupModule } from './admin/backup/backup.module';
 import { BacklogModule } from './backlog/backlog-module';
 import { BannersModule } from './banners/banners-module';
+import { BroadcastsModule } from './broadcasts/broadcasts-module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { BannersModule } from './banners/banners-module';
     ProfileModule,
     BacklogModule,
     BannersModule,
+    BroadcastsModule,
   ],
 })
 export class AppModule {}

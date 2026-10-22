@@ -1800,3 +1800,53 @@ Cookie: maq_auth=<token>
 >
 > Prefer the bulk endpoint for all new integrations.
 
+---
+
+## System broadcasts (super role)
+
+Manage global announcements displayed to active users across the platform. Stored in **`services.broadcasts`** and tracked per-user in **`services.user_broadcast_status`**. Requires **`super`** role on the caller's **`auth.accounts`** row.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/broadcasts` | `POST` | Create a new broadcast announcement. |
+| `/api/admin/broadcasts` | `GET` | List all broadcasts (supports `?limit=50&offset=0`). |
+| `/api/admin/broadcasts/:id` | `DELETE` | Delete a broadcast announcement. |
+
+### Create broadcast
+
+**Endpoint:** `POST /api/admin/broadcasts`
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `title` | string | 1–255 chars | Short headline of the announcement. |
+| `message` | string | 1–4000 chars | Announcement body text or markdown. |
+| `level` | string | `info`, `warning`, `critical` (default `info`) | Visual severity indicator. |
+| `targetRole` | string | `all`, `student`, `lecturer`, `administrator` (default `all`) | Target user audience. |
+| `expiresAt` | string | ISO-8601 date string (optional) | When the broadcast stops being visible. Null = never expires. |
+
+**Response:** `201 Created` with created broadcast object.
+
+---
+
+## User broadcasts (authenticated)
+
+Fetch active announcements directed to the currently authenticated user and acknowledge receipts.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/broadcasts/me` | `GET` | Fetch unread active broadcasts matching the user's role. |
+| `/api/broadcasts/:id/read` | `POST` | Mark a broadcast announcement as read/dismissed. |
+
+### Mark broadcast as read
+
+**Endpoint:** `POST /api/broadcasts/:id/read`
+
+**Response:** `200 OK`
+
+```json
+{ "success": true }
+```
+
+
