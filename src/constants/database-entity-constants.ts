@@ -22,6 +22,27 @@ export const AUTH_ORGANIZATION_CONTACT_EMAIL_MAX_LENGTH = 255;
 /** Max length for `auth.organizations.contact_phone`. */
 export const AUTH_ORGANIZATION_CONTACT_PHONE_MAX_LENGTH = 64;
 
+/** Max length for `auth.organizations.domain`. */
+export const AUTH_ORGANIZATION_DOMAIN_MAX_LENGTH = 255;
+
+/** Max length for `auth.organizations.representative_full_name`. */
+export const AUTH_ORGANIZATION_REPRESENTATIVE_NAME_MAX_LENGTH = 255;
+
+/** Max length for `auth.organizations.address_town`. */
+export const AUTH_ORGANIZATION_ADDRESS_TOWN_MAX_LENGTH = 128;
+
+/** Max length for `auth.organizations.address_street`. */
+export const AUTH_ORGANIZATION_ADDRESS_STREET_MAX_LENGTH = 255;
+
+/** Max length for `auth.organizations.address_building`. */
+export const AUTH_ORGANIZATION_ADDRESS_BUILDING_MAX_LENGTH = 64;
+
+/** Max length for `auth.organizations.address_postal_code`. */
+export const AUTH_ORGANIZATION_ADDRESS_POSTAL_CODE_MAX_LENGTH = 16;
+
+/** Max length for `auth.organizations.address_country` (ISO 3166-1 alpha-2). */
+export const AUTH_ORGANIZATION_ADDRESS_COUNTRY_MAX_LENGTH = 2;
+
 /** Max length for `education.enrollment_codes.code`. */
 export const EDUCATION_ENROLLMENT_CODE_MAX_LENGTH = 10;
 

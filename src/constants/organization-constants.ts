@@ -26,3 +26,19 @@ export const FIRST_TENANT_ORGANIZATION_ID = 11;
 
 /** PostgreSQL sequence backing `auth.organizations.id`. */
 export const ORGANIZATIONS_ID_SEQUENCE = 'auth.organizacje_id_seq';
+
+/** Maximum ids accepted by `POST /api/admin/organizations/bulk`. */
+export const ORGANIZATION_BULK_MAX_IDS = 50;
+
+/**
+ * Hostname, `localhost`, `127.0.0.1`, or `192.168.0.0`–`192.168.0.255`.
+ * No scheme and no path.
+ */
+export const ORGANIZATION_DOMAIN_PATTERN = /^(?:(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}|localhost|127\.0\.0\.1|192\.168\.0\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))$/i;
+
+/** Returned when `domain` fails {@link ORGANIZATION_DOMAIN_PATTERN}. */
+export const ORGANIZATION_DOMAIN_INVALID_MESSAGE =
+  'domain must be a hostname, localhost, 127.0.0.1, or 192.168.0.0-255';
+
+/** ISO 3166-1 alpha-2 country code. Length matches `AUTH_ORGANIZATION_ADDRESS_COUNTRY_MAX_LENGTH`. */
+export const ORGANIZATION_COUNTRY_CODE_PATTERN = /^[A-Za-z]{2}$/;

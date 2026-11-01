@@ -32,19 +32,13 @@ function syntheticEmailFromSub(sub: string): string {
   return `${local.slice(0, Math.max(1, maxLocal))}${suffix}`;
 }
 
-function splitDisplayName(displayName: string | undefined): { name: string; surname: string } {
-  const trimmed = displayName?.trim() ?? '';
+/** Stores a PIONIER `givenName` or `sn` string as-is. Empty attributes stay a placeholder. */
+function identityField(value: string | undefined): string {
+  const trimmed = value?.trim() ?? '';
   if (trimmed === '') {
-    return { name: '-', surname: '-' };
+    return '-';
   }
-  const parts = trimmed.split(/\s+/).filter((part) => part.length > 0);
-  if (parts.length === 1) {
-    return { name: truncateField(parts[0], AUTH_USER_NAME_FIELD_MAX_LENGTH), surname: '-' };
-  }
-  return {
-    name: truncateField(parts[0], AUTH_USER_NAME_FIELD_MAX_LENGTH),
-    surname: truncateField(parts.slice(1).join(' '), AUTH_USER_NAME_FIELD_MAX_LENGTH),
-  };
+  return truncateField(trimmed, AUTH_USER_NAME_FIELD_MAX_LENGTH);
 }
 
 /**
@@ -70,7 +64,8 @@ export class SamlLinkedUserService {
     }
     const emailTrimmed = truncateField(payload.email?.trim() ?? '', AUTH_USER_EMAIL_MAX_LENGTH);
     const emailForRow = emailTrimmed.length > 0 ? emailTrimmed : syntheticEmailFromSub(rawSub);
-    const { name, surname } = splitDisplayName(payload.displayName);
+    const name = identityField(payload.givenName);
+    const surname = identityField(payload.surname);
     const nicknameBase = emailTrimmed.length > 0 ? emailTrimmed.split('@')[0] : rawSub;
     const nickname = truncateField(nicknameBase, AUTH_USER_NAME_FIELD_MAX_LENGTH);
     if (emailTrimmed.length > 0) {

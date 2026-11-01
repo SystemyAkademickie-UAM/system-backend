@@ -25,6 +25,27 @@ export type OrganizationAdministratorListItem = {
   surname: string;
 };
 
+/** Administrator row plus the organization it belongs to. */
+export type OrganizationAdministratorDirectoryItem = OrganizationAdministratorListItem & {
+  organizationId: number;
+  organizationName: string;
+};
+
+type AdministratorRow = {
+  accountId?: string | number;
+  accountid?: string | number;
+  userId?: string | number;
+  userid?: string | number;
+  organizationId?: string | number;
+  organizationid?: string | number;
+  organizationName?: string;
+  organizationname?: string;
+  email: string;
+  nickname: string;
+  name: string;
+  surname: string;
+};
+
 @Injectable()
 export class AdminOrganizationAdministratorsService {
   private readonly logger = new Logger(AdminOrganizationAdministratorsService.name);
@@ -45,26 +66,26 @@ export class AdminOrganizationAdministratorsService {
     queryAuth?: string): Promise<OrganizationAdministratorListItem[]> {
     await this.adminAccessService.assertSuperAdmin(req, queryAuth);
     await this.assertOrganizationExists(organizationId);
-    const rows = await this.accountRepository.find({
-      where: { organizationId, role: ADMINISTRATOR_ROLE_NAME },
-      order: { id: 'ASC' },
-    });
-    const items: OrganizationAdministratorListItem[] = [];
-    for (const row of rows) {
-      const user = await this.userRepository.findOne({ where: { id: row.userId } });
-      if (user === null) {
-        continue;
-      }
-      items.push({
-        accountId: row.id,
-        userId: user.id,
-        email: user.email,
-        nickname: user.nickname,
-        name: user.name,
-        surname: user.surname,
-      });
-    }
-    return items;
+    const rows = await this.loadAdministrators(organizationId);
+    return rows.map((row) => ({
+      accountId: row.accountId,
+      userId: row.userId,
+      email: row.email,
+      nickname: row.nickname,
+      name: row.name,
+      surname: row.surname,
+    }));
+  }
+
+  /**
+   * Administrators of every active organization.
+   */
+  async listAllAdministrators(
+    req: Request,
+    queryAuth?: string,
+  ): Promise<OrganizationAdministratorDirectoryItem[]> {
+    await this.adminAccessService.assertSuperAdmin(req, queryAuth);
+    return this.loadAdministrators(null);
   }
 
   async grantAdministrator(
@@ -132,6 +153,66 @@ export class AdminOrganizationAdministratorsService {
       accountId);
     this.logger.log(
       `Revoked administrator org=${organizationId} accountId=${accountId} userRemoved=${result.userRemoved}`);
+  }
+
+  private async loadAdministrators(
+    organizationId: number | null,
+  ): Promise<OrganizationAdministratorDirectoryItem[]> {
+    const query = this.accountRepository
+      .createQueryBuilder('account')
+      .innerJoin(UserEntity, 'user', 'user.id = account.user_id')
+      .innerJoin(OrganizationEntity, 'organization', 'organization.id = account.organization_id')
+      .select('account.id', 'accountId')
+      .addSelect('account.user_id', 'userId')
+      .addSelect('account.organization_id', 'organizationId')
+      .addSelect('organization.name', 'organizationName')
+      .addSelect('user.email', 'email')
+      .addSelect('user.nickname', 'nickname')
+      .addSelect('user.name', 'name')
+      .addSelect('user.surname', 'surname')
+      .where('account.role = :role', { role: ADMINISTRATOR_ROLE_NAME })
+      .andWhere('organization.is_active = true')
+      .orderBy('account.organization_id', 'ASC')
+      .addOrderBy('account.id', 'ASC');
+    if (organizationId !== null) {
+      query.andWhere('account.organization_id = :organizationId', { organizationId });
+    }
+    const rows = await query.getRawMany<AdministratorRow>();
+    const items: OrganizationAdministratorDirectoryItem[] = [];
+    for (const row of rows) {
+      const item = this.mapAdministratorRow(row);
+      if (item !== null) {
+        items.push(item);
+      }
+    }
+    return items;
+  }
+
+  private mapAdministratorRow(row: AdministratorRow): OrganizationAdministratorDirectoryItem | null {
+    const accountId = this.readPositiveInteger(row.accountId ?? row.accountid);
+    const userId = this.readPositiveInteger(row.userId ?? row.userid);
+    const organizationId = this.readPositiveInteger(row.organizationId ?? row.organizationid);
+    if (accountId === null || userId === null || organizationId === null) {
+      return null;
+    }
+    return {
+      accountId,
+      userId,
+      organizationId,
+      organizationName: row.organizationName ?? row.organizationname ?? '',
+      email: row.email,
+      nickname: row.nickname,
+      name: row.name,
+      surname: row.surname,
+    };
+  }
+
+  private readPositiveInteger(value: string | number | undefined): number | null {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return null;
+    }
+    return parsed;
   }
 
   private async assertOrganizationExists(organizationId: number): Promise<void> {

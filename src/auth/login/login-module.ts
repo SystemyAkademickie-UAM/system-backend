@@ -17,6 +17,7 @@ import { SamlModule } from '../saml/saml.module';
 import { LoginController } from './login-controller';
 import { LogoutController } from './logout-controller';
 import { LoginApiService } from './login-api.service';
+import { LoginContextService } from './login-context.service';
 import { SamlLinkedUserService } from './saml-linked-user.service';
 
 @Module({
@@ -37,6 +38,7 @@ import { SamlLinkedUserService } from './saml-linked-user.service';
   controllers: [LoginController, LogoutController],
   providers: [
     LoginApiService,
+    LoginContextService,
     SamlLinkedUserService,
     MagicLinkService,
     MagicLinkEmailService,

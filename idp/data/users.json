@@ -10,6 +10,8 @@
             ],
             "eduPersonPrincipalName": "student1@localhost.invalid",
             "mail": "student1@localhost.invalid",
+            "givenName": "Student",
+            "sn": "1",
             "displayName": "Student 1"
         },
         {
@@ -22,6 +24,8 @@
             ],
             "eduPersonPrincipalName": "student2@localhost.invalid",
             "mail": "student2@localhost.invalid",
+            "givenName": "Student",
+            "sn": "2",
             "displayName": "Student 2"
         },
         {
@@ -34,6 +38,8 @@
             ],
             "eduPersonPrincipalName": "student3@localhost.invalid",
             "mail": "student3@localhost.invalid",
+            "givenName": "Student",
+            "sn": "3",
             "displayName": "Student 3"
         },
         {
@@ -46,6 +52,8 @@
             ],
             "eduPersonPrincipalName": "student4@localhost.invalid",
             "mail": "student4@localhost.invalid",
+            "givenName": "Student",
+            "sn": "4",
             "displayName": "Student 4"
         },
         {
@@ -58,6 +66,8 @@
             ],
             "eduPersonPrincipalName": "student5@localhost.invalid",
             "mail": "student5@localhost.invalid",
+            "givenName": "Student",
+            "sn": "5",
             "displayName": "Student 5"
         },
         {
@@ -70,6 +80,8 @@
             ],
             "eduPersonPrincipalName": "student6@localhost.invalid",
             "mail": "student6@localhost.invalid",
+            "givenName": "Student",
+            "sn": "6",
             "displayName": "Student 6"
         },
         {
@@ -82,6 +94,8 @@
             ],
             "eduPersonPrincipalName": "student7@localhost.invalid",
             "mail": "student7@localhost.invalid",
+            "givenName": "Student",
+            "sn": "7",
             "displayName": "Student 7"
         },
         {
@@ -94,6 +108,8 @@
             ],
             "eduPersonPrincipalName": "student8@localhost.invalid",
             "mail": "student8@localhost.invalid",
+            "givenName": "Student",
+            "sn": "8",
             "displayName": "Student 8"
         },
         {
@@ -106,6 +122,8 @@
             ],
             "eduPersonPrincipalName": "student9@localhost.invalid",
             "mail": "student9@localhost.invalid",
+            "givenName": "Student",
+            "sn": "9",
             "displayName": "Student 9"
         },
         {
@@ -118,6 +136,8 @@
             ],
             "eduPersonPrincipalName": "student10@localhost.invalid",
             "mail": "student10@localhost.invalid",
+            "givenName": "Student",
+            "sn": "10",
             "displayName": "Student 10"
         },
         {
@@ -130,6 +150,8 @@
             ],
             "eduPersonPrincipalName": "student11@localhost.invalid",
             "mail": "student11@localhost.invalid",
+            "givenName": "Student",
+            "sn": "11",
             "displayName": "Student 11"
         },
         {
@@ -142,6 +164,8 @@
             ],
             "eduPersonPrincipalName": "student12@localhost.invalid",
             "mail": "student12@localhost.invalid",
+            "givenName": "Student",
+            "sn": "12",
             "displayName": "Student 12"
         },
         {
@@ -154,6 +178,8 @@
             ],
             "eduPersonPrincipalName": "student13@localhost.invalid",
             "mail": "student13@localhost.invalid",
+            "givenName": "Student",
+            "sn": "13",
             "displayName": "Student 13"
         },
         {
@@ -166,6 +192,8 @@
             ],
             "eduPersonPrincipalName": "student14@localhost.invalid",
             "mail": "student14@localhost.invalid",
+            "givenName": "Student",
+            "sn": "14",
             "displayName": "Student 14"
         },
         {
@@ -178,6 +206,8 @@
             ],
             "eduPersonPrincipalName": "student15@localhost.invalid",
             "mail": "student15@localhost.invalid",
+            "givenName": "Student",
+            "sn": "15",
             "displayName": "Student 15"
         },
         {
@@ -190,6 +220,8 @@
             ],
             "eduPersonPrincipalName": "lecturer1@localhost.invalid",
             "mail": "lecturer1@localhost.invalid",
+            "givenName": "Lecturer",
+            "sn": "One",
             "displayName": "Lecturer One"
         },
         {
@@ -202,6 +234,8 @@
             ],
             "eduPersonPrincipalName": "lecturer2@localhost.invalid",
             "mail": "lecturer2@localhost.invalid",
+            "givenName": "Lecturer",
+            "sn": "Two",
             "displayName": "Lecturer Two"
         },
         {
@@ -214,6 +248,8 @@
             ],
             "eduPersonPrincipalName": "lecturer3@localhost.invalid",
             "mail": "lecturer3@localhost.invalid",
+            "givenName": "Lecturer",
+            "sn": "Three",
             "displayName": "Lecturer Three"
         },
         {
@@ -226,6 +262,8 @@
             ],
             "eduPersonPrincipalName": "administrator@localhost.invalid",
             "mail": "administrator@localhost.invalid",
+            "givenName": "University",
+            "sn": "Administrator",
             "displayName": "University Administrator"
         }
     ]

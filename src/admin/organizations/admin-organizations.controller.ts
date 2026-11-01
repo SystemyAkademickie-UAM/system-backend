@@ -24,33 +24,55 @@ import type { Request } from 'express';
 import { MAQ_SESSION_COOKIE_NAME } from '../../constants/session-constants';
 
 import {
+  BulkOrganizationsDto,
   CreateOrganizationDto,
   UpdateOrganizationDto,
   UploadOrganizationCertificateDto,
 } from './dto/admin-organization.dto';
+import { AdminOrganizationAdministratorsService } from './admin-organization-administrators.service';
 import { AdminOrganizationsService } from './admin-organizations.service';
 
 @ApiTags('Admin organizations')
 @ApiCookieAuth(MAQ_SESSION_COOKIE_NAME)
 @Controller('admin/organizations')
 export class AdminOrganizationsController {
-  constructor(private readonly adminOrganizationsService: AdminOrganizationsService) {}
+  constructor(
+    private readonly adminOrganizationsService: AdminOrganizationsService,
+    private readonly adminOrganizationAdministratorsService: AdminOrganizationAdministratorsService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create organization (super role)' })
-  @ApiCreatedResponse({ description: 'Organization created with SAML metadata summary' })
+  @ApiOperation({ summary: 'Create organization (super role). Requires domain, address, representative, and SAML or email login data.' })
+  @ApiCreatedResponse({ description: 'Full organization record, including stored domain, address, and representative' })
   @ApiForbiddenResponse({ description: 'Caller lacks super role' })
   createOrganization(@Req() req: Request, @Body() dto: CreateOrganizationDto) {
     return this.adminOrganizationsService.createOrganization(req, dto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'List organizations (super role)' })
-  @ApiOkResponse({ description: 'Organizations with certificate summary fields' })
+  @ApiOperation({ summary: 'List organizations (super role): id, name, isActive, domain' })
+  @ApiOkResponse({ description: 'id, name, isActive, and domain only' })
   @ApiForbiddenResponse({ description: 'Caller lacks super role' })
   listOrganizations(@Req() req: Request) {
     return this.adminOrganizationsService.listOrganizations(req);
+  }
+
+  @Post('bulk')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Full organization records for the given ids (super role)' })
+  @ApiOkResponse({ description: 'Each item is the full organization record, in request order' })
+  @ApiForbiddenResponse({ description: 'Caller lacks super role' })
+  bulkOrganizations(@Req() req: Request, @Body() dto: BulkOrganizationsDto) {
+    return this.adminOrganizationsService.bulkOrganizations(req, dto);
+  }
+
+  @Get('administrators')
+  @ApiOperation({ summary: 'List administrators of every active organization (super role)' })
+  @ApiOkResponse({ description: 'Administrator accounts with organization id and name' })
+  @ApiForbiddenResponse({ description: 'Caller lacks super role' })
+  listAllAdministrators(@Req() req: Request) {
+    return this.adminOrganizationAdministratorsService.listAllAdministrators(req);
   }
 
   @Get(':id')

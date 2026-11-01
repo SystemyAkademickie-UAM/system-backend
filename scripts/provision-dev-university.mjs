@@ -39,49 +39,48 @@ const IDP_METADATA_URL = 'http://127.0.0.1:5000/simplesaml/saml2/idp/metadata.ph
 const IDP_CONTAINER_NAME = 'academy-idp';
 const LEGACY_IDP_COMPOSE_FILE = 'idp/docker-compose.yml';
 
-/** @typedef {{ email: string, username: string, password: string, displayName: string, eduPersonAffiliation: string[] }} DevUserSpec */
+/** @typedef {{ email: string, username: string, password: string, givenName: string, surname: string, displayName: string, eduPersonAffiliation: string[] }} DevUserSpec */
+
+/**
+ * @param {string} username
+ * @param {string} givenName
+ * @param {string} surname
+ * @param {string} displayName
+ * @param {string[]} eduPersonAffiliation
+ * @returns {DevUserSpec}
+ */
+function devUser(username, givenName, surname, displayName, eduPersonAffiliation) {
+  return {
+    email: `${username}@localhost.invalid`,
+    username,
+    password: username,
+    givenName,
+    surname,
+    displayName,
+    eduPersonAffiliation,
+  };
+}
 
 /** @type {DevUserSpec[]} */
 const DEV_UNIVERSITY_USERS = [
   ...Array.from({ length: 15 }, (_, i) => {
     const num = i + 1;
-    const username = `student${num}`;
-    return {
-      email: `${username}@localhost.invalid`,
-      username,
-      password: username,
-      displayName: `Student ${num}`,
-      eduPersonAffiliation: ['student', 'member'],
-    };
+    return devUser(
+      `student${num}`,
+      'Student',
+      String(num),
+      `Student ${num}`,
+      ['student', 'member'],
+    );
   }),
-  {
-    email: 'lecturer1@localhost.invalid',
-    username: 'lecturer1',
-    password: 'lecturer1',
-    displayName: 'Lecturer One',
-    eduPersonAffiliation: ['faculty', 'member'],
-  },
-  {
-    email: 'lecturer2@localhost.invalid',
-    username: 'lecturer2',
-    password: 'lecturer2',
-    displayName: 'Lecturer Two',
-    eduPersonAffiliation: ['faculty', 'member'],
-  },
-  {
-    email: 'lecturer3@localhost.invalid',
-    username: 'lecturer3',
-    password: 'lecturer3',
-    displayName: 'Lecturer Three',
-    eduPersonAffiliation: ['faculty', 'member'],
-  },
-  {
-    email: 'administrator@localhost.invalid',
-    username: 'administrator',
-    password: 'administrator',
-    displayName: 'University Administrator',
-    eduPersonAffiliation: ['staff', 'member'],
-  },
+  devUser('lecturer1', 'Lecturer', 'One', 'Lecturer One', ['faculty', 'member']),
+  devUser('lecturer2', 'Lecturer', 'Two', 'Lecturer Two', ['faculty', 'member']),
+  devUser('lecturer3', 'Lecturer', 'Three', 'Lecturer Three', ['faculty', 'member']),
+  devUser('administrator', 'University', 'Administrator', 'University Administrator', ['staff', 'member']),
+  devUser('name-single', 'Jan', 'Kowalski', 'Kowalski Jan', ['student', 'member']),
+  devUser('name-two-two', 'Jan Krzysztof', 'Pawłak Kowalski', 'Pawłak Kowalski Jan Krzysztof', ['student', 'member']),
+  devUser('name-hyphen', 'Jan Krzysztof', 'Pawłak-Kowalski', 'Pawłak-Kowalski Jan Krzysztof', ['student', 'member']),
+  devUser('name-reversed', 'Paweł', 'Nawrocki', 'Nawrocki Paweł', ['student', 'member']),
 ];
 
 function parseArgs(argv) {
@@ -177,6 +176,8 @@ function writeIdpUsersFile() {
       eduPersonAffiliation: user.eduPersonAffiliation,
       eduPersonPrincipalName: user.email,
       mail: user.email,
+      givenName: user.givenName,
+      sn: user.surname,
       displayName: user.displayName,
     })),
   };
