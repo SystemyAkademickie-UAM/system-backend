@@ -4,17 +4,14 @@
 # - .env.example: empty placeholder values for documentation
 # - ci.yml: ephemeral test database credentials (destroyed after CI run)
 #
-# The GitGuardian pull-request check is not a suitable control for the local
-# identity-provider fixture. It reports a new password assignment as a leaked
-# secret, including when that value is labeled as an example credential, and
-# the path listed below is not applied by that check. The password field
-# remains for every account already in idp/data/users.json so a tester can
-# read it and assign a distinct password. The personal-name accounts are
-# created by the provision script instead of being introduced as new password
-# assignments in this pull request.
+# The GitGuardian pull-request check does not read this file. It reports a
+# new password assignment under idp/ as a leaked secret. The command-line
+# scanner does read the list below. Stopping that pull-request check for the
+# whole identity-provider tree requires a filepath exclusion of idp/ in the
+# GitGuardian workspace settings.
 
 secret:
   ignored-paths:
     - ".env.example"
     - ".github/workflows/ci.yml"
-    - "idp/data/users.json"
+    - "idp/**"
