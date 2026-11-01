@@ -1800,3 +1800,107 @@ Cookie: maq_auth=<token>
 >
 > Prefer the bulk endpoint for all new integrations.
 
+---
+
+## System broadcasts (super role)
+
+Manage global announcements displayed to active users across the platform. Stored in **`services.broadcasts`** and tracked per-user in **`services.user_broadcast_status`**. Requires **`super`** role on the caller's **`auth.accounts`** row.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/broadcasts` | `POST` | Create a new broadcast announcement. |
+| `/api/admin/broadcasts` | `GET` | List all broadcasts (supports `?limit=50&offset=0`). |
+| `/api/admin/broadcasts/:id` | `DELETE` | Delete a broadcast announcement. |
+
+### Create broadcast
+
+**Endpoint:** `POST /api/admin/broadcasts`
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `title` | string | 1–255 chars | Short headline of the announcement. |
+| `message` | string | 1–4000 chars | Announcement body text or markdown. |
+| `level` | string | `info`, `warning`, `critical` (default `info`) | Visual severity indicator. |
+| `targetRole` | string | `all`, `student`, `lecturer`, `administrator` (default `all`) | Target user audience. |
+| `expiresAt` | string | ISO-8601 date string (optional) | When the broadcast stops being visible. Null = never expires. |
+
+**Response:** `201 Created` with created broadcast object.
+
+---
+
+## User broadcasts (authenticated)
+
+Fetch active announcements directed to the currently authenticated user and acknowledge receipts.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/broadcasts/me` | `GET` | Fetch unread active broadcasts matching the user's role. |
+| `/api/broadcasts/:id/read` | `POST` | Mark a broadcast announcement as read/dismissed. |
+
+### Mark broadcast as read
+
+**Endpoint:** `POST /api/broadcasts/:id/read`
+
+**Response:** `200 OK`
+
+```json
+{ "success": true }
+```
+
+---
+
+## Maintenance mode (super role)
+
+Control global technical break / maintenance screen. Managed as a singleton row in **`services.maintenance_mode`** (`id = 1`). Requires **`super`** role.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/maintenance` | `GET` | Get current maintenance configuration. |
+| `/api/admin/maintenance` | `PUT` | Update maintenance status, message, and expected end timestamp. |
+
+### Update maintenance mode
+
+**Endpoint:** `PUT /api/admin/maintenance`
+
+**Request body (JSON):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `isEnabled` | boolean | `@IsDefined()`, `@IsBoolean()` | Whether maintenance mode is active. |
+| `message` | string | 0–1000 chars (optional) | Informational message displayed to users. |
+| `estimatedEndAt` | string | ISO-8601 date string (optional, nullable) | Anticipated end timestamp. |
+
+**Response:** `200 OK` with updated status.
+
+When maintenance mode is enabled (`isEnabled: true`):
+- All general API requests return **`HTTP 503 Service Unavailable`** with JSON `{ "statusCode": 503, "message": "...", "estimatedEndAt": "..." }`.
+- System probe endpoints (`/api/system/*`), authentication endpoints (`/api/auth/*`), documentation (`/api/docs`), and requests authenticated with **`super`** role are exempted to allow administration and verification.
+
+---
+
+## System status & maintenance probe (public)
+
+Public probe endpoints used by client applications to verify server status and check for technical breaks without requiring authentication.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/system/status` | `GET` | Public status probe returning operational status and maintenance info. |
+| `/api/system/maintenance` | `GET` | Public endpoint returning maintenance mode status. |
+
+**Response:** `200 OK`
+
+```json
+{
+  "status": "ok",
+  "maintenance": {
+    "isEnabled": false,
+    "message": null,
+    "estimatedEndAt": null
+  }
+}
+```
+
+
+
