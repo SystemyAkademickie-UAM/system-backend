@@ -132,7 +132,7 @@ describe('BackupService', () => {
       const pastTime = (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000;
       await fs.promises.utimes(oldPath, pastTime, pastTime);
 
-      const recentFilename = `${BACKUP_AUTO_FILE_PREFIX}recent${BACKUP_FILE_EXTENSION}`;
+      const recentFilename = `${BACKUP_AUTO_FILE_PREFIX}2026-11-01T00-00-00-000Z${BACKUP_FILE_EXTENSION}`;
       const recentPath = path.join(tempDir, recentFilename);
       await fs.promises.writeFile(recentPath, 'recent data');
 
@@ -156,6 +156,9 @@ describe('BackupService', () => {
     it('rejects filenames that do not match the expected pattern', async () => {
       await expect(service.getAutoBackupStream('malicious.sh')).rejects.toThrow(BadRequestException);
       await expect(service.getAutoBackupStream('backup-manual-123.enc')).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.getAutoBackupStream('backup-auto-invalid.enc')).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -190,6 +193,45 @@ describe('BackupService', () => {
       const status = await service.getBackupStatus();
       expect(status.lastAutoBackupAt).toBe(summary.createdAt);
       expect(status.autoBackupsCount).toBe(1);
+    });
+
+    it('cleans up temporary file and leaves no partial backup if backup stream fails', async () => {
+      const failingStream = new Readable({
+        read() {
+          this.destroy(new Error('Simulated dump failure'));
+        },
+      });
+      jest.spyOn(service, 'createBackupStream').mockResolvedValue(failingStream);
+
+      await expect(service.createAutoBackup()).rejects.toThrow('Simulated dump failure');
+
+      const files = await fs.promises.readdir(tempDir);
+      const encOrTmpFiles = files.filter((f) => f.endsWith('.enc') || f.endsWith('.tmp'));
+      expect(encOrTmpFiles.length).toBe(0);
+    });
+
+    it('throws ConflictException if an auto backup is already in progress', async () => {
+      let finishStream: () => void;
+      const delayedStream = new Readable({
+        read() {},
+      });
+      const streamPromise = new Promise<void>((resolve) => {
+        finishStream = resolve;
+      });
+
+      jest.spyOn(service, 'createBackupStream').mockImplementation(async () => {
+        // keep open until finishStream
+        setTimeout(() => {
+          delayedStream.push(null);
+          finishStream();
+        }, 100);
+        return delayedStream;
+      });
+
+      const firstCall = service.createAutoBackup();
+      await expect(service.createAutoBackup()).rejects.toThrow('Automated backup is already in progress');
+
+      await firstCall;
     });
   });
 });

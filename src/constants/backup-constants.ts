@@ -49,3 +49,7 @@ export const BACKUP_AUTO_FILE_PREFIX = 'backup-auto-';
 /** Metadata filename stored in the backup directory. */
 export const BACKUP_METADATA_FILENAME = 'backup-metadata.json';
 
+/** Regular expression matching automated backup filenames. */
+export const BACKUP_AUTO_FILENAME_REGEX =
+  /^backup-auto-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.enc$/;
+

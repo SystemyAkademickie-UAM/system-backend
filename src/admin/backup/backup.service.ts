@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -19,6 +20,7 @@ import {
   BACKUP_AES_ALGORITHM,
   BACKUP_AES_AUTH_TAG_LENGTH,
   BACKUP_AES_IV_LENGTH,
+  BACKUP_AUTO_FILENAME_REGEX,
   BACKUP_AUTO_FILE_PREFIX,
   BACKUP_DEFAULT_MANUAL_WARNING_DAYS,
   BACKUP_DEFAULT_RETENTION_DAYS,
@@ -43,6 +45,7 @@ import type {
 @Injectable()
 export class BackupService {
   private readonly logger = new Logger(BackupService.name);
+  private isAutoBackupInProgress = false;
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -58,16 +61,20 @@ export class BackupService {
       ['--format=custom', '--no-owner', '--no-privileges', `--dbname=${pgEnv.PGDATABASE}`],
       { env: { ...process.env, ...pgEnv }, stdio: ['ignore', 'pipe', 'pipe'] },
     );
-    child.on('error', (err: Error) => {
-      this.logger.error(`pg_dump spawn failed: ${err.message}`);
-    });
     let stderr = '';
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
     });
+    const passThrough = new PassThrough();
+    child.on('error', (err: Error) => {
+      this.logger.error(`pg_dump spawn failed: ${err.message}`);
+      passThrough.destroy(err);
+    });
     child.on('close', (code) => {
       if (code !== 0) {
-        this.logger.error(`pg_dump exited with code ${code}: ${stderr}`);
+        const errorMsg = stderr.trim() || `pg_dump exited with code ${code}`;
+        this.logger.error(`pg_dump failed: ${errorMsg}`);
+        passThrough.destroy(new Error(`Database dump failed: ${errorMsg}`));
       }
     });
     if (child.stdout === null) {
@@ -76,7 +83,6 @@ export class BackupService {
     const gzip = createGzip({ level: BACKUP_GZIP_LEVEL });
     const iv = randomBytes(BACKUP_AES_IV_LENGTH);
     const cipher = createCipheriv(BACKUP_AES_ALGORITHM, key, iv);
-    const passThrough = new PassThrough();
     passThrough.write(iv);
     pipeline(
       child.stdout,
@@ -121,32 +127,50 @@ export class BackupService {
    * Creates an automated backup directly on the host/container volume.
    */
   async createAutoBackup(): Promise<BackupFileSummary> {
-    const storageDir = this.resolveStorageDir();
-    await fsPromises.mkdir(storageDir, { recursive: true });
+    if (this.isAutoBackupInProgress) {
+      throw new ConflictException('Automated backup is already in progress');
+    }
+    this.isAutoBackupInProgress = true;
 
-    const now = new Date();
-    const timestamp = now.toISOString().replace(/[:.]/g, '-');
-    const filename = `${BACKUP_AUTO_FILE_PREFIX}${timestamp}${BACKUP_FILE_EXTENSION}`;
-    const filePath = path.join(storageDir, filename);
+    try {
+      const storageDir = this.resolveStorageDir();
+      await fsPromises.mkdir(storageDir, { recursive: true });
 
-    const stream = await this.createBackupStream();
-    const writeStream = createWriteStream(filePath);
-    await pipeline(stream, writeStream);
+      const now = new Date();
+      const timestamp = now.toISOString().replace(/[:.]/g, '-');
+      const filename = `${BACKUP_AUTO_FILE_PREFIX}${timestamp}${BACKUP_FILE_EXTENSION}`;
+      const filePath = path.join(storageDir, filename);
+      const tmpFilePath = `${filePath}.tmp`;
 
-    const stat = await fsPromises.stat(filePath);
-    const createdAtIso = now.toISOString();
+      try {
+        const stream = await this.createBackupStream();
+        const writeStream = createWriteStream(tmpFilePath);
+        await pipeline(stream, writeStream);
+        await fsPromises.rename(tmpFilePath, filePath);
+      } catch (err: unknown) {
+        if (existsSync(tmpFilePath)) {
+          await fsPromises.unlink(tmpFilePath).catch(() => {});
+        }
+        throw err;
+      }
 
-    await this.writeMetadata({
-      lastAutoBackupAt: createdAtIso,
-      lastAutoBackupFilename: filename,
-    });
+      const stat = await fsPromises.stat(filePath);
+      const createdAtIso = now.toISOString();
 
-    this.logger.log(`Created automated backup ${filename} (${stat.size} bytes)`);
-    return {
-      filename,
-      createdAt: createdAtIso,
-      sizeBytes: stat.size,
-    };
+      await this.writeMetadata({
+        lastAutoBackupAt: createdAtIso,
+        lastAutoBackupFilename: filename,
+      });
+
+      this.logger.log(`Created automated backup ${filename} (${stat.size} bytes)`);
+      return {
+        filename,
+        createdAt: createdAtIso,
+        sizeBytes: stat.size,
+      };
+    } finally {
+      this.isAutoBackupInProgress = false;
+    }
   }
 
   /**
@@ -166,7 +190,7 @@ export class BackupService {
 
     const files = await fsPromises.readdir(storageDir);
     for (const file of files) {
-      if (!file.startsWith(BACKUP_AUTO_FILE_PREFIX) || !file.endsWith(BACKUP_FILE_EXTENSION)) {
+      if (!BACKUP_AUTO_FILENAME_REGEX.test(file)) {
         continue;
       }
       const filePath = path.join(storageDir, file);
@@ -200,7 +224,7 @@ export class BackupService {
     if (existsSync(storageDir)) {
       const entries = await fsPromises.readdir(storageDir);
       for (const entry of entries) {
-        if (!entry.startsWith(BACKUP_AUTO_FILE_PREFIX) || !entry.endsWith(BACKUP_FILE_EXTENSION)) {
+        if (!BACKUP_AUTO_FILENAME_REGEX.test(entry)) {
           continue;
         }
         const filePath = path.join(storageDir, entry);
@@ -265,19 +289,16 @@ export class BackupService {
    * Streams a specific automated backup file from the server volume for download.
    */
   async getAutoBackupStream(filename: string): Promise<{ stream: Readable; sizeBytes: number }> {
-    if (
-      typeof filename !== 'string' ||
-      !filename.startsWith(BACKUP_AUTO_FILE_PREFIX) ||
-      !filename.endsWith(BACKUP_FILE_EXTENSION) ||
-      filename.includes('..') ||
-      filename.includes('/') ||
-      filename.includes('\\')
-    ) {
+    if (typeof filename !== 'string' || !BACKUP_AUTO_FILENAME_REGEX.test(filename)) {
       throw new BadRequestException('Invalid backup filename');
     }
 
     const storageDir = this.resolveStorageDir();
-    const filePath = path.join(storageDir, filename);
+    const filePath = path.resolve(storageDir, filename);
+
+    if (path.dirname(filePath) !== storageDir) {
+      throw new BadRequestException('Path traversal attempt detected');
+    }
 
     if (!existsSync(filePath)) {
       throw new NotFoundException(`Backup file ${filename} not found`);
@@ -370,7 +391,9 @@ export class BackupService {
       ...updates,
     };
     const metaPath = path.join(storageDir, BACKUP_METADATA_FILENAME);
-    await fsPromises.writeFile(metaPath, JSON.stringify(updated, null, 2), 'utf8');
+    const tempPath = `${metaPath}.${randomBytes(4).toString('hex')}.tmp`;
+    await fsPromises.writeFile(tempPath, JSON.stringify(updated, null, 2), 'utf8');
+    await fsPromises.rename(tempPath, metaPath);
   }
 
   private async runPgRestoreStream(
