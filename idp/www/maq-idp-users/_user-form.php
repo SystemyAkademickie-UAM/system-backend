@@ -25,6 +25,12 @@ if (($error ?? null) !== null) {
   <label for="displayName">Display name</label>
   <input id="displayName" name="displayName" value="<?= maq_idp_h($values['displayName']) ?>">
 
+  <label for="givenName">Given name</label>
+  <input id="givenName" name="givenName" value="<?= maq_idp_h($values['givenName']) ?>" required>
+
+  <label for="sn">Surname</label>
+  <input id="sn" name="sn" value="<?= maq_idp_h($values['sn']) ?>" required>
+
   <label for="mail">Email</label>
   <input id="mail" name="mail" type="email" value="<?= maq_idp_h($values['mail']) ?>" placeholder="user@localhost.invalid">
 

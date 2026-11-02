@@ -35,7 +35,8 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/login/organizations?loginMethod=saml|email` — institution picker from `auth.organizations` (one row per tenant)
 - `POST /api/login/magic-link/request` — body `{ "email" }`; organization resolved from provisioned account (SMTP required; 404 if not registered)
 - `POST /api/login/magic-link/verify` — consume magic link token → `{ "session": "<plaintext>" }` + `maq_session` cookie
-- `GET /api/login/me` — session check from `maq_session` cookie (returns user profile and active role)
+- `GET /api/login/me` — session check from `maq_session` cookie (profile, organization, role, `selectionRequired`, `memberships`)
+- `POST /api/login/context` — body `{ "organizationId", "role" }`; confirms the pair, stores it as the last choice, returns the same shape as `GET /api/login/me`
 - `GET /api/login/registration-status` — registration progress during `/login` wizard (includes `profileSubmitted`)
 - `POST /api/login/profile` — save nickname + avatar during `/login` wizard (sets `profileSubmitted`)
 - `POST /api/login/accept-eula` — accept EULA and complete registration
@@ -78,6 +79,13 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/admin/logs` — super only: list calendar dates that have production logs
 - `POST /api/admin/logs/export` — super only: one day of logs as ECDH+AES-GCM ciphertext (not plaintext)
 - `POST /api/client-logs` — authenticated browser error/warn line into the same daily file
+- `GET /api/admin/organizations` — super only: `id`, `name`, `isActive`, `domain`
+- `POST /api/admin/organizations` — super only: create requires `name`, `loginMethod` (`saml` or `email`), `domain`, `representative` (`fullName`, `email`, optional `phone`), `address` (`town`, `street`), and for `saml` either `metadataUrl` or `entityId` + `ssoLoginUrl` + `certificatePem`. Those fields are written to `auth.organizations`
+- `POST /api/admin/organizations/bulk` — super only: body `{ "ids": [11, 12] }` (1–50). Each item is the full stored organization, not a name/domain sample
+- `GET /api/admin/organizations/administrators` — super only: every administrator of an active organization (`accountId`, `userId`, `organizationId`, `organizationName`, `email`, `nickname`, `name`, `surname`)
+- `GET /api/admin/organizations/:organizationId/administrators` — super only: administrators of one organization
+- `POST /api/admin/organizations/:organizationId/administrators` — super only: body `{ "email" }`; grants `administrator` when that user has already signed in
+- `DELETE /api/admin/organizations/:organizationId/administrators/:accountId` — super only: revoke that administrator account
 - `GET /api/admin/organizations/:organizationId/accounts` — list accounts in an organization (super or org administrator)
 - `DELETE /api/admin/organizations/:organizationId/accounts/:accountId` — org administrator or super: remove organization account (see [docs/api.md](./docs/api.md))
 - `POST /api/admin/broadcasts`, `GET /api/admin/broadcasts`, `DELETE /api/admin/broadcasts/:id` — super only: manage platform-wide announcements

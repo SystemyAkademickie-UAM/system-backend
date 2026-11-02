@@ -144,10 +144,22 @@ export class SamlConfigService {
   }
 
   private readPemFile(filePath: string): string {
-    const absolutePath = path.isAbsolute(filePath)
-      ? filePath
-      : path.resolve(process.cwd(), filePath);
-    return this.normalizePem(fs.readFileSync(absolutePath, 'utf-8'));
+    return this.normalizePem(fs.readFileSync(this.resolvePemPath(filePath), 'utf-8'));
+  }
+
+  /**
+   * Host `npm run start:dev` uses cwd `system-backend/` while PEM files live in the
+   * workspace `secrets/` directory. Docker mounts that directory at `/app/secrets`.
+   */
+  private resolvePemPath(filePath: string): string {
+    if (path.isAbsolute(filePath)) {
+      return filePath;
+    }
+    const fromCwd = path.resolve(process.cwd(), filePath);
+    if (fs.existsSync(fromCwd)) {
+      return fromCwd;
+    }
+    return path.resolve(process.cwd(), '..', filePath);
   }
 
   private normalizePem(pem: string): string {

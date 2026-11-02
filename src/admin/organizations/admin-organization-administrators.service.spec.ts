@@ -16,7 +16,7 @@ describe('AdminOrganizationAdministratorsService', () => {
   let adminAccessService: { assertSuperAdmin: jest.Mock };
   let accountRemovalService: { removeOrganizationAccountRecord: jest.Mock };
   let organizationRepository: { findOne: jest.Mock };
-  let accountRepository: { findOne: jest.Mock };
+  let accountRepository: { findOne: jest.Mock; createQueryBuilder?: jest.Mock };
 
   const req = {} as Request;
 
@@ -66,5 +66,92 @@ describe('AdminOrganizationAdministratorsService', () => {
     accountRepository.findOne.mockResolvedValue(null);
 
     await expect(service.revokeAdministrator(req, 1, 99)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('lists administrators of one organization', async () => {
+    const queryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([
+        {
+          accountId: 8,
+          userId: 4,
+          organizationId: 2,
+          organizationName: 'Localhost IdP',
+          email: 'administrator@localhost.invalid',
+          nickname: 'administrator',
+          name: 'University',
+          surname: 'Administrator',
+        },
+      ]),
+    };
+    accountRepository.createQueryBuilder = jest.fn(() => queryBuilder);
+
+    const actual = await service.listAdministrators(req, 2);
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'account.organization_id = :organizationId',
+      { organizationId: 2 },
+    );
+    expect(actual).toEqual([
+      {
+        accountId: 8,
+        userId: 4,
+        email: 'administrator@localhost.invalid',
+        nickname: 'administrator',
+        name: 'University',
+        surname: 'Administrator',
+      },
+    ]);
+  });
+
+  it('lists administrators across active organizations', async () => {
+    const queryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([
+        {
+          accountId: 8,
+          userId: 4,
+          organizationId: 2,
+          organizationName: 'Localhost IdP',
+          email: 'administrator@localhost.invalid',
+          nickname: 'administrator',
+          name: 'University',
+          surname: 'Administrator',
+        },
+      ]),
+    };
+    accountRepository.createQueryBuilder = jest.fn(() => queryBuilder);
+
+    const actual = await service.listAllAdministrators(req);
+
+    expect(adminAccessService.assertSuperAdmin).toHaveBeenCalledWith(req, undefined);
+    expect(queryBuilder.andWhere).not.toHaveBeenCalledWith(
+      'account.organization_id = :organizationId',
+      expect.anything(),
+    );
+    expect(actual).toEqual([
+      {
+        accountId: 8,
+        userId: 4,
+        organizationId: 2,
+        organizationName: 'Localhost IdP',
+        email: 'administrator@localhost.invalid',
+        nickname: 'administrator',
+        name: 'University',
+        surname: 'Administrator',
+      },
+    ]);
   });
 });

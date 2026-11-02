@@ -34,6 +34,7 @@ import {
 } from '../../constants/throttler-constants';
 import { LoginApiService } from './login-api.service';
 import { SelectActiveRoleDto } from './dto/select-active-role.dto';
+import { SelectLoginContextDto } from './dto/select-login-context.dto';
 import { UpdateLoginProfileDto } from './dto/update-login-profile.dto';
 import { RequestMagicLinkDto } from '../magic-link/dto/request-magic-link.dto';
 import { VerifyMagicLinkDto } from '../magic-link/dto/verify-magic-link.dto';
@@ -98,6 +99,21 @@ export class LoginController {
     @Req() req: Request,
     @Body() body: SelectActiveRoleDto) {
     return this.loginApiService.setActiveRole(req, body.role);
+  }
+
+  @Post('context')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: ACTIVE_ROLE_THROTTLE_LIMIT, ttl: seconds(AUTH_THROTTLE_TTL_SECONDS) } })
+  @ApiOperation({ summary: 'Confirm the organization and role for this session' })
+  @ApiCookieAuth(MAQ_SESSION_COOKIE_NAME)
+  @ApiOkResponse({ description: 'Updated session view with the confirmed organization and role' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid session' })
+  @ApiBadRequestResponse({ description: 'User does not hold that role in the organization' })
+  async selectLoginContext(
+    @Req() req: Request,
+    @Body() body: SelectLoginContextDto) {
+    return this.loginApiService.selectLoginContext(req, body.organizationId, body.role);
   }
 
   @Get('registration-status')

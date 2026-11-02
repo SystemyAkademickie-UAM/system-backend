@@ -62,14 +62,16 @@ Manage institutional SAML configuration stored in **`auth.organizations`** and *
 
 | Endpoint | Method | Description |
 | -------- | ------ | ----------- |
-| `/api/admin/organizations` | `POST` | Create organization. Set `metadataUrl` to fetch IdP entity ID, SSO URLs, and signing cert from federation metadata; or pass `certificatePem` when metadata is unavailable. |
-| `/api/admin/organizations` | `GET` | List organizations with cert summary. |
-| `/api/admin/organizations/:id` | `GET` | Organization detail. |
+| `/api/admin/organizations` | `POST` | Create organization. Required: `name`, `loginMethod` (`saml` or `email`), `domain`, `representative` (`fullName`, `email`), `address` (`town`, `street`). `saml` also requires `metadataUrl`, or `entityId` + `ssoLoginUrl` + `certificatePem`. Domain may be a hostname, `localhost`, `127.0.0.1`, or `192.168.0.0`–`192.168.0.255`. |
+| `/api/admin/organizations` | `GET` | List organizations. Each row is `id`, `name`, `isActive`, `domain`. |
+| `/api/admin/organizations/bulk` | `POST` | Body `{ "ids": [11, 12] }`, 1–50 ids. Returns `{ "organizations": [...] }` where each item is the full stored record (login method, domain, representative, address, SAML fields, certificate summary, timestamps). |
+| `/api/admin/organizations/:id` | `GET` | Full organization record, including domain, representative, and address. |
 | `/api/admin/organizations/:id` | `PATCH` | Update name, contact, SSO URLs, `isActive`. |
 | `/api/admin/organizations/:id` | `DELETE` | Soft-delete (`is_active = false`). |
 | `/api/admin/organizations/:id/sync-from-metadata` | `POST` | Re-fetch IdP metadata from stored `metadata_url` and rotate signing certificate. |
 | `/api/admin/organizations/:id/certificates` | `POST` | Rotate IdP signing certificate (PEM body). |
 | `/api/admin/organizations/:id/certificates/:certId` | `DELETE` | Revoke certificate. |
+| `/api/admin/organizations/administrators` | `GET` | Administrators of every active organization. Each item adds `organizationId` and `organizationName`. |
 | `/api/admin/organizations/:organizationId/administrators` | `GET` | List organization administrators (`administrator` role). |
 | `/api/admin/organizations/:organizationId/administrators` | `POST` | Grant `administrator` role by user email (user must exist after SAML login). Body: `{ "email": "..." }`. |
 | `/api/admin/organizations/:organizationId/administrators/:accountId` | `DELETE` | Revoke organization administrator role. |
@@ -183,7 +185,7 @@ Configure **`API_TOKEN_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=
 
 **Session lifetime:** `maq_auth` and `saml_session` are **session cookies** (no `Max-Age`) — dropped on browser close. Server-side `expired_at` is the source of truth: a sliding idle window is refreshed on each authenticated request, never past the absolute cap measured from `created_at`. After idle expiry or the cap, the token is rejected and the user must re-authenticate.
 
-**Rate limiting:** `POST /api/login`, `POST /api/login/active-role`, and `GET /api/auth/saml/login` are throttled per client IP (`@nestjs/throttler`); exceeding the limit returns `429 Too Many Requests`.
+**Rate limiting:** `POST /api/login`, `POST /api/login/active-role`, `POST /api/login/context`, and `GET /api/auth/saml/login` are throttled per client IP (`@nestjs/throttler`); exceeding the limit returns `429 Too Many Requests`.
 
 ---
 
@@ -222,8 +224,11 @@ The `user` object exposes role information:
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `role` | string | **Active** role: the selected role from the `maq_active_role` cookie when valid, otherwise the highest-privilege role the user holds. |
+| `role` | string | **Active** role in the session organization. Omitted while `selectionRequired` is true and no role has been confirmed. |
 | `availableRoles` | string[] | All distinct roles the user holds, ordered highest → lowest privilege (`super`, `administrator`, `lecturer`, `student`). |
+| `organizationId` | number \| null | Organization bound to this session. |
+| `selectionRequired` | boolean | True when the user belongs to more than one organization/role pair and has not confirmed one for this session. |
+| `memberships` | object[] | Active organizations: `{ organizationId, name, roles }`. Inactive organizations are omitted. |
 
 When not authenticated, returns `{ "authenticated": false }` (still `200`).
 
@@ -231,9 +236,26 @@ Uses **strong** auth (`maq_auth` + matching `X-Browser-ID`) when the header is p
 
 ---
 
+## Organization and role selection
+
+After login, a remembered organization and role are applied when that account still exists. A user with only one organization and one role is signed in as that pair and the pair is remembered. Otherwise `user.selectionRequired` is true until the user confirms a choice. The confirmation is stored on the user, so the next login skips the question.
+
+**Endpoint:** `POST /api/login/context`
+
+**Body:**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `organizationId` | number | Active organization the user belongs to. |
+| `role` | string | Role held in that organization (`super`, `administrator`, `lecturer`, `student`). |
+
+**Response:** `200 OK` — same shape as `GET /api/login/me`, with `selectionRequired` false. `400` when the user does not hold that role in the organization. `401` when the session is missing.
+
+---
+
 ## Active role selection
 
-Lets a user with more than one role choose which role is active for the UI. The choice is persisted in the HTTP-only **`maq_active_role`** cookie and reflected by `GET /api/login/me` (`user.role`). Cleared on logout.
+Lets a user with more than one role choose which role is active for the UI. The choice is stored on the session row and reflected by `GET /api/login/me` (`user.role`). Prefer `POST /api/login/context` when the user can also belong to more than one organization. Cleared on logout.
 
 **Endpoint:** `POST /api/login/active-role`
 
@@ -245,7 +267,7 @@ Lets a user with more than one role choose which role is active for the UI. The 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `role` | string | Role to activate. Must be one of the user's `availableRoles`. |
+| `role` | string | Role to activate. Must be held in the session organization. |
 
 **Response:** `200 OK` — same shape as `GET /api/login/me`, with `user.role` set to the selected role.
 
@@ -253,7 +275,7 @@ Lets a user with more than one role choose which role is active for the UI. The 
 
 | Status | When |
 | ------ | ---- |
-| `400 Bad Request` | The requested role is not assigned to the user. |
+| `400 Bad Request` | The requested role is not held in the session organization. |
 | `401 Unauthorized` | No valid session. |
 
 ---

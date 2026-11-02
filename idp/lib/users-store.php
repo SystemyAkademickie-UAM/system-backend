@@ -51,6 +51,8 @@ final class MaqIdpUsersStore
             'eduPersonAffiliation' => self::stringList($user['eduPersonAffiliation'] ?? []),
             'eduPersonPrincipalName' => [(string) ($user['eduPersonPrincipalName'] ?? '')],
             'mail' => [(string) ($user['mail'] ?? '')],
+            'givenName' => [(string) ($user['givenName'] ?? '')],
+            'sn' => [(string) ($user['sn'] ?? '')],
             'displayName' => [(string) ($user['displayName'] ?? '')],
         ];
     }
@@ -162,18 +164,27 @@ final class MaqIdpUsersStore
         $username = trim((string) ($input['username'] ?? ''));
         $password = (string) ($input['password'] ?? '');
         $displayName = trim((string) ($input['displayName'] ?? ''));
+        $givenName = trim((string) ($input['givenName'] ?? ''));
+        $surname = trim((string) ($input['sn'] ?? ''));
         $mail = trim((string) ($input['mail'] ?? ''));
         $role = trim((string) ($input['role'] ?? 'student'));
         if (!in_array($role, self::ALLOWED_ROLES, true)) {
             throw new InvalidArgumentException('Invalid role.');
-        }        if ($username === '') {
+        }
+        if ($username === '') {
             throw new InvalidArgumentException('Username is required.');
         }
         if ($password === '') {
             throw new InvalidArgumentException('Password is required.');
         }
+        if ($givenName === '') {
+            throw new InvalidArgumentException('Given name is required.');
+        }
+        if ($surname === '') {
+            throw new InvalidArgumentException('Surname is required.');
+        }
         if ($displayName === '') {
-            $displayName = $username;
+            $displayName = trim($givenName . ' ' . $surname);
         }
         if ($mail === '') {
             $mail = $username . '@localhost.invalid';
@@ -186,6 +197,8 @@ final class MaqIdpUsersStore
             'eduPersonAffiliation' => $affiliation,
             'eduPersonPrincipalName' => $mail,
             'mail' => $mail,
+            'givenName' => $givenName,
+            'sn' => $surname,
             'displayName' => $displayName,
         ];
     }

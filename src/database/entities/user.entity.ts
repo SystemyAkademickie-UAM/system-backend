@@ -2,6 +2,7 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 import { AUTH_SCHEMA } from '../../constants/database-schema-constants';
 import {
+  AUTH_ACCOUNT_ROLE_MAX_LENGTH,
   AUTH_USER_EMAIL_MAX_LENGTH,
   AUTH_USER_LANGUAGE_MAX_LENGTH,
   AUTH_USER_NAME_FIELD_MAX_LENGTH,
@@ -52,4 +53,17 @@ export class UserEntity {
   /** Set when nickname/avatar are saved during the registration wizard (before EULA). */
   @Column({ name: 'profile_submitted_at', type: 'timestamp', nullable: true, default: null })
   profileSubmittedAt: Date | null;
+
+  /** Last organization the user confirmed. Used to skip the picker on the next login. */
+  @Column({ name: 'last_organization_id', type: 'integer', nullable: true })
+  lastOrganizationId: number | null;
+
+  /** Last role the user confirmed inside `lastOrganizationId`. */
+  @Column({
+    name: 'last_role',
+    type: 'varchar',
+    length: AUTH_ACCOUNT_ROLE_MAX_LENGTH,
+    nullable: true,
+  })
+  lastRole: string | null;
 }

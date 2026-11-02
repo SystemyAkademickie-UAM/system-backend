@@ -24,6 +24,8 @@ $values = [
     'username' => (string) ($user['username'] ?? ''),
     'password' => (string) ($user['password'] ?? ''),
     'displayName' => (string) ($user['displayName'] ?? ''),
+    'givenName' => (string) ($user['givenName'] ?? ''),
+    'sn' => (string) ($user['sn'] ?? ''),
     'mail' => (string) ($user['mail'] ?? ''),
     'role' => MaqIdpUsersStore::roleFromAffiliation($user['eduPersonAffiliation'] ?? []),
 ];
@@ -33,6 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'username' => trim((string) ($_POST['username'] ?? '')),
         'password' => (string) ($_POST['password'] ?? ''),
         'displayName' => trim((string) ($_POST['displayName'] ?? '')),
+        'givenName' => trim((string) ($_POST['givenName'] ?? '')),
+        'sn' => trim((string) ($_POST['sn'] ?? '')),
         'mail' => trim((string) ($_POST['mail'] ?? '')),
         'role' => trim((string) ($_POST['role'] ?? 'student')),
     ];
