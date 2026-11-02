@@ -6,6 +6,7 @@ import { SessionModule } from '../../auth/session/session.module';
 import { UserRolesModule } from '../../user-roles/user-roles-module';
 import { AdminAccessService } from '../admin-access.service';
 import { BackupController } from './backup.controller';
+import { BackupSchedulerService } from './backup-scheduler.service';
 import { BackupService } from './backup.service';
 
 @Module({
@@ -18,6 +19,6 @@ import { BackupService } from './backup.service';
     }),
   ],
   controllers: [BackupController],
-  providers: [AdminAccessService, BackupService],
+  providers: [AdminAccessService, BackupService, BackupSchedulerService],
 })
 export class BackupModule {}
