@@ -1924,5 +1924,57 @@ Public probe endpoints used by client applications to verify server status and c
 }
 ```
 
+---
+
+## System documents management (super role)
+
+Inspect, upload/replace, and delete platform PDF documents (`termsOfUse`, `privacyPolicy`, `documentation`). Metadata is stored in **`services.system_documents`** and PDF files are stored under `DOCUMENTS_STORAGE_DIR` (defaults to `<DRIVE_STORAGE_ROOT>/documents`). Requires **`super`** role.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/documents` | `GET` | List all application documents with upload status and timestamps. |
+| `/api/admin/documents/:key` | `GET` | Get metadata and upload timestamp of a specific document (`termsOfUse`, `privacyPolicy`, `documentation`). |
+| `/api/admin/documents/:key/file` | `GET` | Inspect/download the PDF binary of a specific document (`?download=1` for attachment). |
+| `/api/admin/documents/:key` | `PUT` / `POST` | Upload or replace the PDF file for a specific document (`multipart/form-data`). |
+| `/api/admin/documents/:key` | `DELETE` | Delete the uploaded PDF file for a specific document. |
+
+### Upload or replace document PDF
+
+**Endpoint:** `PUT /api/admin/documents/:key` (or `POST /api/admin/documents/:key`, `multipart/form-data`)
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `file` | binary (`.pdf`) | Required, max `DOCUMENTS_MAX_FILE_BYTES` (default 20 MiB), valid `%PDF-` header | Replacement PDF file. |
+| `title` | string | 1–200 chars (optional) | Optional custom display title. |
+
+**Response:** `200 OK`
+
+```json
+{
+  "key": "termsOfUse",
+  "title": "Terms of Use",
+  "canonicalFilename": "warunki-uzytkowania.pdf",
+  "isUploaded": true,
+  "originalFilename": "warunki-uzytkowania.pdf",
+  "fileSizeBytes": 142509,
+  "uploadedAt": "2026-11-03T12:00:00.000Z",
+  "uploadedByUserId": 1,
+  "fileUrl": "/api/documents/termsOfUse/file"
+}
+```
+
+---
+
+## System documents (public / user access)
+
+Public endpoints allowing users to check and open application legal/informational PDF documents.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/documents` | `GET` | List all application documents and their upload status. |
+| `/api/documents/:key` | `GET` | Get metadata of a specific document (`termsOfUse`, `privacyPolicy`, `documentation`). |
+| `/api/documents/:key/file` | `GET` | Serve the PDF binary of a specific document (`?download=1` for attachment). |
+
+
 
 

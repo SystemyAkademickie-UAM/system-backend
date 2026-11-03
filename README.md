@@ -90,6 +90,8 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `DELETE /api/admin/organizations/:organizationId/accounts/:accountId` — org administrator or super: remove organization account (see [docs/api.md](./docs/api.md))
 - `POST /api/admin/broadcasts`, `GET /api/admin/broadcasts`, `DELETE /api/admin/broadcasts/:id` — super only: manage platform-wide announcements
 - `GET /api/admin/maintenance`, `PUT /api/admin/maintenance` — super only: manage global technical break / maintenance mode
+- `GET /api/admin/documents`, `GET /api/admin/documents/:key`, `GET /api/admin/documents/:key/file`, `PUT /api/admin/documents/:key`, `POST /api/admin/documents/:key`, `DELETE /api/admin/documents/:key` — super only: inspect, upload/replace, and delete application PDF documents (`termsOfUse`, `privacyPolicy`, `documentation`)
+- `GET /api/documents`, `GET /api/documents/:key`, `GET /api/documents/:key/file` — public/user access to application PDF documents
 - `GET /api/broadcasts/me`, `POST /api/broadcasts/:id/read` — authenticated: retrieve active announcements and acknowledge receipts
 - `GET /api/system/status`, `GET /api/system/maintenance` — public probe: operational status and maintenance mode check
 - Local IdP: [docs/saml-local-idp.md](./docs/saml-local-idp.md) (`npm run provision:dev-university` or `npm run idp:up`, 7 test users)
