@@ -26,6 +26,7 @@ import { BacklogModule } from './backlog/backlog-module';
 import { BannersModule } from './banners/banners-module';
 import { BroadcastsModule } from './broadcasts/broadcasts-module';
 import { MaintenanceModeModule } from './maintenance/maintenance-mode.module';
+import { PatchNotesModule } from './patch-notes/patch-notes-module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { MaintenanceModeModule } from './maintenance/maintenance-mode.module';
     BannersModule,
     BroadcastsModule,
     MaintenanceModeModule,
+    PatchNotesModule,
   ],
 })
 export class AppModule {}

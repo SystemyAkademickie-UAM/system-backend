@@ -16,6 +16,7 @@ import { ShopListingBadgePromotionEntity } from './entities/shop-listing-badge-p
 import { ShopListingRankPromotionEntity } from './entities/shop-listing-rank-promotion.entity';
 import { BroadcastEntity } from './entities/broadcast.entity';
 import { MaintenanceModeEntity } from './entities/maintenance-mode.entity';
+import { PatchNoteEntity } from './entities/patch-note.entity';
 import { UserBroadcastStatusEntity } from './entities/user-broadcast-status.entity';
 import { resolvePostgresSslOption } from './postgres-ssl.config';
 import { assertDatabaseEnv } from '../validate-env';
@@ -58,6 +59,7 @@ export default new DataSource({
     BroadcastEntity,
     UserBroadcastStatusEntity,
     MaintenanceModeEntity,
+    PatchNoteEntity,
   ],
   migrations: [join(__dirname, 'migrations', isTypeScriptContext ? '*.ts' : '*.js')],
   synchronize: false,
