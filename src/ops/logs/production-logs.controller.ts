@@ -14,7 +14,7 @@ import { ProductionLogsService } from './production-logs.service';
 
 @ApiTags('Admin production logs')
 @ApiCookieAuth(MAQ_SESSION_COOKIE_NAME)
-@Controller('admin/logs')
+@Controller(['admin/logs', 'logs', 'admin/system-logs'])
 export class ProductionLogsController {
   constructor(private readonly productionLogsService: ProductionLogsService) {}
 

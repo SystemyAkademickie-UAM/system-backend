@@ -35,7 +35,7 @@ import type {
  */
 @ApiTags('Admin broadcasts')
 @ApiCookieAuth(MAQ_SESSION_COOKIE_NAME)
-@Controller('admin/broadcasts')
+@Controller(['admin/broadcasts', 'admin/boardcasts'])
 export class AdminBroadcastsController {
   constructor(
     private readonly broadcastsService: BroadcastsService,
