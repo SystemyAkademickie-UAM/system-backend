@@ -36,6 +36,8 @@ export type ActivityResponseBody = {
     educationalDescription: string;
     storyDescription: string;
     isVisible: boolean;
+    completedAt?: string | null;
+    isCompleted?: boolean;
   }>;
 };
 
@@ -294,16 +296,40 @@ export class ActivitiesService {
       }
 
       const countsMap = new Map<number, number>();
+      const userCompletionsMap = new Map<number, string>();
+
       if (activities.length > 0) {
+        const activityIds = activities.map((a) => a.id);
+
         const counts = await this.activityBacklogRepository
           .createQueryBuilder('ab')
           .select('ab.activity_id', 'activityId')
           .addSelect('COUNT(DISTINCT ab.account_id)', 'count')
-          .where('ab.activity_id IN (:...ids)', { ids: activities.map(a => a.id) })
+          .where('ab.activity_id IN (:...ids)', { ids: activityIds })
           .groupBy('ab.activity_id')
           .getRawMany();
         for (const row of counts) {
           countsMap.set(Number(row.activityId), Number(row.count));
+        }
+
+        const userCompletions = await this.activityBacklogRepository
+          .createQueryBuilder('ab')
+          .innerJoin('auth.accounts', 'acc', 'acc.id = ab.account_id')
+          .select('ab.activity_id', 'activityId')
+          .addSelect('ab.date', 'completedAt')
+          .where('ab.activity_id IN (:...ids)', { ids: activityIds })
+          .andWhere('acc.user_id = :userId', { userId: subject.userId })
+          .orderBy('ab.date', 'DESC')
+          .getRawMany();
+
+        for (const row of userCompletions) {
+          const actId = Number(row.activityId);
+          if (!userCompletionsMap.has(actId)) {
+            userCompletionsMap.set(
+              actId,
+              row.completedAt ? new Date(row.completedAt).toISOString() : new Date().toISOString(),
+            );
+          }
         }
       }
 
@@ -311,16 +337,21 @@ export class ActivitiesService {
         statusCode: ACTIVITY_API_JSON_STATUS_OK,
         method: 'retrieve',
         activity: activities.length,
-        activities: activities.map((a) => ({
-          id: a.id,
-          stageId: a.stageId,
-          name: a.name,
-          currency: a.currency,
-          completionCount: countsMap.get(a.id) ?? 0,
-          educationalDescription: a.educationalDescription,
-          storyDescription: a.storyDescription,
-          isVisible: a.isVisible ?? true,
-        })),
+        activities: activities.map((a) => {
+          const completedAt = userCompletionsMap.get(a.id) ?? null;
+          return {
+            id: a.id,
+            stageId: a.stageId,
+            name: a.name,
+            currency: a.currency,
+            completionCount: countsMap.get(a.id) ?? 0,
+            educationalDescription: a.educationalDescription,
+            storyDescription: a.storyDescription,
+            isVisible: a.isVisible ?? true,
+            completedAt,
+            isCompleted: completedAt !== null,
+          };
+        }),
       };
     } catch (err) {
       this.logger.error(`Activity retrieval failed: ${err instanceof Error ? err.message : String(err)}`);
