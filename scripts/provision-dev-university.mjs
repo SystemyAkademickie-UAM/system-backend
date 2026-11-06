@@ -28,6 +28,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import './lib/load-env.mjs';
 import { createPgClient } from './lib/pg-client.mjs';
+import {
+  ADMINISTRATOR_ROLE_NAME,
+  LECTURER_ROLE_NAME,
+  SUPER_ROLE_NAME,
+} from '../src/constants/role-name-constants.ts';
+import { PRIVATE_ORGANIZATION_ID } from '../src/constants/organization-constants.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_ROOT = path.join(__dirname, '..');
@@ -77,6 +83,9 @@ const DEV_UNIVERSITY_USERS = [
   devUser('lecturer2', 'Lecturer', 'Two', 'Lecturer Two', ['faculty', 'member']),
   devUser('lecturer3', 'Lecturer', 'Three', 'Lecturer Three', ['faculty', 'member']),
   devUser('administrator', 'University', 'Administrator', 'University Administrator', ['staff', 'member']),
+  devUser('multirole', 'Multirole', 'User', 'Multirole User', ['faculty', 'staff', 'member']),
+  devUser('multirole1', 'Multirole', 'One', 'Multirole One', ['faculty', 'staff', 'member']),
+  devUser('multirole2', 'Multirole', 'Two', 'Multirole Two', ['faculty', 'staff', 'member']),
   devUser('name-single', 'Jan', 'Kowalski', 'Kowalski Jan', ['student', 'member']),
   devUser('name-two-two', 'Jan Krzysztof', 'Pawłak Kowalski', 'Pawłak Kowalski Jan Krzysztof', ['student', 'member']),
   devUser('name-hyphen', 'Jan Krzysztof', 'Pawłak-Kowalski', 'Pawłak-Kowalski Jan Krzysztof', ['student', 'member']),
@@ -167,6 +176,44 @@ function runBackendCliScript(scriptFileName, extraArgs = []) {
   }
 }
 
+function runDatabaseMigrations() {
+  const typeormCli = path.join(BACKEND_ROOT, 'node_modules', 'typeorm', 'cli.js');
+  const dataSource = path.join(BACKEND_ROOT, 'src', 'database', 'data-source.ts');
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--require',
+      'ts-node/register',
+      '--require',
+      'tsconfig-paths/register',
+      typeormCli,
+      'migration:run',
+      '-d',
+      dataSource,
+    ],
+    {
+      cwd: BACKEND_ROOT,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+      shell: false,
+      env: process.env,
+    },
+  );
+  if (result.status !== 0) {
+    if (result.stdout) console.log(result.stdout);
+    if (result.stderr) console.error(result.stderr);
+    throw new Error(`Migracje bazy danych zakonczyly sie kodem ${result.status ?? 1}`);
+  }
+  const stdout = result.stdout || '';
+  if (stdout.includes('No migrations are pending')) {
+    console.log('Baza danych jest aktualna (brak nowych migracji).');
+  } else {
+    const match = stdout.match(/(\d+)\s+migrations are new migrations must be executed/);
+    const count = match ? match[1] : 'wszystkie';
+    console.log(`Zastosowano migracje bazy danych (${count}). Schemat zaktualizowany.`);
+  }
+}
+
 function writeIdpUsersFile() {
   const payload = {
     users: DEV_UNIVERSITY_USERS.map((user) => ({
@@ -206,6 +253,83 @@ async function resolveOrganizationId(client, organizationName) {
   throw new Error(`Organization "${organizationName}" not found after register:org`);
 }
 
+const MULTIROLE_SPECS = [
+  { username: 'multirole', givenName: 'Multirole', surname: 'User' },
+  { username: 'multirole1', givenName: 'Multirole', surname: 'One' },
+  { username: 'multirole2', givenName: 'Multirole', surname: 'Two' },
+];
+
+async function ensureMultiroleAccounts(client, organizationId) {
+  const roles = [SUPER_ROLE_NAME, ADMINISTRATOR_ROLE_NAME, LECTURER_ROLE_NAME];
+  const internalOrg = await client.query(
+    `SELECT id FROM auth.organizations WHERE id = $1 LIMIT 1`,
+    [PRIVATE_ORGANIZATION_ID],
+  );
+
+  for (const spec of MULTIROLE_SPECS) {
+    const email = `${spec.username}@localhost.invalid`;
+
+    let userResult = await client.query(
+      `SELECT id FROM auth.users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+      [email],
+    );
+    let userId;
+    if (userResult.rowCount === 0) {
+      const insertUser = await client.query(
+        `INSERT INTO auth.users (
+           email, student_id, name, surname, nickname, language, avatar_id,
+           registration_completed, eula_accepted_at, profile_submitted_at
+         )
+         VALUES ($1, 0, $2, $3, $4, 'PL', 1, false, NULL, NULL)
+         RETURNING id`,
+        [email, spec.givenName, spec.surname, spec.username],
+      );
+      userId = insertUser.rows[0].id;
+      console.log(`Created multirole user "${spec.username}" in auth.users (id=${userId}, registration wizard enabled)`);
+    } else {
+      userId = userResult.rows[0].id;
+      // Reset registration flags so that login enters the registration wizard (same as student1)
+      await client.query(
+        `UPDATE auth.users
+         SET registration_completed = false,
+             eula_accepted_at = NULL,
+             profile_submitted_at = NULL
+         WHERE id = $1`,
+        [userId],
+      );
+      console.log(`Reset registration flags for "${spec.username}" (id=${userId}, registration wizard enabled)`);
+    }
+
+    for (const role of roles) {
+      const existing = await client.query(
+        `SELECT id FROM auth.accounts WHERE user_id = $1 AND organization_id = $2 AND role = $3 LIMIT 1`,
+        [userId, organizationId, role],
+      );
+      if (existing.rowCount === 0) {
+        await client.query(
+          `INSERT INTO auth.accounts (user_id, organization_id, role) VALUES ($1, $2, $3)`,
+          [userId, organizationId, role],
+        );
+        console.log(`Granted role "${role}" in organization id=${organizationId} to "${spec.username}" (id=${userId})`);
+      }
+    }
+
+    if (internalOrg.rowCount > 0) {
+      const existingInternalSuper = await client.query(
+        `SELECT id FROM auth.accounts WHERE user_id = $1 AND organization_id = $2 AND role = $3 LIMIT 1`,
+        [userId, PRIVATE_ORGANIZATION_ID, SUPER_ROLE_NAME],
+      );
+      if (existingInternalSuper.rowCount === 0) {
+        await client.query(
+          `INSERT INTO auth.accounts (user_id, organization_id, role) VALUES ($1, $2, $3)`,
+          [userId, PRIVATE_ORGANIZATION_ID, SUPER_ROLE_NAME],
+        );
+        console.log(`Granted role "${SUPER_ROLE_NAME}" in organization id=${PRIVATE_ORGANIZATION_ID} to "${spec.username}" (id=${userId})`);
+      }
+    }
+  }
+}
+
 function printSummary(organizationId) {
   console.log('\n=== Dev university ready ===');
   console.log(`Organization: "${ORGANIZATION_NAME}" (id=${organizationId})`);
@@ -215,6 +339,11 @@ function printSummary(organizationId) {
   for (const user of DEV_UNIVERSITY_USERS) {
     console.log(`  ${user.username} / ${user.password}  (${user.email})`);
   }
+  console.log('\nKonta wielorolowe z 3 rolami (super, administrator, lecturer):');
+  for (const spec of MULTIROLE_SPECS) {
+    console.log(`  ${spec.username} / ${spec.username}  (${spec.username}@localhost.invalid)`);
+  }
+  console.log('  Uwaga: Konta rozpoczynaja od pelnego kreatora rejestracji (pseudonim, awatar, regulamin).');
   console.log('\nNext:');
   console.log('  npm run start:dev          (backend)');
   console.log('  cd ../system-frontend && npm run dev');
@@ -229,10 +358,10 @@ async function main() {
   assertBackendLayout();
   writeIdpUsersFile();
   if (!skipDocker) {
-    console.log('\n[1/3] PostgreSQL (academy-db)...');
+    console.log('\n[1/4] PostgreSQL (academy-db)...');
     runDockerCompose(['up', '-d', 'db', '--wait']);
     stopLegacyLocalIdp();
-    console.log(`\n[2/3] IdP ${IDP_CONTAINER_NAME} (docker-compose.yml service idp)...`);
+    console.log(`\n[2/4] IdP ${IDP_CONTAINER_NAME} (docker-compose.yml service idp)...`);
     runDockerCompose(['up', '-d', 'idp', '--wait']);
     console.log(`Restarting ${IDP_CONTAINER_NAME} to reload idp/data/users.json...`);
     restartAcademyIdp();
@@ -240,12 +369,15 @@ async function main() {
     console.log('\n[skip-docker] Assuming academy-db and academy-idp are already running.');
     console.log('If you changed users.json, restart manually: docker compose restart idp');
   }
-  console.log('\n[3/3] SAML organization registration (register-org.mjs)...');
+  console.log('\n[3/4] Database migrations (migrate:local)...');
+  runDatabaseMigrations();
+  console.log('\n[4/4] SAML organization registration (register-org.mjs)...');
   runBackendCliScript('register-org.mjs', ['--name', ORGANIZATION_NAME, '--metadata-url', IDP_METADATA_URL]);
   const client = await createPgClient();
   let organizationId;
   try {
     organizationId = await resolveOrganizationId(client, ORGANIZATION_NAME);
+    await ensureMultiroleAccounts(client, organizationId);
   } finally {
     await client.end();
   }

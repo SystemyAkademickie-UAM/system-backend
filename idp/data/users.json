@@ -265,6 +265,107 @@
             "givenName": "University",
             "sn": "Administrator",
             "displayName": "University Administrator"
+        },
+        {
+            "username": "multirole",
+            "password": "multirole",
+            "uid": "multirole",
+            "eduPersonAffiliation": [
+                "faculty",
+                "staff",
+                "member"
+            ],
+            "eduPersonPrincipalName": "multirole@localhost.invalid",
+            "mail": "multirole@localhost.invalid",
+            "givenName": "Multirole",
+            "sn": "User",
+            "displayName": "Multirole User"
+        },
+        {
+            "username": "multirole1",
+            "password": "multirole1",
+            "uid": "multirole1",
+            "eduPersonAffiliation": [
+                "faculty",
+                "staff",
+                "member"
+            ],
+            "eduPersonPrincipalName": "multirole1@localhost.invalid",
+            "mail": "multirole1@localhost.invalid",
+            "givenName": "Multirole",
+            "sn": "One",
+            "displayName": "Multirole One"
+        },
+        {
+            "username": "multirole2",
+            "password": "multirole2",
+            "uid": "multirole2",
+            "eduPersonAffiliation": [
+                "faculty",
+                "staff",
+                "member"
+            ],
+            "eduPersonPrincipalName": "multirole2@localhost.invalid",
+            "mail": "multirole2@localhost.invalid",
+            "givenName": "Multirole",
+            "sn": "Two",
+            "displayName": "Multirole Two"
+        },
+        {
+            "username": "name-single",
+            "password": "name-single",
+            "uid": "name-single",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "name-single@localhost.invalid",
+            "mail": "name-single@localhost.invalid",
+            "givenName": "Jan",
+            "sn": "Kowalski",
+            "displayName": "Kowalski Jan"
+        },
+        {
+            "username": "name-two-two",
+            "password": "name-two-two",
+            "uid": "name-two-two",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "name-two-two@localhost.invalid",
+            "mail": "name-two-two@localhost.invalid",
+            "givenName": "Jan Krzysztof",
+            "sn": "Pawłak Kowalski",
+            "displayName": "Pawłak Kowalski Jan Krzysztof"
+        },
+        {
+            "username": "name-hyphen",
+            "password": "name-hyphen",
+            "uid": "name-hyphen",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "name-hyphen@localhost.invalid",
+            "mail": "name-hyphen@localhost.invalid",
+            "givenName": "Jan Krzysztof",
+            "sn": "Pawłak-Kowalski",
+            "displayName": "Pawłak-Kowalski Jan Krzysztof"
+        },
+        {
+            "username": "name-reversed",
+            "password": "name-reversed",
+            "uid": "name-reversed",
+            "eduPersonAffiliation": [
+                "student",
+                "member"
+            ],
+            "eduPersonPrincipalName": "name-reversed@localhost.invalid",
+            "mail": "name-reversed@localhost.invalid",
+            "givenName": "Paweł",
+            "sn": "Nawrocki",
+            "displayName": "Nawrocki Paweł"
         }
     ]
 }

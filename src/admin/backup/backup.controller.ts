@@ -38,7 +38,7 @@ import { BackupService } from './backup.service';
 
 @ApiTags('Admin backup')
 @ApiCookieAuth(MAQ_SESSION_COOKIE_NAME)
-@Controller('admin/backup')
+@Controller(['admin/backup', 'backups', 'admin/backups'])
 export class BackupController {
   private readonly logger = new Logger(BackupController.name);
 

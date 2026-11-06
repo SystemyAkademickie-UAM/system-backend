@@ -34,7 +34,7 @@ import { AdminOrganizationsService } from './admin-organizations.service';
 
 @ApiTags('Admin organizations')
 @ApiCookieAuth(MAQ_SESSION_COOKIE_NAME)
-@Controller('admin/organizations')
+@Controller(['admin/organizations', 'organizations'])
 export class AdminOrganizationsController {
   constructor(
     private readonly adminOrganizationsService: AdminOrganizationsService,
