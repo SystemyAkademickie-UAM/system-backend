@@ -1924,5 +1924,56 @@ Public probe endpoints used by client applications to verify server status and c
 }
 ```
 
+---
+
+## Patch notes management (super role)
+
+Upload, inspect upload history, and delete platform patch note PDF documents. Metadata is stored in **`services.patch_notes`** and PDF binaries on disk under `PATCH_NOTES_STORAGE_DIR` (defaults to `<DRIVE_STORAGE_ROOT>/patch-notes`). Requires **`super`** role.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/patch-notes` | `POST` | Upload a new patch note PDF document (`multipart/form-data`). |
+| `/api/admin/patch-notes` | `GET` | List uploaded patch notes ordered from newest to oldest (`?take=50&skip=0`). |
+| `/api/admin/patch-notes/:id` | `DELETE` | Delete a selected patch note record and its PDF file. |
+
+### Upload patch note PDF
+
+**Endpoint:** `POST /api/admin/patch-notes` (`multipart/form-data`)
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `file` | binary (`.pdf`) | Required, max `PATCH_NOTES_MAX_FILE_BYTES` (default 20 MiB), valid `%PDF-` header | Patch note PDF file. |
+| `title` | string | 1–200 chars (optional) | Display title (defaults to filename without `.pdf`). |
+| `version` | string | 1–64 chars (optional) | Optional release version tag (e.g. `v1.2.0`). |
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": 1,
+  "title": "Patch Notes 1.2.0",
+  "version": "v1.2.0",
+  "originalFilename": "patch-notes-1.2.0.pdf",
+  "fileSizeBytes": 145280,
+  "uploadedByUserId": 1,
+  "createdAt": "2026-11-03T10:00:00.000Z",
+  "fileUrl": "/api/patch-notes/1/file"
+}
+```
+
+---
+
+## Patch notes (public / user access)
+
+Public endpoints allowing users on application pages to browse patch notes history and view or download PDF documents.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/patch-notes` | `GET` | List available patch notes ordered newest first (`?take=50&skip=0`). |
+| `/api/patch-notes/latest` | `GET` | Get metadata of the most recently uploaded patch note. |
+| `/api/patch-notes/latest/file` | `GET` | Serve the latest patch note PDF (`?download=1` for attachment). |
+| `/api/patch-notes/:id/file` | `GET` | Serve a specific patch note PDF by ID (`?download=1` for attachment). |
+
+
 
 
