@@ -27,6 +27,7 @@ import { BannersModule } from './banners/banners-module';
 import { BroadcastsModule } from './broadcasts/broadcasts-module';
 import { DocumentsModule } from './documents/documents-module';
 import { MaintenanceModeModule } from './maintenance/maintenance-mode.module';
+import { PatchNotesModule } from './patch-notes/patch-notes-module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { MaintenanceModeModule } from './maintenance/maintenance-mode.module';
     BroadcastsModule,
     MaintenanceModeModule,
     DocumentsModule,
+    PatchNotesModule,
   ],
 })
 export class AppModule {}

@@ -17,6 +17,7 @@ import { ShopListingRankPromotionEntity } from './entities/shop-listing-rank-pro
 import { BroadcastEntity } from './entities/broadcast.entity';
 import { MaintenanceModeEntity } from './entities/maintenance-mode.entity';
 import { SystemDocumentEntity } from './entities/system-document.entity';
+import { PatchNoteEntity } from './entities/patch-note.entity';
 import { UserBroadcastStatusEntity } from './entities/user-broadcast-status.entity';
 import { resolvePostgresSslOption } from './postgres-ssl.config';
 import { assertDatabaseEnv } from '../validate-env';
@@ -60,6 +61,7 @@ export default new DataSource({
     UserBroadcastStatusEntity,
     MaintenanceModeEntity,
     SystemDocumentEntity,
+    PatchNoteEntity,
   ],
   migrations: [join(__dirname, 'migrations', isTypeScriptContext ? '*.ts' : '*.js')],
   synchronize: false,
