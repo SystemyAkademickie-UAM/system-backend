@@ -4,6 +4,7 @@ import { basename, join } from 'node:path';
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -24,6 +25,8 @@ import {
 } from '../constants/system-documents-constants';
 import { SystemDocumentEntity } from '../database/entities/system-document.entity';
 import type {
+  PublicSystemDocumentListResponse,
+  PublicSystemDocumentResponse,
   SystemDocumentFilePayload,
   SystemDocumentListResponse,
   SystemDocumentResponse,
@@ -83,6 +86,21 @@ function buildCanonicalFilePath(definition: SystemDocumentDefinition): string {
   return join(resolveDocumentsStorageDir(), definition.canonicalFilename);
 }
 
+function stripInternalMetadata(
+  response: SystemDocumentResponse,
+): PublicSystemDocumentResponse {
+  return {
+    key: response.key,
+    title: response.title,
+    canonicalFilename: response.canonicalFilename,
+    isUploaded: response.isUploaded,
+    originalFilename: response.originalFilename,
+    fileSizeBytes: response.fileSizeBytes,
+    uploadedAt: response.uploadedAt,
+    fileUrl: response.fileUrl,
+  };
+}
+
 /**
  * Domain service managing application legal and informational PDF documents.
  */
@@ -94,7 +112,7 @@ export class DocumentsService {
   ) {}
 
   /**
-   * Lists all application documents with their upload status, timestamps, and file URLs.
+   * Lists all application documents with their upload status, timestamps, and uploader IDs for super-administrators.
    */
   async listDocuments(): Promise<SystemDocumentListResponse> {
     const dbRows = await this.documentRepository.find();
@@ -110,7 +128,15 @@ export class DocumentsService {
   }
 
   /**
-   * Returns metadata and upload status for a single application document by key.
+   * Lists all application documents for public users without internal uploader user IDs.
+   */
+  async listPublicDocuments(): Promise<PublicSystemDocumentListResponse> {
+    const adminList = await this.listDocuments();
+    return { items: adminList.items.map(stripInternalMetadata) };
+  }
+
+  /**
+   * Returns metadata and upload status for a single application document by key for super-administrators.
    */
   async getDocument(rawKey: string): Promise<SystemDocumentResponse> {
     const definition = requireDocumentDefinition(rawKey);
@@ -118,6 +144,14 @@ export class DocumentsService {
       where: { documentKey: definition.key },
     });
     return this.buildDocumentResponse(definition, entity);
+  }
+
+  /**
+   * Returns public metadata for a single application document without internal uploader user ID.
+   */
+  async getPublicDocument(rawKey: string): Promise<PublicSystemDocumentResponse> {
+    const response = await this.getDocument(rawKey);
+    return stripInternalMetadata(response);
   }
 
   /**
@@ -139,8 +173,8 @@ export class DocumentsService {
       definition.canonicalFilename,
     );
     const title = resolveTitle(dto.title, existing?.title, definition.defaultTitle);
-    await this.writeDocumentFileAtomically(definition, validFile.buffer);
-    const saved = await this.saveDocumentEntity({
+    const tempPath = await this.stageTempDocumentFile(definition, validFile.buffer);
+    const saved = await this.saveAndCommitStagedFile(tempPath, {
       existing,
       definition,
       title,
@@ -152,19 +186,25 @@ export class DocumentsService {
   }
 
   /**
-   * Reads the binary PDF content of a given application document.
+   * Reads the binary PDF content of a given application document when its database record exists.
    */
   async getDocumentFile(rawKey: string): Promise<SystemDocumentFilePayload> {
     const definition = requireDocumentDefinition(rawKey);
     const entity = await this.documentRepository.findOne({
       where: { documentKey: definition.key },
     });
+    if (!entity) {
+      throw new NotFoundException(
+        `Document "${definition.key}" has no uploaded PDF file`,
+      );
+    }
     const filePath = buildCanonicalFilePath(definition);
     try {
       const buffer = await readFile(filePath);
-      const filename = entity
-        ? sanitizeOriginalFilename(entity.originalFilename, definition.canonicalFilename)
-        : definition.canonicalFilename;
+      const filename = sanitizeOriginalFilename(
+        entity.originalFilename,
+        definition.canonicalFilename,
+      );
       return {
         buffer,
         filename,
@@ -194,10 +234,10 @@ export class DocumentsService {
         `Document "${definition.key}" is not currently uploaded`,
       );
     }
+    await this.removeDiskFileVerified(definition);
     if (existing) {
       await this.documentRepository.delete({ id: existing.id });
     }
-    await this.removeDiskFileQuietly(definition);
     return { deleted: true, key: definition.key };
   }
 
@@ -220,17 +260,39 @@ export class DocumentsService {
     return file;
   }
 
-  private async writeDocumentFileAtomically(
+  private async stageTempDocumentFile(
     definition: SystemDocumentDefinition,
     buffer: Buffer,
-  ): Promise<void> {
+  ): Promise<string> {
     const storageDir = resolveDocumentsStorageDir();
     await mkdir(storageDir, { recursive: true });
     const targetPath = buildCanonicalFilePath(definition);
     const tempPath = `${targetPath}.tmp`;
     try {
       await writeFile(tempPath, buffer);
+      return tempPath;
+    } catch (err: unknown) {
+      await unlink(tempPath).catch(() => {});
+      throw err;
+    }
+  }
+
+  private async saveAndCommitStagedFile(
+    tempPath: string,
+    input: {
+      existing: SystemDocumentEntity | null;
+      definition: SystemDocumentDefinition;
+      title: string;
+      originalFilename: string;
+      fileSizeBytes: number;
+      superAdminUserId: number;
+    },
+  ): Promise<SystemDocumentEntity> {
+    const targetPath = buildCanonicalFilePath(input.definition);
+    try {
+      const saved = await this.saveDocumentEntity(input);
       await rename(tempPath, targetPath);
+      return saved;
     } catch (err: unknown) {
       await unlink(tempPath).catch(() => {});
       throw err;
@@ -254,14 +316,7 @@ export class DocumentsService {
     record.fileSizeBytes = input.fileSizeBytes;
     record.uploadedByUserId = input.superAdminUserId;
     record.uploadedAt = new Date();
-    try {
-      return await this.documentRepository.save(record);
-    } catch (err: unknown) {
-      if (!input.existing) {
-        await this.removeDiskFileQuietly(input.definition);
-      }
-      throw err;
-    }
+    return this.documentRepository.save(record);
   }
 
   private async readDiskStat(
@@ -281,13 +336,23 @@ export class DocumentsService {
     }
   }
 
-  private async removeDiskFileQuietly(
+  private async removeDiskFileVerified(
     definition: SystemDocumentDefinition,
   ): Promise<void> {
     try {
       await unlink(buildCanonicalFilePath(definition));
-    } catch {
-      // Ignore missing file on disk during cleanup
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      if (code && code !== 'ENOENT') {
+        throw new InternalServerErrorException(
+          `Failed to delete PDF file for document "${definition.key}"`,
+        );
+      }
+    }
+    if ((await this.readDiskStat(definition)) !== null) {
+      throw new InternalServerErrorException(
+        `Failed to delete PDF file for document "${definition.key}"`,
+      );
     }
   }
 
@@ -296,7 +361,7 @@ export class DocumentsService {
     entity: SystemDocumentEntity | null,
   ): Promise<SystemDocumentResponse> {
     const diskStat = await this.readDiskStat(definition);
-    const isUploaded = diskStat !== null;
+    const isUploaded = entity !== null && diskStat !== null;
     if (!isUploaded) {
       return {
         key: definition.key,
@@ -311,20 +376,19 @@ export class DocumentsService {
       };
     }
     const uploadedAtIso =
-      entity?.uploadedAt instanceof Date
+      entity.uploadedAt instanceof Date
         ? entity.uploadedAt.toISOString()
         : diskStat.mtimeIso;
     return {
       key: definition.key,
-      title: entity?.title ?? definition.defaultTitle,
+      title: entity.title,
       canonicalFilename: definition.canonicalFilename,
       isUploaded: true,
-      originalFilename: entity?.originalFilename ?? definition.canonicalFilename,
+      originalFilename: entity.originalFilename,
       fileSizeBytes: diskStat.sizeBytes,
       uploadedAt: uploadedAtIso,
-      uploadedByUserId: entity?.uploadedByUserId ?? null,
+      uploadedByUserId: entity.uploadedByUserId,
       fileUrl: `/api/documents/${definition.key}/file`,
     };
   }
 }
-

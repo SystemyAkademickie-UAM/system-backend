@@ -18,8 +18,8 @@ import type { Response } from 'express';
 
 import { DOCUMENTS_CONTENT_TYPE } from '../constants/system-documents-constants';
 import type {
-  SystemDocumentListResponse,
-  SystemDocumentResponse,
+  PublicSystemDocumentListResponse,
+  PublicSystemDocumentResponse,
 } from './documents-response-types';
 import { DocumentsService } from './documents-service';
 import { sendDocumentPdfResponse } from './send-document-pdf';
@@ -33,25 +33,25 @@ export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   /**
-   * Lists all application documents and their upload metadata.
+   * Lists all application documents and their public upload metadata.
    */
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List all application documents and their upload status' })
   @ApiOkResponse({ description: 'List of application documents' })
-  async list(): Promise<SystemDocumentListResponse> {
-    return this.documentsService.listDocuments();
+  async list(): Promise<PublicSystemDocumentListResponse> {
+    return this.documentsService.listPublicDocuments();
   }
 
   /**
-   * Returns metadata for a single application document by key.
+   * Returns public metadata for a single application document by key.
    */
   @Get(':key')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get metadata of a specific application document' })
   @ApiOkResponse({ description: 'Application document metadata' })
-  async getOne(@Param('key') key: string): Promise<SystemDocumentResponse> {
-    return this.documentsService.getDocument(key);
+  async getOne(@Param('key') key: string): Promise<PublicSystemDocumentResponse> {
+    return this.documentsService.getPublicDocument(key);
   }
 
   /**
@@ -72,4 +72,3 @@ export class DocumentsController {
     sendDocumentPdfResponse(res, payload, download);
   }
 }
-

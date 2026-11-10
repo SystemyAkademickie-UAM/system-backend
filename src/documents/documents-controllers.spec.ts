@@ -9,7 +9,9 @@ import type { DocumentsService } from './documents-service';
 describe('Documents controllers', () => {
   let mockService: {
     listDocuments: jest.Mock;
+    listPublicDocuments: jest.Mock;
     getDocument: jest.Mock;
+    getPublicDocument: jest.Mock;
     getDocumentFile: jest.Mock;
     upsertDocument: jest.Mock;
     deleteDocument: jest.Mock;
@@ -23,7 +25,9 @@ describe('Documents controllers', () => {
   beforeEach(() => {
     mockService = {
       listDocuments: jest.fn(),
+      listPublicDocuments: jest.fn(),
       getDocument: jest.fn(),
+      getPublicDocument: jest.fn(),
       getDocumentFile: jest.fn(),
       upsertDocument: jest.fn(),
       deleteDocument: jest.fn(),
@@ -138,10 +142,10 @@ describe('Documents controllers', () => {
   });
 
   describe('DocumentsController', () => {
-    it('lists and fetches public document metadata', async () => {
-      mockService.listDocuments.mockResolvedValue({ items: [] });
+    it('lists and fetches public document metadata without uploadedByUserId', async () => {
+      mockService.listPublicDocuments.mockResolvedValue({ items: [] });
       expect(await publicController.list()).toEqual({ items: [] });
-      mockService.getDocument.mockResolvedValue({ key: 'termsOfUse' });
+      mockService.getPublicDocument.mockResolvedValue({ key: 'termsOfUse' });
       expect(await publicController.getOne('termsOfUse')).toEqual({
         key: 'termsOfUse',
       });

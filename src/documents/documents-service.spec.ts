@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -31,6 +31,7 @@ function createValidPdfMulterFile(
 
 describe('DocumentsService', () => {
   let tempDir: string;
+  let storedEntities: Map<string, SystemDocumentEntity>;
   let mockRepository: {
     find: jest.Mock;
     findOne: jest.Mock;
@@ -43,15 +44,34 @@ describe('DocumentsService', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'maq-documents-test-'));
     process.env[DOCUMENTS_STORAGE_DIR_ENV] = tempDir;
+    storedEntities = new Map<string, SystemDocumentEntity>();
+    let nextId = 1;
     mockRepository = {
-      find: jest.fn().mockResolvedValue([]),
-      findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn(async () => Array.from(storedEntities.values())),
+      findOne: jest.fn(
+        async (opts?: { where?: { documentKey?: string } }) =>
+          (opts?.where?.documentKey
+            ? storedEntities.get(opts.where.documentKey)
+            : null) ?? null,
+      ),
       create: jest.fn((data: Partial<SystemDocumentEntity>) => ({ ...data })),
-      save: jest.fn(async (entity: Partial<SystemDocumentEntity>) => ({
-        id: 1,
-        ...entity,
-      })),
-      delete: jest.fn(),
+      save: jest.fn(async (entity: Partial<SystemDocumentEntity>) => {
+        const saved = {
+          id: entity.id ?? nextId++,
+          ...entity,
+        } as SystemDocumentEntity;
+        if (saved.documentKey) {
+          storedEntities.set(saved.documentKey, saved);
+        }
+        return saved;
+      }),
+      delete: jest.fn(async (id: number) => {
+        for (const [key, value] of storedEntities.entries()) {
+          if (value.id === id) {
+            storedEntities.delete(key);
+          }
+        }
+      }),
     };
     service = new DocumentsService(
       mockRepository as unknown as Repository<SystemDocumentEntity>,
@@ -63,7 +83,7 @@ describe('DocumentsService', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  describe('listDocuments & getDocument', () => {
+  describe('listDocuments, listPublicDocuments & getDocument', () => {
     it('lists all 3 system documents with isUploaded=false when empty', async () => {
       const actual = await service.listDocuments();
       expect(actual.items).toHaveLength(3);
@@ -73,6 +93,19 @@ describe('DocumentsService', () => {
         'documentation',
       ]);
       expect(actual.items.every((i) => i.isUploaded === false)).toBe(true);
+    });
+
+    it('omits uploadedByUserId from public document responses while keeping it on admin responses', async () => {
+      const inputFile = createValidPdfMulterFile('regulamin.pdf');
+      await service.upsertDocument('termsOfUse', inputFile, {}, 42);
+      const adminDoc = await service.getDocument('termsOfUse');
+      expect(adminDoc.uploadedByUserId).toBe(42);
+      const publicDoc = await service.getPublicDocument('termsOfUse');
+      expect('uploadedByUserId' in publicDoc).toBe(false);
+      const publicList = await service.listPublicDocuments();
+      expect(
+        publicList.items.every((item) => !('uploadedByUserId' in item)),
+      ).toBe(true);
     });
 
     it('throws BadRequestException for unknown document key', async () => {
@@ -102,6 +135,26 @@ describe('DocumentsService', () => {
       expect(storedPayload.contentType).toBe('application/pdf');
     });
 
+    it('preserves existing PDF on disk when DB save fails during replace', async () => {
+      const originalFile = createValidPdfMulterFile(
+        'polityka-v1.pdf',
+        '%PDF-1.7\noriginal-content\n%%EOF',
+      );
+      await service.upsertDocument('privacyPolicy', originalFile, {}, 1);
+      mockRepository.save.mockRejectedValueOnce(new Error('DB write failure'));
+      const replacementFile = createValidPdfMulterFile(
+        'polityka-v2.pdf',
+        '%PDF-1.7\nreplacement-content\n%%EOF',
+      );
+      await expect(
+        service.upsertDocument('privacyPolicy', replacementFile, {}, 1),
+      ).rejects.toThrow('DB write failure');
+      const diskBytes = await readFile(join(tempDir, 'polityka-prywatnosci.pdf'));
+      expect(diskBytes.equals(originalFile.buffer)).toBe(true);
+      const filesInDir = await readdir(tempDir);
+      expect(filesInDir).toEqual(['polityka-prywatnosci.pdf']);
+    });
+
     it('rejects non-PDF content without %PDF- magic header', async () => {
       const fakeFile = createValidPdfMulterFile('fake.pdf', 'not a pdf file');
       await expect(
@@ -109,7 +162,14 @@ describe('DocumentsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('throws NotFoundException when reading file of unuploaded document', async () => {
+    it('throws NotFoundException when reading file of unuploaded document or orphan disk file', async () => {
+      await expect(service.getDocumentFile('documentation')).rejects.toThrow(
+        NotFoundException,
+      );
+      await writeFile(
+        join(tempDir, 'dokumentacja.pdf'),
+        Buffer.from('%PDF-1.7\norphan\n%%EOF', 'utf8'),
+      );
       await expect(service.getDocumentFile('documentation')).rejects.toThrow(
         NotFoundException,
       );
@@ -120,10 +180,6 @@ describe('DocumentsService', () => {
     it('deletes uploaded PDF file from disk and database', async () => {
       const inputFile = createValidPdfMulterFile('warunki.pdf');
       await service.upsertDocument('termsOfUse', inputFile, {}, 1);
-      mockRepository.findOne.mockResolvedValueOnce({
-        id: 5,
-        documentKey: 'termsOfUse',
-      });
       const result = await service.deleteDocument('warunki-uzytkowania.pdf');
       expect(result).toEqual({ deleted: true, key: 'termsOfUse' });
       const filesAfter = await readdir(tempDir);

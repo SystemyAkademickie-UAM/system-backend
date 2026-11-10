@@ -1,6 +1,6 @@
 import type { SystemDocumentKey } from '../constants/system-documents-constants';
 
-export type SystemDocumentResponse = {
+export type PublicSystemDocumentResponse = {
   key: SystemDocumentKey;
   title: string;
   canonicalFilename: string;
@@ -8,8 +8,15 @@ export type SystemDocumentResponse = {
   originalFilename: string | null;
   fileSizeBytes: number | null;
   uploadedAt: string | null;
-  uploadedByUserId: number | null;
   fileUrl: string | null;
+};
+
+export type PublicSystemDocumentListResponse = {
+  items: PublicSystemDocumentResponse[];
+};
+
+export type SystemDocumentResponse = PublicSystemDocumentResponse & {
+  uploadedByUserId: number | null;
 };
 
 export type SystemDocumentListResponse = {
@@ -22,4 +29,3 @@ export type SystemDocumentFilePayload = {
   contentType: string;
   sizeBytes: number;
 };
-
