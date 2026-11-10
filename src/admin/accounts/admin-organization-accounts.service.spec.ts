@@ -103,6 +103,8 @@ describe('AdminOrganizationAccountsService', () => {
       {
         id: 3,
         email: 'student@test.local',
+        name: 'Test',
+        surname: 'Student',
         nickname: 'Student',
       },
     ]);
@@ -112,6 +114,8 @@ describe('AdminOrganizationAccountsService', () => {
         accountId: 20,
         userId: 3,
         email: 'student@test.local',
+        name: 'Test',
+        surname: 'Student',
         nickname: 'Student',
         role: STUDENT_ROLE_NAME,
       },

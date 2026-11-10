@@ -78,6 +78,26 @@ Manage institutional SAML configuration stored in **`auth.organizations`** and *
 
 **Bootstrap super admin:** set `SUPERADMIN_BOOTSTRAP_EMAIL` in `.env`. On first startup (or first SAML login with that email), when no `super` account exists, the API inserts one row in `auth.accounts`. Optional `SUPERADMIN_BOOTSTRAP_ORGANIZATION_ID` (default: first active organization).
 
+---
+
+## Organization accounts (organization administrator or super)
+
+An organization administrator can use these routes only when the session organization is the organization in the URL. A super administrator can use them for any active organization. Accounts from any other organization are not listed, exported, changed, or removed.
+
+An organization administrator may assign `student` or `lecturer`. A super administrator may also assign `administrator`. The `super` role is not assigned here. Add and import reuse an existing person and do not change that person's email, name, surname, or nickname. Creating a new person and that person's account is one database transaction: if the account row fails, the person row is undone. `PATCH` is the call that edits those fields. A profile change and a role change in the same `PATCH` are one transaction. `PATCH` refuses the edit when the person also belongs to another organization.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/organizations/:organizationId/accounts` | `GET` | Every account in the organization: `accountId`, `userId`, `email`, `name`, `surname`, `nickname`, `role`. |
+| `/api/admin/organizations/:organizationId/accounts/page` | `GET` | One page ordered by `accountId`. Query `afterAccountId` (default `0`) and `limit` (default and maximum `100`). Response `{ "items": [...], "nextAfterAccountId": 100 }` or `nextAfterAccountId: null` on the last page. |
+| `/api/admin/organizations/:organizationId/accounts/:accountId` | `GET` | One account. `404` when that account is not in this organization. |
+| `/api/admin/organizations/:organizationId/accounts` | `POST` | Body `email`, `name`, `surname`, `role`, optional `nickname`. Creates the person when the email is new. When the person already exists, adds the role and leaves their email, name, surname, and nickname as stored. |
+| `/api/admin/organizations/:organizationId/accounts/:accountId` | `PATCH` | Any of `email`, `name`, `surname`, `nickname`, `role`. |
+| `/api/admin/organizations/:organizationId/accounts/import` | `POST` | Body `{ "users": [ ... ] }` with at most 500 rows. Response `{ "created", "updated", "skipped", "failed" }`. An existing person is reused. A role that is already present is `skipped`. `updated` stays `0`. |
+| `/api/admin/organizations/:organizationId/accounts/export` | `GET` | `text/csv` of every account in this organization. |
+| `/api/admin/organizations/:organizationId/accounts/:accountId/magic-link` | `POST` | Sends the existing email magic link. Allowed only when the organization `loginMethod` is `email`. |
+| `/api/admin/organizations/:organizationId/accounts/:accountId` | `DELETE` | Removes the account in this organization. The user row is deleted only when no membership remains. |
+
 Register organizations via admin API (no migration seed). Example: UAM — `metadataUrl` = `https://sso.amu.edu.pl/simplesaml/saml2/idp/metadata.php`. Local dev IdP — see [saml-local-idp.md](./saml-local-idp.md).
 
 ---

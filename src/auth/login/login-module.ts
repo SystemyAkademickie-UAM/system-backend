@@ -44,6 +44,6 @@ import { SamlLinkedUserService } from './saml-linked-user.service';
     MagicLinkEmailService,
     MagicLinkUserService,
   ],
-  exports: [LoginApiService],
+  exports: [LoginApiService, MagicLinkService],
 })
 export class LoginModule {}
