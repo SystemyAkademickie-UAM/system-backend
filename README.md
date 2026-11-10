@@ -86,8 +86,15 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/admin/organizations/:organizationId/administrators` — super only: administrators of one organization
 - `POST /api/admin/organizations/:organizationId/administrators` — super only: body `{ "email" }`; grants `administrator` when that user has already signed in
 - `DELETE /api/admin/organizations/:organizationId/administrators/:accountId` — super only: revoke that administrator account
-- `GET /api/admin/organizations/:organizationId/accounts` — list accounts in an organization (super or org administrator)
-- `DELETE /api/admin/organizations/:organizationId/accounts/:accountId` — org administrator or super: remove organization account (see [docs/api.md](./docs/api.md))
+- `GET /api/admin/organizations/:organizationId/accounts` — every account in that organization (super, or the organization administrator whose session is that organization)
+- `GET /api/admin/organizations/:organizationId/accounts/page?afterAccountId=&limit=` — next page by account id (default and maximum 100)
+- `GET /api/admin/organizations/:organizationId/accounts/:accountId` — one account in that organization
+- `POST /api/admin/organizations/:organizationId/accounts` — add one account (`email`, `name`, `surname`, `role`, optional `nickname`). An existing person is reused and their stored name is left unchanged
+- `PATCH /api/admin/organizations/:organizationId/accounts/:accountId` — change email, name, surname, nickname, or role
+- `POST /api/admin/organizations/:organizationId/accounts/import` — body `{ "users": [ ...same fields... ] }`, up to 500 rows
+- `GET /api/admin/organizations/:organizationId/accounts/export` — CSV of that organization's accounts
+- `POST /api/admin/organizations/:organizationId/accounts/:accountId/magic-link` — email a magic login link when the organization login method is `email`
+- `DELETE /api/admin/organizations/:organizationId/accounts/:accountId` — remove that organization's account (see [docs/api.md](./docs/api.md))
 - `POST /api/admin/broadcasts`, `GET /api/admin/broadcasts`, `DELETE /api/admin/broadcasts/:id` — super only: manage platform-wide announcements
 - `GET /api/admin/maintenance`, `PUT /api/admin/maintenance` — super only: manage global technical break / maintenance mode
 - `POST /api/admin/patch-notes`, `GET /api/admin/patch-notes`, `DELETE /api/admin/patch-notes/:id` — super only: upload, list, and delete patch note PDF documents

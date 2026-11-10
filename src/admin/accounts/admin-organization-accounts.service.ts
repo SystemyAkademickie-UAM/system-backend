@@ -18,6 +18,8 @@ export type OrganizationAccountListItem = {
   accountId: number;
   userId: number;
   email: string;
+  name: string;
+  surname: string;
   nickname: string;
   role: string;
 };
@@ -98,6 +100,8 @@ export class AdminOrganizationAccountsService {
         accountId: row.id,
         userId: user.id,
         email: user.email,
+        name: user.name,
+        surname: user.surname,
         nickname: user.nickname,
         role: row.role,
       });
