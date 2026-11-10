@@ -49,7 +49,7 @@ import { PatchNotesService } from './patch-notes-service';
 @ApiTags('Admin patch notes')
 @ApiCookieAuth(MAQ_SESSION_COOKIE_NAME)
 @UseGuards(PatchNotesAccessService)
-@Controller('admin/patch-notes')
+@Controller(['admin/patch-notes', 'documents', 'admin/documents'])
 export class AdminPatchNotesController {
   constructor(
     private readonly patchNotesService: PatchNotesService,
