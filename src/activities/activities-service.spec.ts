@@ -26,8 +26,11 @@ describe('ActivitiesService', () => {
   let mockQueryBuilder: {
     select: jest.Mock;
     addSelect: jest.Mock;
+    innerJoin: jest.Mock;
     where: jest.Mock;
+    andWhere: jest.Mock;
     groupBy: jest.Mock;
+    orderBy: jest.Mock;
     getRawMany: jest.Mock;
   };
 
@@ -53,8 +56,11 @@ describe('ActivitiesService', () => {
     mockQueryBuilder = {
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
       groupBy: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
       getRawMany: jest.fn(),
     };
     
@@ -122,7 +128,38 @@ describe('ActivitiesService', () => {
       expect(act1?.isVisible).toBe(true);
     });
 
-    it('should filter out hidden activities for students', async () => {
+    it('should attach completionCount and completedAt for student', async () => {
+      userRolesService.userHasRole.mockResolvedValue(false);
+      activityRepository.find.mockResolvedValue([
+        { id: 1, stageId: 10, name: 'Activity 1', currency: 100, educationalDescription: '', storyDescription: '', isVisible: true },
+        { id: 2, stageId: 10, name: 'Activity 2', currency: 50, educationalDescription: '', storyDescription: '', isVisible: true },
+      ]);
+      stageRepository.find.mockResolvedValue([
+        { id: 10, visibilityStatus: 1 },
+      ]);
+      const mockDate = new Date('2026-11-05T14:30:00.000Z');
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce([{ activityId: '1', count: '3' }])
+        .mockResolvedValueOnce([{ activityId: '1', completedAt: mockDate }]);
+
+      const req = {} as Request;
+      const result = await service.handleActivity(req, { method: 'retrieve' });
+
+      expect(result.statusCode).toBe(200);
+      expect(result.activities).toBeDefined();
+      expect(result.activities?.length).toBe(2);
+
+      const act1 = result.activities?.find(a => a.id === 1);
+      expect(act1?.isCompleted).toBe(true);
+      expect(act1?.completedAt).toBe(mockDate.toISOString());
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('ab.date', 'DESC', 'NULLS LAST');
+
+      const act2 = result.activities?.find(a => a.id === 2);
+      expect(act2?.isCompleted).toBe(false);
+      expect(act2?.completedAt).toBeNull();
+    });
+
+    it('omits a hidden activity for a student', async () => {
       userRolesService.userHasRole.mockResolvedValue(false);
       activityRepository.find.mockResolvedValue([
         { id: 1, stageId: 10, name: 'Activity 1', currency: 100, educationalDescription: '', storyDescription: '', isVisible: true },
@@ -137,9 +174,29 @@ describe('ActivitiesService', () => {
       const result = await service.handleActivity(req, { method: 'retrieve' });
 
       expect(result.statusCode).toBe(200);
-      expect(result.activities).toBeDefined();
-      expect(result.activities?.length).toBe(1);
-      expect(result.activities?.[0].id).toBe(1);
+      expect(result.activities?.map((activity) => activity.id)).toEqual([1]);
+    });
+
+    it('ignores an empty completion date and keeps a dated row', async () => {
+      activityRepository.find.mockResolvedValue([
+        { id: 1, stageId: 10, name: 'Activity 1', currency: 100, educationalDescription: '', storyDescription: '', isVisible: true },
+      ]);
+      const datedCompletion = new Date('2026-11-01T08:00:00.000Z');
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { activityId: '1', completedAt: null },
+          { activityId: '1', completedAt: 'not-a-date' },
+          { activityId: '1', completedAt: datedCompletion },
+        ]);
+
+      const req = {} as Request;
+      const result = await service.handleActivity(req, { method: 'retrieve' });
+      const activity = result.activities?.find((item) => item.id === 1);
+
+      expect(result.activities).toHaveLength(1);
+      expect(activity?.isCompleted).toBe(true);
+      expect(activity?.completedAt).toBe(datedCompletion.toISOString());
     });
   });
 
