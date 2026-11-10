@@ -25,8 +25,9 @@ export class AdminAccessService {
   }
 
   /**
-   * Super administrators may delete accounts in any organization.
-   * Organization administrators may delete only within their organization.
+   * Super administrators may manage accounts in any organization.
+   * An organization administrator may manage accounts only when the session
+   * organization is that same organization.
    */
   async resolveAccountDeletionActor(
     req: Request,
@@ -40,7 +41,7 @@ export class AdminAccessService {
     if (isSuperAdmin) {
       return { userId: subject.userId, isSuperAdmin: true };
     }
-    if (organizationId === undefined) {
+    if (organizationId === undefined || subject.organizationId !== organizationId) {
       throw new ForbiddenException('Not authorized');
     }
     const isOrgAdministrator = await this.userRolesService.userHasRoleInOrganization(
