@@ -152,10 +152,51 @@ describe('ActivitiesService', () => {
       const act1 = result.activities?.find(a => a.id === 1);
       expect(act1?.isCompleted).toBe(true);
       expect(act1?.completedAt).toBe(mockDate.toISOString());
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('ab.date', 'DESC', 'NULLS LAST');
 
       const act2 = result.activities?.find(a => a.id === 2);
       expect(act2?.isCompleted).toBe(false);
       expect(act2?.completedAt).toBeNull();
+    });
+
+    it('omits a hidden activity for a student', async () => {
+      userRolesService.userHasRole.mockResolvedValue(false);
+      activityRepository.find.mockResolvedValue([
+        { id: 1, stageId: 10, name: 'Activity 1', currency: 100, educationalDescription: '', storyDescription: '', isVisible: true },
+        { id: 2, stageId: 10, name: 'Activity 2', currency: 50, educationalDescription: '', storyDescription: '', isVisible: false },
+      ]);
+      stageRepository.find.mockResolvedValue([
+        { id: 10, visibilityStatus: 1 },
+      ]);
+      mockQueryBuilder.getRawMany.mockResolvedValue([]);
+
+      const req = {} as Request;
+      const result = await service.handleActivity(req, { method: 'retrieve' });
+
+      expect(result.statusCode).toBe(200);
+      expect(result.activities?.map((activity) => activity.id)).toEqual([1]);
+    });
+
+    it('ignores an empty completion date and keeps a dated row', async () => {
+      activityRepository.find.mockResolvedValue([
+        { id: 1, stageId: 10, name: 'Activity 1', currency: 100, educationalDescription: '', storyDescription: '', isVisible: true },
+      ]);
+      const datedCompletion = new Date('2026-11-01T08:00:00.000Z');
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { activityId: '1', completedAt: null },
+          { activityId: '1', completedAt: 'not-a-date' },
+          { activityId: '1', completedAt: datedCompletion },
+        ]);
+
+      const req = {} as Request;
+      const result = await service.handleActivity(req, { method: 'retrieve' });
+      const activity = result.activities?.find((item) => item.id === 1);
+
+      expect(result.activities).toHaveLength(1);
+      expect(activity?.isCompleted).toBe(true);
+      expect(activity?.completedAt).toBe(datedCompletion.toISOString());
     });
   });
 

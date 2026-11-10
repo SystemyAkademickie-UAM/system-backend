@@ -319,17 +319,19 @@ export class ActivitiesService {
           .addSelect('ab.date', 'completedAt')
           .where('ab.activity_id IN (:...ids)', { ids: activityIds })
           .andWhere('acc.user_id = :userId', { userId: subject.userId })
-          .orderBy('ab.date', 'DESC')
+          .orderBy('ab.date', 'DESC', 'NULLS LAST')
           .getRawMany();
 
         for (const row of userCompletions) {
           const actId = Number(row.activityId);
-          if (!userCompletionsMap.has(actId)) {
-            userCompletionsMap.set(
-              actId,
-              row.completedAt ? new Date(row.completedAt).toISOString() : new Date().toISOString(),
-            );
+          if (userCompletionsMap.has(actId) || row.completedAt == null) {
+            continue;
           }
+          const completedAt = new Date(row.completedAt);
+          if (Number.isNaN(completedAt.getTime())) {
+            continue;
+          }
+          userCompletionsMap.set(actId, completedAt.toISOString());
         }
       }
 

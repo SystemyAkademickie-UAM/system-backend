@@ -1091,7 +1091,7 @@ Manage activities within stages. Each activity belongs to a stage and has curren
 | `statusCode` | integer | `200` on success; `403` if not authorized; `400` if request JSON or field values are invalid. |
 | `method` | string | Echoes the requested method (or `post` when `method` is missing/invalid). |
 | `activity` | integer | For `post`/`modify`: activity DB id (positive); for `remove`: the removed id; for `retrieve`: count of activities returned. Error codes (negative): `-1` = creation failed, `-2` = not authorized, `-3` = not found, `-4` = stage not found, `-5` = invalid request. |
-| `activities` | array (optional) | For `retrieve`: array of `{ id, stageId, name, currency, educationalDescription, storyDescription }` (DB ids). |
+| `activities` | array (optional) | For `retrieve`: array of `{ id, stageId, name, currency, completionCount, educationalDescription, storyDescription, isVisible, completedAt, isCompleted }`. `completionCount` is the number of distinct accounts with a backlog row. `completedAt` is the signed-in user's latest dated completion (`analytics.activity_backlog.date`) as ISO-8601, or `null` when that user has no dated row. An empty or invalid date is ignored. `isCompleted` is `true` only when `completedAt` is present. |
 
 All responses use this flat JSON shape only (no Nest `message` / `error` fields).
 
@@ -1136,8 +1136,8 @@ Content-Type: application/json
   "method": "retrieve",
   "activity": 2,
   "activities": [
-    { "id": 1, "stageId": 1, "name": "Quiz 1", "currency": 100, "educationalDescription": "Test your knowledge", "storyDescription": "The hero faces a challenge" },
-    { "id": 2, "stageId": 1, "name": "Assignment 1", "currency": 50, "educationalDescription": "Practice problems", "storyDescription": "Training montage" }
+    { "id": 1, "stageId": 1, "name": "Quiz 1", "currency": 100, "completionCount": 3, "educationalDescription": "Test your knowledge", "storyDescription": "The hero faces a challenge", "isVisible": true, "completedAt": "2026-11-05T14:30:00.000Z", "isCompleted": true },
+    { "id": 2, "stageId": 1, "name": "Assignment 1", "currency": 50, "completionCount": 0, "educationalDescription": "Practice problems", "storyDescription": "Training montage", "isVisible": true, "completedAt": null, "isCompleted": false }
   ]
 }
 ```
