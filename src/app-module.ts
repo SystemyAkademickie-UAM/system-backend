@@ -28,6 +28,7 @@ import { BroadcastsModule } from './broadcasts/broadcasts-module';
 import { DocumentsModule } from './documents/documents-module';
 import { MaintenanceModeModule } from './maintenance/maintenance-mode.module';
 import { PatchNotesModule } from './patch-notes/patch-notes-module';
+import { FaqModule } from './faq/faq-module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { PatchNotesModule } from './patch-notes/patch-notes-module';
     MaintenanceModeModule,
     DocumentsModule,
     PatchNotesModule,
+    FaqModule,
   ],
 })
 export class AppModule {}
