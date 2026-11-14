@@ -10,7 +10,6 @@ import {
   Param,
   Post,
   Put,
-  Query,
   Req,
   Res,
   StreamableFile,
@@ -164,14 +163,12 @@ export class BackupController {
   async exportBackupGet(
     @Req() req: Request,
     @Headers('x-backup-password') headerPassword: string | undefined,
-    @Query('password') queryPassword: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
     await this.adminAccessService.assertSuperAdmin(req);
-    const password = headerPassword || queryPassword;
     this.logger.log('Super admin initiated database backup export');
     const stream = await this.backupService.createBackupStream(
-      password ? { password } : undefined,
+      headerPassword ? { password: headerPassword } : undefined,
     );
     await this.backupService.recordManualBackup();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

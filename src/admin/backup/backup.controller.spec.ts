@@ -178,7 +178,7 @@ describe('BackupController', () => {
       expect(file).toBeDefined();
     });
 
-    it('exports backup in GET export with header or query password', async () => {
+    it('exports backup in GET export with header password', async () => {
       backupService.createBackupStream.mockResolvedValue(Readable.from(['enc-data']));
 
       const req = {} as Request;
@@ -189,7 +189,6 @@ describe('BackupController', () => {
       const file = await controller.exportBackupGet(
         req,
         mockHeaderPassword,
-        undefined,
         res,
       );
 

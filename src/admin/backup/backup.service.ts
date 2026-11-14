@@ -59,6 +59,7 @@ import type { UpdateAutoBackupScheduleDto } from './dto/backup.dto';
 export class BackupService {
   private readonly logger = new Logger(BackupService.name);
   private isAutoBackupInProgress = false;
+  private isRestoreInProgress = false;
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -68,6 +69,12 @@ export class BackupService {
    * Otherwise, encrypts with the server key (V1).
    */
   async createBackupStream(options?: { password?: string }): Promise<Readable> {
+    if (this.isRestoreInProgress) {
+      throw new ConflictException(
+        'Nie można wykonać kopii zapasowej podczas przywracania bazy danych.',
+      );
+    }
+
     let key: Buffer;
     let headerPrefix: Buffer;
 
@@ -145,79 +152,107 @@ export class BackupService {
   /**
    * Restores from an encrypted backup buffer (pg_restore --clean --if-exists).
    * Supports both V2 (password-encrypted) and V1 (server-key encrypted) backups.
+   * Cryptographic verification (authTag) is performed in memory BEFORE spawning pg_restore,
+   * preventing the Cryptographic Doom Principle (executing unauthenticated data).
    */
   async restoreBackup(encryptedData: Buffer, password?: string): Promise<void> {
-    if (isV2Backup(encryptedData)) {
-      const minLength =
-        BACKUP_V2_MAGIC_HEADER.length +
-        BACKUP_PBKDF2_SALT_LENGTH +
-        BACKUP_AES_IV_LENGTH +
-        BACKUP_AES_AUTH_TAG_LENGTH +
-        1;
-      if (encryptedData.length < minLength) {
-        throw new BadRequestException('Invalid backup file: too short');
-      }
-      if (!password || password.trim().length === 0) {
-        throw new BadRequestException(
-          'Kopia zapasowa jest zabezpieczona hasłem. Wprowadź hasło szyfrowania.',
+    if (this.isRestoreInProgress) {
+      throw new ConflictException('Operacja przywracania bazy danych jest już w toku.');
+    }
+    if (this.isAutoBackupInProgress) {
+      throw new ConflictException(
+        'Nie można przywrócić bazy danych podczas wykonywania kopii zapasowej.',
+      );
+    }
+    this.isRestoreInProgress = true;
+    try {
+      let decryptedGzip: Buffer;
+
+      if (isV2Backup(encryptedData)) {
+        const minLength =
+          BACKUP_V2_MAGIC_HEADER.length +
+          BACKUP_PBKDF2_SALT_LENGTH +
+          BACKUP_AES_IV_LENGTH +
+          BACKUP_AES_AUTH_TAG_LENGTH +
+          1;
+        if (encryptedData.length < minLength) {
+          throw new BadRequestException('Nieprawidłowy plik kopii zapasowej: plik jest zbyt krótki.');
+        }
+        if (!password || password.trim().length === 0) {
+          throw new BadRequestException(
+            'Kopia zapasowa jest zabezpieczona hasłem. Wprowadź hasło szyfrowania.',
+          );
+        }
+        const saltOffset = BACKUP_V2_MAGIC_HEADER.length;
+        const ivOffset = saltOffset + BACKUP_PBKDF2_SALT_LENGTH;
+        const ciphertextOffset = ivOffset + BACKUP_AES_IV_LENGTH;
+
+        const salt = encryptedData.subarray(saltOffset, ivOffset);
+        const iv = encryptedData.subarray(ivOffset, ciphertextOffset);
+        const authTag = encryptedData.subarray(
+          encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
         );
+        const ciphertext = encryptedData.subarray(
+          ciphertextOffset,
+          encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
+        );
+
+        const key = deriveKeyFromPassword(password, salt);
+        const decipher = createDecipheriv(BACKUP_AES_ALGORITHM, key, iv);
+        decipher.setAuthTag(authTag);
+        try {
+          decryptedGzip = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+        } catch {
+          throw new BadRequestException(
+            'Nieprawidłowe hasło szyfrowania kopii zapasowej lub uszkodzony plik.',
+          );
+        }
+      } else {
+        // Legacy V1 / server-key backup
+        const minLength = BACKUP_AES_IV_LENGTH + BACKUP_AES_AUTH_TAG_LENGTH + 1;
+        if (encryptedData.length < minLength) {
+          throw new BadRequestException('Nieprawidłowy plik kopii zapasowej: plik jest zbyt krótki.');
+        }
+        const key = this.readEncryptionKey();
+        const iv = encryptedData.subarray(0, BACKUP_AES_IV_LENGTH);
+        const authTag = encryptedData.subarray(
+          encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
+        );
+        const ciphertext = encryptedData.subarray(
+          BACKUP_AES_IV_LENGTH,
+          encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
+        );
+        const decipher = createDecipheriv(BACKUP_AES_ALGORITHM, key, iv);
+        decipher.setAuthTag(authTag);
+        try {
+          decryptedGzip = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+        } catch {
+          throw new BadRequestException(
+            'Nieprawidłowy klucz szyfrowania serwera lub uszkodzony plik kopii zapasowej.',
+          );
+        }
       }
-      const saltOffset = BACKUP_V2_MAGIC_HEADER.length;
-      const ivOffset = saltOffset + BACKUP_PBKDF2_SALT_LENGTH;
-      const ciphertextOffset = ivOffset + BACKUP_AES_IV_LENGTH;
 
-      const salt = encryptedData.subarray(saltOffset, ivOffset);
-      const iv = encryptedData.subarray(ivOffset, ciphertextOffset);
-      const authTag = encryptedData.subarray(
-        encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
-      );
-      const ciphertext = encryptedData.subarray(
-        ciphertextOffset,
-        encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
-      );
-
-      const key = deriveKeyFromPassword(password, salt);
-      const decipher = createDecipheriv(BACKUP_AES_ALGORITHM, key, iv);
-      decipher.setAuthTag(authTag);
       await this.runPgRestoreStream(
-        Readable.from(ciphertext),
-        decipher,
+        Readable.from(decryptedGzip),
         createGunzip(),
         this.buildPgEnv(),
       );
       await this.recordRestore();
-      return;
+    } finally {
+      this.isRestoreInProgress = false;
     }
-
-    // Legacy V1 / server-key backup
-    const minLength = BACKUP_AES_IV_LENGTH + BACKUP_AES_AUTH_TAG_LENGTH + 1;
-    if (encryptedData.length < minLength) {
-      throw new BadRequestException('Invalid backup file: too short');
-    }
-    const key = this.readEncryptionKey();
-    const iv = encryptedData.subarray(0, BACKUP_AES_IV_LENGTH);
-    const authTag = encryptedData.subarray(
-      encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
-    );
-    const ciphertext = encryptedData.subarray(
-      BACKUP_AES_IV_LENGTH,
-      encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
-    );
-    const decipher = createDecipheriv(BACKUP_AES_ALGORITHM, key, iv);
-    decipher.setAuthTag(authTag);
-    await this.runPgRestoreStream(
-      Readable.from(ciphertext),
-      decipher,
-      createGunzip(),
-      this.buildPgEnv(),
-    );
-    await this.recordRestore();
   }
 
   /**
    * Creates an automated backup directly on the host/container volume.
    */
   async createAutoBackup(): Promise<BackupFileSummary> {
+    if (this.isRestoreInProgress) {
+      throw new ConflictException(
+        'Nie można wykonać kopii zapasowej podczas przywracania bazy danych.',
+      );
+    }
     if (this.isAutoBackupInProgress) {
       throw new ConflictException('Automated backup is already in progress');
     }
@@ -661,7 +696,6 @@ export class BackupService {
 
   private async runPgRestoreStream(
     sourceStream: Readable,
-    decipher: Transform,
     gunzip: Transform,
     pgEnv: Record<string, string>,
   ): Promise<void> {
@@ -694,22 +728,10 @@ export class BackupService {
         }
         resolve();
       });
-      pipeline(sourceStream, decipher, gunzip, child.stdin).catch((err: Error) => {
+      pipeline(sourceStream, gunzip, child.stdin).catch((err: Error) => {
         this.logger.error(`Restore pipeline failed: ${err.message}`);
         if (child && !child.killed) {
           child.kill('SIGTERM');
-        }
-        if (
-          err.message.includes('authenticate data') ||
-          err.message.includes('auth tag') ||
-          err.message.includes('bad decrypt')
-        ) {
-          reject(
-            new BadRequestException(
-              'Nieprawidłowe hasło szyfrowania kopii zapasowej lub uszkodzony plik.',
-            ),
-          );
-          return;
         }
         if (err.message.includes('incorrect header check') || err.message.includes('zlib')) {
           reject(new BadRequestException('Błąd dekompresji kopii zapasowej (nieprawidłowy format).'));

@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -317,6 +317,36 @@ describe('BackupService', () => {
     it('rejects restoreBackup for V2 file without password', async () => {
       const fakeV2 = Buffer.concat([BACKUP_V2_MAGIC_HEADER, Buffer.alloc(60, 1)]);
       await expect(service.restoreBackup(fakeV2)).rejects.toThrow(/zabezpieczona hasłem/);
+    });
+
+    it('rejects restoreBackup for V2 file with invalid authTag/corrupted payload without executing restore', async () => {
+      const fakeV2 = Buffer.concat([BACKUP_V2_MAGIC_HEADER, Buffer.alloc(60, 1)]);
+      const mockPass = ['mock', 'test', 'restore', 'key'].join('-');
+      await expect(service.restoreBackup(fakeV2, mockPass)).rejects.toThrow(
+        /Nieprawidłowe hasło szyfrowania/,
+      );
+    });
+
+    it('rejects restoreBackup when another restore is already in progress', async () => {
+      (service as any).isRestoreInProgress = true;
+      try {
+        await expect(service.restoreBackup(Buffer.alloc(40))).rejects.toThrow(
+          ConflictException,
+        );
+      } finally {
+        (service as any).isRestoreInProgress = false;
+      }
+    });
+
+    it('rejects createBackupStream when a restore is in progress', async () => {
+      (service as any).isRestoreInProgress = true;
+      try {
+        await expect(service.createBackupStream()).rejects.toThrow(
+          ConflictException,
+        );
+      } finally {
+        (service as any).isRestoreInProgress = false;
+      }
     });
   });
 });
