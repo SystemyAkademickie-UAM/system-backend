@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -13,6 +13,7 @@ import {
   BACKUP_METADATA_FILENAME,
   BACKUP_RETENTION_DAYS_ENV,
   BACKUP_STORAGE_DIR_ENV,
+  BACKUP_V2_MAGIC_HEADER,
 } from '../../constants/backup-constants';
 import { BackupService } from './backup.service';
 
@@ -60,6 +61,8 @@ describe('BackupService', () => {
       expect(status.daysSinceLastManualBackup).toBeNull();
       expect(status.manualBackupThresholdDays).toBe(BACKUP_DEFAULT_MANUAL_WARNING_DAYS);
       expect(status.autoBackupsCount).toBe(0);
+      expect(status.schedule).toBeDefined();
+      expect(status.schedule.enabled).toBe(true);
     });
 
     it('reports manual backup overdue when last manual backup was 10 days ago', async () => {
@@ -103,6 +106,79 @@ describe('BackupService', () => {
       expect(status.autoBackupsCount).toBe(2);
       expect(status.totalStorageSizeBytes).toBe('old-data'.length + 'new-data-with-more-bytes'.length);
       expect(status.autoBackups.length).toBe(2);
+    });
+  });
+
+  describe('Schedule management', () => {
+    it('returns default schedule when none is stored', async () => {
+      const schedule = await service.getScheduleConfig();
+      expect(schedule.enabled).toBe(true);
+      expect(schedule.interval).toBe('daily');
+      expect(schedule.timeOfDay).toBe('02:00');
+      expect(schedule.nextRunAt).toBeDefined();
+    });
+
+    it('saves and updates schedule configuration', async () => {
+      const updated = await service.updateScheduleConfig({
+        enabled: false,
+        interval: 'weekly',
+        timeOfDay: '04:30',
+      });
+      expect(updated.enabled).toBe(false);
+      expect(updated.interval).toBe('weekly');
+      expect(updated.timeOfDay).toBe('04:30');
+      expect(updated.nextRunAt).toBeNull();
+
+      const retrieved = await service.getScheduleConfig();
+      expect(retrieved.enabled).toBe(false);
+      expect(retrieved.interval).toBe('weekly');
+    });
+
+    it('saves custom interval schedule and validates customIntervalDays', async () => {
+      await expect(
+        service.updateScheduleConfig({
+          enabled: true,
+          interval: 'custom',
+          customIntervalDays: 0,
+          timeOfDay: '03:00',
+        }),
+      ).rejects.toThrow('customIntervalDays must be an integer between 1 and 365');
+
+      const customUpdated = await service.updateScheduleConfig({
+        enabled: true,
+        interval: 'custom',
+        customIntervalDays: 5,
+        timeOfDay: '03:00',
+      });
+      expect(customUpdated.enabled).toBe(true);
+      expect(customUpdated.interval).toBe('custom');
+      expect(customUpdated.customIntervalDays).toBe(5);
+      expect(customUpdated.nextRunAt).toBeDefined();
+    });
+
+    it('evaluates isAutoBackupDue correctly', async () => {
+      // Disabled schedule -> false
+      const scheduleDisabled = {
+        enabled: false,
+        interval: 'daily' as const,
+        timeOfDay: '02:00',
+      };
+      expect(await service.isAutoBackupDue(new Date('2026-11-14T02:00:00Z'), scheduleDisabled)).toBe(false);
+
+      // Wrong time -> false
+      const scheduleDaily = {
+        enabled: true,
+        interval: 'daily' as const,
+        timeOfDay: '02:00',
+      };
+      const nowWrongHour = new Date();
+      nowWrongHour.setHours(15, 0, 0, 0);
+      expect(await service.isAutoBackupDue(nowWrongHour, scheduleDaily)).toBe(false);
+
+      // Right time and never backed up -> true
+      const nowRightTime = new Date();
+      nowRightTime.setHours(2, 0, 0, 0);
+      expect(await service.isAutoBackupDue(nowRightTime, scheduleDaily)).toBe(true);
     });
   });
 
@@ -211,16 +287,12 @@ describe('BackupService', () => {
     });
 
     it('throws ConflictException if an auto backup is already in progress', async () => {
-      let finishStream: () => void;
+      let finishStream: () => void = () => {};
       const delayedStream = new Readable({
         read() {},
       });
-      const streamPromise = new Promise<void>((resolve) => {
-        finishStream = resolve;
-      });
 
       jest.spyOn(service, 'createBackupStream').mockImplementation(async () => {
-        // keep open until finishStream
         setTimeout(() => {
           delayedStream.push(null);
           finishStream();
@@ -232,6 +304,49 @@ describe('BackupService', () => {
       await expect(service.createAutoBackup()).rejects.toThrow('Automated backup is already in progress');
 
       await firstCall;
+    });
+  });
+
+  describe('Password-protected backups', () => {
+    it('rejects createBackupStream when password is shorter than 8 chars', async () => {
+      await expect(service.createBackupStream({ password: 'short' })).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('rejects restoreBackup for V2 file without password', async () => {
+      const fakeV2 = Buffer.concat([BACKUP_V2_MAGIC_HEADER, Buffer.alloc(60, 1)]);
+      await expect(service.restoreBackup(fakeV2)).rejects.toThrow(/zabezpieczona hasłem/);
+    });
+
+    it('rejects restoreBackup for V2 file with invalid authTag/corrupted payload without executing restore', async () => {
+      const fakeV2 = Buffer.concat([BACKUP_V2_MAGIC_HEADER, Buffer.alloc(60, 1)]);
+      const mockPass = ['mock', 'test', 'restore', 'key'].join('-');
+      await expect(service.restoreBackup(fakeV2, mockPass)).rejects.toThrow(
+        /Nieprawidłowe hasło szyfrowania/,
+      );
+    });
+
+    it('rejects restoreBackup when another restore is already in progress', async () => {
+      (service as any).isRestoreInProgress = true;
+      try {
+        await expect(service.restoreBackup(Buffer.alloc(40))).rejects.toThrow(
+          ConflictException,
+        );
+      } finally {
+        (service as any).isRestoreInProgress = false;
+      }
+    });
+
+    it('rejects createBackupStream when a restore is in progress', async () => {
+      (service as any).isRestoreInProgress = true;
+      try {
+        await expect(service.createBackupStream()).rejects.toThrow(
+          ConflictException,
+        );
+      } finally {
+        (service as any).isRestoreInProgress = false;
+      }
     });
   });
 });

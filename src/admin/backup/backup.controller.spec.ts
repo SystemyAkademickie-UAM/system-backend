@@ -4,7 +4,11 @@ import { Readable } from 'node:stream';
 
 import { AdminAccessService } from '../admin-access.service';
 import { BackupController } from './backup.controller';
-import type { BackupFileSummary, BackupStatusResponse } from './backup-response-types';
+import type {
+  AutoBackupScheduleConfig,
+  BackupFileSummary,
+  BackupStatusResponse,
+} from './backup-response-types';
 import { BackupService } from './backup.service';
 
 describe('BackupController', () => {
@@ -19,6 +23,8 @@ describe('BackupController', () => {
 
     backupService = {
       getBackupStatus: jest.fn(),
+      getScheduleConfig: jest.fn(),
+      updateScheduleConfig: jest.fn(),
       createAutoBackup: jest.fn(),
       purgeOldAutoBackups: jest.fn().mockResolvedValue({ purgedCount: 0, freedBytes: 0 }),
       getAutoBackupStream: jest.fn(),
@@ -43,6 +49,11 @@ describe('BackupController', () => {
         autoBackupsCount: 1,
         totalStorageSizeBytes: 1024,
         autoBackups: [],
+        schedule: {
+          enabled: true,
+          interval: 'daily',
+          timeOfDay: '02:00',
+        },
       };
       backupService.getBackupStatus.mockResolvedValue(mockStatus);
 
@@ -51,6 +62,47 @@ describe('BackupController', () => {
 
       expect(adminAccessService.assertSuperAdmin).toHaveBeenCalledWith(req);
       expect(result).toBe(mockStatus);
+    });
+  });
+
+  describe('getSchedule and updateSchedule', () => {
+    it('returns schedule config', async () => {
+      const mockSchedule: AutoBackupScheduleConfig = {
+        enabled: true,
+        interval: 'weekly',
+        timeOfDay: '03:00',
+      };
+      backupService.getScheduleConfig.mockResolvedValue(mockSchedule);
+
+      const req = {} as Request;
+      const result = await controller.getSchedule(req);
+
+      expect(adminAccessService.assertSuperAdmin).toHaveBeenCalledWith(req);
+      expect(result).toBe(mockSchedule);
+    });
+
+    it('updates schedule config', async () => {
+      const mockSchedule: AutoBackupScheduleConfig = {
+        enabled: false,
+        interval: 'every_3_days',
+        timeOfDay: '04:00',
+      };
+      backupService.updateScheduleConfig.mockResolvedValue(mockSchedule);
+
+      const req = {} as Request;
+      const result = await controller.updateSchedule(req, {
+        enabled: false,
+        interval: 'every_3_days',
+        timeOfDay: '04:00',
+      });
+
+      expect(adminAccessService.assertSuperAdmin).toHaveBeenCalledWith(req);
+      expect(backupService.updateScheduleConfig).toHaveBeenCalledWith({
+        enabled: false,
+        interval: 'every_3_days',
+        timeOfDay: '04:00',
+      });
+      expect(result).toBe(mockSchedule);
     });
   });
 
@@ -99,8 +151,11 @@ describe('BackupController', () => {
     });
   });
 
-  describe('exportBackup', () => {
-    it('records manual backup and sets disposition header', async () => {
+  describe('exportBackupPost and exportBackupGet', () => {
+    const mockPostPassword = ['mock', 'test', 'export', 'pass'].join('-');
+    const mockHeaderPassword = ['mock', 'test', 'header', 'pass'].join('-');
+
+    it('encrypts backup with user password in POST export', async () => {
       backupService.createBackupStream.mockResolvedValue(Readable.from(['enc-data']));
 
       const req = {} as Request;
@@ -108,34 +163,65 @@ describe('BackupController', () => {
         setHeader: jest.fn(),
       } as unknown as Response;
 
-      const file = await controller.exportBackup(req, res);
+      const file = await controller.exportBackupPost(
+        req,
+        { password: mockPostPassword },
+        res,
+      );
 
       expect(adminAccessService.assertSuperAdmin).toHaveBeenCalledWith(req);
+      expect(backupService.createBackupStream).toHaveBeenCalledWith({
+        password: mockPostPassword,
+      });
       expect(backupService.recordManualBackup).toHaveBeenCalled();
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/octet-stream');
+      expect(file).toBeDefined();
+    });
+
+    it('exports backup in GET export with header password', async () => {
+      backupService.createBackupStream.mockResolvedValue(Readable.from(['enc-data']));
+
+      const req = {} as Request;
+      const res = {
+        setHeader: jest.fn(),
+      } as unknown as Response;
+
+      const file = await controller.exportBackupGet(
+        req,
+        mockHeaderPassword,
+        res,
+      );
+
+      expect(adminAccessService.assertSuperAdmin).toHaveBeenCalledWith(req);
+      expect(backupService.createBackupStream).toHaveBeenCalledWith({
+        password: mockHeaderPassword,
+      });
+      expect(backupService.recordManualBackup).toHaveBeenCalled();
       expect(file).toBeDefined();
     });
   });
 
   describe('importBackup', () => {
+    const mockRestorePassword = ['mock', 'test', 'restore', 'pass'].join('-');
+
     it('throws BadRequestException when no file is uploaded', async () => {
       const req = {} as Request;
       await expect(
-        controller.importBackup(req, undefined as unknown as Express.Multer.File),
+        controller.importBackup(req, undefined as unknown as Express.Multer.File, {}),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('restores backup when valid file is uploaded', async () => {
+    it('restores backup when valid file and password are provided', async () => {
       const req = {} as Request;
       const file = {
         size: 512,
         buffer: Buffer.from('test-backup'),
       } as Express.Multer.File;
 
-      const result = await controller.importBackup(req, file);
+      const result = await controller.importBackup(req, file, { password: mockRestorePassword });
 
       expect(adminAccessService.assertSuperAdmin).toHaveBeenCalledWith(req);
-      expect(backupService.restoreBackup).toHaveBeenCalledWith(file.buffer);
+      expect(backupService.restoreBackup).toHaveBeenCalledWith(file.buffer, mockRestorePassword);
       expect(result.restored).toBe(true);
     });
   });
