@@ -24,23 +24,36 @@ import {
   BACKUP_AUTO_FILE_PREFIX,
   BACKUP_DEFAULT_MANUAL_WARNING_DAYS,
   BACKUP_DEFAULT_RETENTION_DAYS,
+  BACKUP_DEFAULT_SCHEDULE_ENABLED,
+  BACKUP_DEFAULT_SCHEDULE_INTERVAL,
+  BACKUP_DEFAULT_SCHEDULE_TIME,
   BACKUP_DEFAULT_STORAGE_DIR,
   BACKUP_ENCRYPTION_KEY_ENV,
   BACKUP_FILE_EXTENSION,
   BACKUP_GZIP_LEVEL,
   BACKUP_MANUAL_WARNING_DAYS_ENV,
   BACKUP_METADATA_FILENAME,
+  BACKUP_PASSWORD_MIN_LENGTH,
+  BACKUP_PBKDF2_SALT_LENGTH,
   BACKUP_PG_RESTORE_WARNING_EXIT_CODE,
   BACKUP_RETENTION_DAYS_ENV,
   BACKUP_STORAGE_DIR_ENV,
+  BACKUP_V2_MAGIC_HEADER,
 } from '../../constants/backup-constants';
 import { resolvePostgresSslOption } from '../../database/postgres-ssl.config';
-import { deriveBackupEncryptionKey } from './backup-crypto';
+import {
+  deriveBackupEncryptionKey,
+  deriveKeyFromPassword,
+  isV2Backup,
+} from './backup-crypto';
 import type {
+  AutoBackupScheduleConfig,
+  AutoBackupScheduleInterval,
   BackupFileSummary,
   BackupMetadata,
   BackupStatusResponse,
 } from './backup-response-types';
+import type { UpdateAutoBackupScheduleDto } from './dto/backup.dto';
 
 @Injectable()
 export class BackupService {
@@ -51,10 +64,38 @@ export class BackupService {
 
   /**
    * Streams pg_dump → gzip → AES-256-GCM.
-   * File layout: IV (16) + ciphertext + auth tag (16).
+   * If options.password is provided, encrypts with PBKDF2 derived key and prepends V2 magic header + salt.
+   * Otherwise, encrypts with the server key (V1).
    */
-  async createBackupStream(): Promise<Readable> {
-    const key = this.readEncryptionKey();
+  async createBackupStream(options?: { password?: string }): Promise<Readable> {
+    let key: Buffer;
+    let headerPrefix: Buffer;
+
+    if (options?.password) {
+      const password = options.password.trim();
+      if (password.length < BACKUP_PASSWORD_MIN_LENGTH) {
+        throw new BadRequestException(
+          `Password must be at least ${BACKUP_PASSWORD_MIN_LENGTH} characters`,
+        );
+      }
+      const salt = randomBytes(BACKUP_PBKDF2_SALT_LENGTH);
+      key = deriveKeyFromPassword(password, salt);
+      const iv = randomBytes(BACKUP_AES_IV_LENGTH);
+      headerPrefix = Buffer.concat([BACKUP_V2_MAGIC_HEADER, salt, iv]);
+      return this.executeDumpPipeline(key, iv, headerPrefix);
+    }
+
+    key = this.readEncryptionKey();
+    const iv = randomBytes(BACKUP_AES_IV_LENGTH);
+    headerPrefix = iv;
+    return this.executeDumpPipeline(key, iv, headerPrefix);
+  }
+
+  private async executeDumpPipeline(
+    key: Buffer,
+    iv: Buffer,
+    headerPrefix: Buffer,
+  ): Promise<Readable> {
     const pgEnv = this.buildPgEnv();
     const child = spawn(
       'pg_dump',
@@ -81,9 +122,8 @@ export class BackupService {
       throw new InternalServerErrorException('Failed to start pg_dump');
     }
     const gzip = createGzip({ level: BACKUP_GZIP_LEVEL });
-    const iv = randomBytes(BACKUP_AES_IV_LENGTH);
     const cipher = createCipheriv(BACKUP_AES_ALGORITHM, key, iv);
-    passThrough.write(iv);
+    passThrough.write(headerPrefix);
     pipeline(
       child.stdout,
       gzip,
@@ -104,22 +144,73 @@ export class BackupService {
 
   /**
    * Restores from an encrypted backup buffer (pg_restore --clean --if-exists).
+   * Supports both V2 (password-encrypted) and V1 (server-key encrypted) backups.
    */
-  async restoreBackup(encryptedData: Buffer): Promise<void> {
+  async restoreBackup(encryptedData: Buffer, password?: string): Promise<void> {
+    if (isV2Backup(encryptedData)) {
+      const minLength =
+        BACKUP_V2_MAGIC_HEADER.length +
+        BACKUP_PBKDF2_SALT_LENGTH +
+        BACKUP_AES_IV_LENGTH +
+        BACKUP_AES_AUTH_TAG_LENGTH +
+        1;
+      if (encryptedData.length < minLength) {
+        throw new BadRequestException('Invalid backup file: too short');
+      }
+      if (!password || password.trim().length === 0) {
+        throw new BadRequestException(
+          'Kopia zapasowa jest zabezpieczona hasłem. Wprowadź hasło szyfrowania.',
+        );
+      }
+      const saltOffset = BACKUP_V2_MAGIC_HEADER.length;
+      const ivOffset = saltOffset + BACKUP_PBKDF2_SALT_LENGTH;
+      const ciphertextOffset = ivOffset + BACKUP_AES_IV_LENGTH;
+
+      const salt = encryptedData.subarray(saltOffset, ivOffset);
+      const iv = encryptedData.subarray(ivOffset, ciphertextOffset);
+      const authTag = encryptedData.subarray(
+        encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
+      );
+      const ciphertext = encryptedData.subarray(
+        ciphertextOffset,
+        encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
+      );
+
+      const key = deriveKeyFromPassword(password, salt);
+      const decipher = createDecipheriv(BACKUP_AES_ALGORITHM, key, iv);
+      decipher.setAuthTag(authTag);
+      await this.runPgRestoreStream(
+        Readable.from(ciphertext),
+        decipher,
+        createGunzip(),
+        this.buildPgEnv(),
+      );
+      await this.recordRestore();
+      return;
+    }
+
+    // Legacy V1 / server-key backup
     const minLength = BACKUP_AES_IV_LENGTH + BACKUP_AES_AUTH_TAG_LENGTH + 1;
     if (encryptedData.length < minLength) {
       throw new BadRequestException('Invalid backup file: too short');
     }
     const key = this.readEncryptionKey();
     const iv = encryptedData.subarray(0, BACKUP_AES_IV_LENGTH);
-    const authTag = encryptedData.subarray(encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH);
+    const authTag = encryptedData.subarray(
+      encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
+    );
     const ciphertext = encryptedData.subarray(
       BACKUP_AES_IV_LENGTH,
       encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
     );
     const decipher = createDecipheriv(BACKUP_AES_ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);
-    await this.runPgRestoreStream(Readable.from(ciphertext), decipher, createGunzip(), this.buildPgEnv());
+    await this.runPgRestoreStream(
+      Readable.from(ciphertext),
+      decipher,
+      createGunzip(),
+      this.buildPgEnv(),
+    );
     await this.recordRestore();
   }
 
@@ -213,6 +304,155 @@ export class BackupService {
   }
 
   /**
+   * Returns current auto-backup schedule configuration.
+   */
+  async getScheduleConfig(): Promise<AutoBackupScheduleConfig> {
+    const metadata = await this.readMetadata();
+    const config: AutoBackupScheduleConfig = {
+      enabled: metadata.schedule?.enabled ?? BACKUP_DEFAULT_SCHEDULE_ENABLED,
+      interval: (metadata.schedule?.interval as AutoBackupScheduleInterval) ?? BACKUP_DEFAULT_SCHEDULE_INTERVAL,
+      customIntervalDays: metadata.schedule?.customIntervalDays ?? null,
+      timeOfDay: metadata.schedule?.timeOfDay ?? BACKUP_DEFAULT_SCHEDULE_TIME,
+    };
+    config.nextRunAt = this.calculateNextRunAt(config, metadata.lastAutoBackupAt);
+    return config;
+  }
+
+  /**
+   * Updates auto-backup schedule configuration.
+   */
+  async updateScheduleConfig(
+    dto: UpdateAutoBackupScheduleDto,
+  ): Promise<AutoBackupScheduleConfig> {
+    if (dto.interval === 'custom') {
+      if (!dto.customIntervalDays || dto.customIntervalDays < 1 || dto.customIntervalDays > 365) {
+        throw new BadRequestException(
+          'customIntervalDays must be an integer between 1 and 365 when interval is "custom"',
+        );
+      }
+    }
+
+    await this.writeMetadata({
+      schedule: {
+        enabled: dto.enabled,
+        interval: dto.interval,
+        customIntervalDays: dto.interval === 'custom' ? dto.customIntervalDays : null,
+        timeOfDay: dto.timeOfDay,
+      },
+    });
+    this.logger.log(
+      `Updated auto-backup schedule: enabled=${dto.enabled}, interval=${dto.interval}, customIntervalDays=${dto.customIntervalDays}, time=${dto.timeOfDay}`,
+    );
+    return this.getScheduleConfig();
+  }
+
+  /**
+   * Calculates next scheduled execution timestamp.
+   */
+  calculateNextRunAt(
+    config: AutoBackupScheduleConfig,
+    lastAutoBackupAt: string | null,
+    now: Date = new Date(),
+  ): string | null {
+    if (!config.enabled) {
+      return null;
+    }
+    const [hourStr, minuteStr] = config.timeOfDay.split(':');
+    const targetHour = parseInt(hourStr, 10);
+    const targetMinute = parseInt(minuteStr, 10);
+
+    const targetToday = new Date(now);
+    targetToday.setHours(targetHour, targetMinute, 0, 0);
+
+    if (!lastAutoBackupAt) {
+      if (now.getTime() < targetToday.getTime()) {
+        return targetToday.toISOString();
+      }
+      return new Date(targetToday.getTime() + 24 * 60 * 60 * 1000).toISOString();
+    }
+
+    const intervalDays = this.getIntervalDays(config.interval, config.customIntervalDays);
+    const lastBackupTime = new Date(lastAutoBackupAt).getTime();
+    const candidate = new Date(lastBackupTime + intervalDays * 24 * 60 * 60 * 1000);
+    candidate.setHours(targetHour, targetMinute, 0, 0);
+
+    if (candidate.getTime() > now.getTime()) {
+      return candidate.toISOString();
+    }
+
+    if (now.getTime() < targetToday.getTime()) {
+      return targetToday.toISOString();
+    }
+    return new Date(targetToday.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  /**
+   * Determines whether an auto-backup is due to run at this exact moment.
+   */
+  async isAutoBackupDue(
+    now: Date = new Date(),
+    config?: AutoBackupScheduleConfig,
+  ): Promise<boolean> {
+    const activeConfig = config ?? (await this.getScheduleConfig());
+    if (!activeConfig.enabled) {
+      return false;
+    }
+
+    const [hourStr, minuteStr] = activeConfig.timeOfDay.split(':');
+    const targetHour = parseInt(hourStr, 10);
+    const targetMinute = parseInt(minuteStr, 10);
+
+    if (now.getHours() !== targetHour || now.getMinutes() !== targetMinute) {
+      return false;
+    }
+
+    const metadata = await this.readMetadata();
+    if (!metadata.lastAutoBackupAt) {
+      return true;
+    }
+
+    const lastDate = new Date(metadata.lastAutoBackupAt);
+    if (
+      activeConfig.interval === 'daily' ||
+      (activeConfig.interval === 'custom' && activeConfig.customIntervalDays === 1)
+    ) {
+      const lastDay = lastDate.toISOString().split('T')[0];
+      const today = now.toISOString().split('T')[0];
+      return lastDay !== today;
+    }
+
+    const intervalDays = this.getIntervalDays(
+      activeConfig.interval,
+      activeConfig.customIntervalDays,
+    );
+    const diffMs = now.getTime() - lastDate.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    return diffDays >= intervalDays - 0.2;
+  }
+
+  private getIntervalDays(
+    interval: AutoBackupScheduleInterval,
+    customIntervalDays?: number | null,
+  ): number {
+    switch (interval) {
+      case 'daily':
+        return 1;
+      case 'every_3_days':
+        return 3;
+      case 'weekly':
+        return 7;
+      case 'every_2_weeks':
+        return 14;
+      case 'custom':
+        return typeof customIntervalDays === 'number' && customIntervalDays >= 1
+          ? Math.floor(customIntervalDays)
+          : 1;
+      default:
+        return 1;
+    }
+  }
+
+  /**
    * Returns backup statistics, last backup timestamps, and warning status.
    */
   async getBackupStatus(): Promise<BackupStatusResponse> {
@@ -271,6 +511,8 @@ export class BackupService {
       }
     }
 
+    const schedule = await this.getScheduleConfig();
+
     return {
       lastBackupAt,
       lastManualBackupAt: metadata.lastManualBackupAt,
@@ -282,6 +524,7 @@ export class BackupService {
       autoBackupsCount: autoBackups.length,
       totalStorageSizeBytes,
       autoBackups,
+      schedule,
     };
   }
 
@@ -351,7 +594,7 @@ export class BackupService {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : BACKUP_DEFAULT_MANUAL_WARNING_DAYS;
   }
 
-  private async readMetadata(): Promise<BackupMetadata> {
+  public async readMetadata(): Promise<BackupMetadata> {
     const metaPath = path.join(this.resolveStorageDir(), BACKUP_METADATA_FILENAME);
     if (!existsSync(metaPath)) {
       return {
@@ -371,6 +614,18 @@ export class BackupService {
         lastManualBackupAt:
           typeof data.lastManualBackupAt === 'string' ? data.lastManualBackupAt : null,
         lastRestoreAt: typeof data.lastRestoreAt === 'string' ? data.lastRestoreAt : null,
+        schedule:
+          data.schedule && typeof data.schedule === 'object'
+            ? {
+                enabled: Boolean(data.schedule.enabled),
+                interval: (data.schedule.interval as AutoBackupScheduleInterval) || 'daily',
+                customIntervalDays:
+                  typeof data.schedule.customIntervalDays === 'number'
+                    ? data.schedule.customIntervalDays
+                    : null,
+                timeOfDay: typeof data.schedule.timeOfDay === 'string' ? data.schedule.timeOfDay : '02:00',
+              }
+            : undefined,
       };
     } catch {
       return {
@@ -389,6 +644,14 @@ export class BackupService {
     const updated: BackupMetadata = {
       ...current,
       ...updates,
+      ...(updates.schedule
+        ? {
+            schedule: {
+              ...current.schedule,
+              ...updates.schedule,
+            },
+          }
+        : {}),
     };
     const metaPath = path.join(storageDir, BACKUP_METADATA_FILENAME);
     const tempPath = `${metaPath}.${randomBytes(4).toString('hex')}.tmp`;
@@ -433,6 +696,25 @@ export class BackupService {
       });
       pipeline(sourceStream, decipher, gunzip, child.stdin).catch((err: Error) => {
         this.logger.error(`Restore pipeline failed: ${err.message}`);
+        if (child && !child.killed) {
+          child.kill('SIGTERM');
+        }
+        if (
+          err.message.includes('authenticate data') ||
+          err.message.includes('auth tag') ||
+          err.message.includes('bad decrypt')
+        ) {
+          reject(
+            new BadRequestException(
+              'Nieprawidłowe hasło szyfrowania kopii zapasowej lub uszkodzony plik.',
+            ),
+          );
+          return;
+        }
+        if (err.message.includes('incorrect header check') || err.message.includes('zlib')) {
+          reject(new BadRequestException('Błąd dekompresji kopii zapasowej (nieprawidłowy format).'));
+          return;
+        }
         reject(new InternalServerErrorException('Restore pipeline failed'));
       });
     });
