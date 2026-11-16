@@ -112,17 +112,21 @@ The HTTP body is **not** log plaintext. The client sends an uncompressed P-256 p
 
 ## Admin database backup (super role)
 
-Encrypted `pg_dump` (custom format) wrapped in gzip + AES-256-GCM. Super role only. File layout: 16-byte IV, ciphertext, 16-byte auth tag. Key: `BACKUP_ENCRYPTION_KEY` (min 32 characters; SHA-256 derived). Required when `NODE_ENV=production`.
+Encrypted `pg_dump` (custom format) wrapped in gzip + AES-256-GCM. Super role only. Server-key files start with a 16-byte IV, then ciphertext and a 16-byte auth tag. Key: `BACKUP_ENCRYPTION_KEY` (min 32 characters; SHA-256 derived). Required when `NODE_ENV=production`. Password files start with `MAQBKPV2`, a 16-byte salt, and a 16-byte IV. The key is PBKDF2-SHA-256 (100000 iterations). The password is accepted only in the POST body, not in a header.
 
-**Export —** `GET /api/admin/backup/export`
+**Schedule —** `GET /api/admin/backup/schedule` and `PUT /api/admin/backup/schedule`
 
-**Authorization:** **super** role (`maq_session`). Missing or non-super → `403 Forbidden`. Missing/short key → `500`.
+**PUT body:** `{ "enabled": true, "interval": "daily", "timeOfDay": "02:00" }`. `interval` is `daily`, `every_3_days`, `weekly`, `every_2_weeks`, or `custom`. `custom` also requires `customIntervalDays` from 1 to 365. `timeOfDay` is `HH:mm` in the server's local clock. A daily run is skipped when a backup already exists on that local calendar day.
+
+**Export —** `GET /api/admin/backup/export` uses the server key. `POST /api/admin/backup/export` with `{ "password": "..." }` (at least 8 characters) writes a password file.
+
+**Authorization:** **super** role (`maq_session`). Missing or non-super → `403 Forbidden`. Missing/short key → `500`. A short password → `400`.
 
 **Response:** `200 OK` — `application/octet-stream` attachment (`backup-<iso>.enc`). Streamed; do not buffer the whole dump in the browser when possible.
 
 **Import —** `POST /api/admin/backup/import`
 
-**Content-Type:** `multipart/form-data` field `file` (`.enc` only, max 100 MiB).
+**Content-Type:** `multipart/form-data` field `file` (`.enc` only, max 100 MiB) and optional `password` for a password file. A password file without a password, or with a wrong password, → `400`.
 
 **Authorization:** **super** role. Invalid file → `400`. Restore runs `pg_restore --clean --if-exists` against the configured `DATABASE_*` (destructive).
 
@@ -2024,6 +2028,62 @@ Public endpoints allowing users to check and open application legal/informationa
 | `/api/documents` | `GET` | List all application documents and their upload status. |
 | `/api/documents/:key` | `GET` | Get metadata of a specific document (`termsOfUse`, `privacyPolicy`, `documentation`). |
 | `/api/documents/:key/file` | `GET` | Serve the PDF binary of a specific document (`?download=1` for attachment). |
+
+---
+
+## FAQ knowledge base management (super role)
+
+Create, inspect, update, reorder, and delete FAQ knowledge base entries. Stored in **`services.faqs`**. Requires **`super`** role.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/faq` | `GET` | List all FAQ entries (`?category=...&search=...`). |
+| `/api/admin/faq/:id` | `GET` | Get details of a single FAQ entry. |
+| `/api/admin/faq` | `POST` | Create a new FAQ entry (`question`, `answer`, optional `category`, `orderIndex`, `isPublished`). |
+| `/api/admin/faq` | `PUT` | Replace all FAQ entries when saving the edited FAQ page (`{ "items": [...] }`). |
+| `/api/admin/faq/:id` | `PUT` | Update an existing FAQ entry. |
+| `/api/admin/faq/reorder` | `PATCH` | Batch update ordering indices for FAQ entries (`{ "items": [{ "id": 1, "orderIndex": 0 }] }`). |
+| `/api/admin/faq/:id` | `DELETE` | Delete an FAQ entry. |
+
+### Create FAQ entry
+
+**Endpoint:** `POST /api/admin/faq` (`application/json`)
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `question` | string | 1–300 chars, required | The FAQ question. |
+| `answer` | string | 1–10000 chars, required | The answer text or markdown. |
+| `category` | string | 1–100 chars (optional, default `Ogólne`) | Category name/identifier. |
+| `orderIndex` | integer | >= 0 (optional, default 0) | Display order within category. |
+| `isPublished` | boolean | optional, default true | Whether visible on public FAQ page. |
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": 1,
+  "question": "Jak zresetować hasło?",
+  "answer": "Przejdź do profilu i kliknij zmień hasło.",
+  "category": "Konto",
+  "orderIndex": 0,
+  "isPublished": true,
+  "createdByUserId": 1,
+  "updatedByUserId": 1,
+  "createdAt": "2026-11-10T20:00:00.000Z",
+  "updatedAt": "2026-11-10T20:00:00.000Z"
+}
+```
+
+---
+
+## FAQ (public / user access)
+
+Public endpoints allowing users to browse published FAQ entries and accordion categories.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/faq` | `GET` | List published FAQ entries (`?category=...`, or `?grouped=1` for category-grouped accordion payload). |
+| `/api/faq/:id` | `GET` | Get a specific published FAQ entry by ID. |
 
 
 

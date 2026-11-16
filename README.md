@@ -94,6 +94,12 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/patch-notes`, `GET /api/patch-notes/latest`, `GET /api/patch-notes/latest/file`, `GET /api/patch-notes/:id/file` — public/user access to patch note PDF history and files
 - `GET /api/admin/documents`, `GET /api/admin/documents/:key`, `GET /api/admin/documents/:key/file`, `PUT /api/admin/documents/:key`, `POST /api/admin/documents/:key`, `DELETE /api/admin/documents/:key` — super only: inspect, upload/replace, and delete application PDF documents (`termsOfUse`, `privacyPolicy`, `documentation`)
 - `GET /api/documents`, `GET /api/documents/:key`, `GET /api/documents/:key/file` — public/user access to application PDF documents
+- `POST /api/admin/faq`, `GET /api/admin/faq`, `GET /api/admin/faq/:id`, `PUT /api/admin/faq`, `PUT /api/admin/faq/:id`, `PATCH /api/admin/faq/reorder`, `DELETE /api/admin/faq/:id` — super only: manage FAQ knowledge base entries (including whole-page edit/save)
+- `GET /api/admin/backup/schedule`, `PUT /api/admin/backup/schedule` — super only: read and update the automatic backup schedule
+- `GET /api/admin/backup/export` — super only: download a server-key backup
+- `POST /api/admin/backup/export` — super only: download a backup encrypted with the password in the JSON body
+- `POST /api/admin/backup/import` — super only: restore a `.enc` backup (`password` form field for a password file)
+- `GET /api/faq`, `GET /api/faq/:id` — public/user access to published FAQ entries (supports `?category=` and `?grouped=1`)
 - `GET /api/broadcasts/me`, `POST /api/broadcasts/:id/read` — authenticated: retrieve active announcements and acknowledge receipts
 - `GET /api/system/status`, `GET /api/system/maintenance` — public probe: operational status and maintenance mode check
 - Local IdP: [docs/saml-local-idp.md](./docs/saml-local-idp.md) (`npm run provision:dev-university` or `npm run idp:up`, 7 test users)

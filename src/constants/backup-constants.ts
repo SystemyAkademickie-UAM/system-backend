@@ -53,3 +53,31 @@ export const BACKUP_METADATA_FILENAME = 'backup-metadata.json';
 export const BACKUP_AUTO_FILENAME_REGEX =
   /^backup-auto-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.enc$/;
 
+/** Magic header for V2 password-encrypted backup files (8 bytes). */
+export const BACKUP_V2_MAGIC_HEADER = Buffer.from('MAQBKPV2', 'utf8');
+
+/** Minimum character length for user-provided backup password. */
+export const BACKUP_PASSWORD_MIN_LENGTH = 8;
+
+/** Salt length in bytes for PBKDF2 key derivation. */
+export const BACKUP_PBKDF2_SALT_LENGTH = 16;
+
+/** Iteration count for PBKDF2 key derivation. */
+export const BACKUP_PBKDF2_ITERATIONS = 100_000;
+
+/** Key length in bytes for AES-256 derived key. */
+export const BACKUP_PBKDF2_KEY_LENGTH = 32;
+
+/** Hash algorithm for PBKDF2 key derivation. */
+export const BACKUP_PBKDF2_DIGEST = 'sha256';
+
+/** Default automated backup schedule enabled status. */
+export const BACKUP_DEFAULT_SCHEDULE_ENABLED = true;
+
+/** Default automated backup schedule interval. */
+export const BACKUP_DEFAULT_SCHEDULE_INTERVAL = 'daily';
+
+/** Default automated backup schedule time of day (24h). */
+export const BACKUP_DEFAULT_SCHEDULE_TIME = '02:00';
+
+
