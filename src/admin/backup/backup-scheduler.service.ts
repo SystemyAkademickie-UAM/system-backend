@@ -4,7 +4,8 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { BackupService } from './backup.service';
 
 /**
- * Automates daily database backups and retention cleanup on the host volume.
+ * Automates dynamic database backups and retention cleanup on the host volume
+ * based on the superadmin-configured schedule.
  */
 @Injectable()
 export class BackupSchedulerService implements OnModuleInit {
@@ -20,18 +21,32 @@ export class BackupSchedulerService implements OnModuleInit {
           `Startup backup retention cleanup: purged ${purgeResult.purgedCount} expired backup(s) (${purgeResult.freedBytes} bytes freed)`,
         );
       }
+      const schedule = await this.backupService.getScheduleConfig();
+      if (schedule.enabled) {
+        this.logger.log(
+          `Auto-backup scheduler initialized: interval=${schedule.interval}, time=${schedule.timeOfDay}, nextRunAt=${schedule.nextRunAt ?? 'unknown'}`,
+        );
+      } else {
+        this.logger.log('Auto-backup scheduler initialized: currently DISABLED by superadmin');
+      }
     } catch (err: unknown) {
-      this.logger.warn(`Startup backup retention cleanup error: ${String(err)}`);
+      this.logger.warn(`Startup backup scheduler init error: ${String(err)}`);
     }
   }
 
   /**
-   * Executes automated backup every day at 02:00 AM.
+   * Evaluates the active schedule every minute and triggers auto-backup when due.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_2AM)
-  async handleDailyAutoBackup(): Promise<void> {
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleScheduledCheck(): Promise<void> {
     try {
-      this.logger.log('Starting scheduled automated database backup...');
+      const now = new Date();
+      const isDue = await this.backupService.isAutoBackupDue(now);
+      if (!isDue) {
+        return;
+      }
+
+      this.logger.log('Scheduled automated database backup is due. Starting dump...');
       const summary = await this.backupService.createAutoBackup();
       this.logger.log(
         `Scheduled automated backup finished: ${summary.filename} (${summary.sizeBytes} bytes)`,

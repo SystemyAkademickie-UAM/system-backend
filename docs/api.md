@@ -112,17 +112,21 @@ The HTTP body is **not** log plaintext. The client sends an uncompressed P-256 p
 
 ## Admin database backup (super role)
 
-Encrypted `pg_dump` (custom format) wrapped in gzip + AES-256-GCM. Super role only. File layout: 16-byte IV, ciphertext, 16-byte auth tag. Key: `BACKUP_ENCRYPTION_KEY` (min 32 characters; SHA-256 derived). Required when `NODE_ENV=production`.
+Encrypted `pg_dump` (custom format) wrapped in gzip + AES-256-GCM. Super role only. Server-key files start with a 16-byte IV, then ciphertext and a 16-byte auth tag. Key: `BACKUP_ENCRYPTION_KEY` (min 32 characters; SHA-256 derived). Required when `NODE_ENV=production`. Password files start with `MAQBKPV2`, a 16-byte salt, and a 16-byte IV. The key is PBKDF2-SHA-256 (100000 iterations). The password is accepted only in the POST body, not in a header.
 
-**Export —** `GET /api/admin/backup/export`
+**Schedule —** `GET /api/admin/backup/schedule` and `PUT /api/admin/backup/schedule`
 
-**Authorization:** **super** role (`maq_session`). Missing or non-super → `403 Forbidden`. Missing/short key → `500`.
+**PUT body:** `{ "enabled": true, "interval": "daily", "timeOfDay": "02:00" }`. `interval` is `daily`, `every_3_days`, `weekly`, `every_2_weeks`, or `custom`. `custom` also requires `customIntervalDays` from 1 to 365. `timeOfDay` is `HH:mm` in the server's local clock. A daily run is skipped when a backup already exists on that local calendar day.
+
+**Export —** `GET /api/admin/backup/export` uses the server key. `POST /api/admin/backup/export` with `{ "password": "..." }` (at least 8 characters) writes a password file.
+
+**Authorization:** **super** role (`maq_session`). Missing or non-super → `403 Forbidden`. Missing/short key → `500`. A short password → `400`.
 
 **Response:** `200 OK` — `application/octet-stream` attachment (`backup-<iso>.enc`). Streamed; do not buffer the whole dump in the browser when possible.
 
 **Import —** `POST /api/admin/backup/import`
 
-**Content-Type:** `multipart/form-data` field `file` (`.enc` only, max 100 MiB).
+**Content-Type:** `multipart/form-data` field `file` (`.enc` only, max 100 MiB) and optional `password` for a password file. A password file without a password, or with a wrong password, → `400`.
 
 **Authorization:** **super** role. Invalid file → `400`. Restore runs `pg_restore --clean --if-exists` against the configured `DATABASE_*` (destructive).
 

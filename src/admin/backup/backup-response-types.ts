@@ -1,3 +1,18 @@
+export type AutoBackupScheduleInterval =
+  | 'daily'
+  | 'every_3_days'
+  | 'weekly'
+  | 'every_2_weeks'
+  | 'custom';
+
+export interface AutoBackupScheduleConfig {
+  enabled: boolean;
+  interval: AutoBackupScheduleInterval;
+  customIntervalDays?: number | null;
+  timeOfDay: string;
+  nextRunAt?: string | null;
+}
+
 export interface BackupFileSummary {
   filename: string;
   createdAt: string;
@@ -15,6 +30,7 @@ export interface BackupStatusResponse {
   autoBackupsCount: number;
   totalStorageSizeBytes: number;
   autoBackups: BackupFileSummary[];
+  schedule: AutoBackupScheduleConfig;
 }
 
 export interface BackupMetadata {
@@ -22,4 +38,5 @@ export interface BackupMetadata {
   lastAutoBackupFilename: string | null;
   lastManualBackupAt: string | null;
   lastRestoreAt: string | null;
+  schedule?: AutoBackupScheduleConfig;
 }
