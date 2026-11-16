@@ -153,7 +153,6 @@ describe('BackupController', () => {
 
   describe('exportBackupPost and exportBackupGet', () => {
     const mockPostPassword = ['mock', 'test', 'export', 'pass'].join('-');
-    const mockHeaderPassword = ['mock', 'test', 'header', 'pass'].join('-');
 
     it('encrypts backup with user password in POST export', async () => {
       backupService.createBackupStream.mockResolvedValue(Readable.from(['enc-data']));
@@ -178,7 +177,7 @@ describe('BackupController', () => {
       expect(file).toBeDefined();
     });
 
-    it('exports backup in GET export with header password', async () => {
+    it('exports a server-key backup from GET without taking a password header', async () => {
       backupService.createBackupStream.mockResolvedValue(Readable.from(['enc-data']));
 
       const req = {} as Request;
@@ -186,16 +185,10 @@ describe('BackupController', () => {
         setHeader: jest.fn(),
       } as unknown as Response;
 
-      const file = await controller.exportBackupGet(
-        req,
-        mockHeaderPassword,
-        res,
-      );
+      const file = await controller.exportBackupGet(req, res);
 
       expect(adminAccessService.assertSuperAdmin).toHaveBeenCalledWith(req);
-      expect(backupService.createBackupStream).toHaveBeenCalledWith({
-        password: mockHeaderPassword,
-      });
+      expect(backupService.createBackupStream).toHaveBeenCalledWith();
       expect(backupService.recordManualBackup).toHaveBeenCalled();
       expect(file).toBeDefined();
     });

@@ -3,7 +3,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   HttpStatus,
   Logger,
@@ -157,19 +156,16 @@ export class BackupController {
 
   @Get('export')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Export encrypted database backup stream (legacy / server-key or header password)' })
+  @ApiOperation({ summary: 'Export encrypted database backup stream (server key)' })
   @ApiOkResponse({ description: 'Encrypted backup file (.enc)' })
   @ApiForbiddenResponse({ description: 'Caller is not a super admin' })
   async exportBackupGet(
     @Req() req: Request,
-    @Headers('x-backup-password') headerPassword: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
     await this.adminAccessService.assertSuperAdmin(req);
     this.logger.log('Super admin initiated database backup export');
-    const stream = await this.backupService.createBackupStream(
-      headerPassword ? { password: headerPassword } : undefined,
-    );
+    const stream = await this.backupService.createBackupStream();
     await this.backupService.recordManualBackup();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     res.setHeader('Content-Type', BACKUP_CONTENT_TYPE);

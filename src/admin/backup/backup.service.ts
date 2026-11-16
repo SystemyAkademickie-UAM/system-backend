@@ -55,6 +55,13 @@ import type {
 } from './backup-response-types';
 import type { UpdateAutoBackupScheduleDto } from './dto/backup.dto';
 
+function formatLocalCalendarDay(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 @Injectable()
 export class BackupService {
   private readonly logger = new Logger(BackupService.name);
@@ -178,9 +185,15 @@ export class BackupService {
         if (encryptedData.length < minLength) {
           throw new BadRequestException('Nieprawidłowy plik kopii zapasowej: plik jest zbyt krótki.');
         }
-        if (!password || password.trim().length === 0) {
+        const trimmedPassword = password?.trim() ?? '';
+        if (trimmedPassword.length === 0) {
           throw new BadRequestException(
             'Kopia zapasowa jest zabezpieczona hasłem. Wprowadź hasło szyfrowania.',
+          );
+        }
+        if (trimmedPassword.length < BACKUP_PASSWORD_MIN_LENGTH) {
+          throw new BadRequestException(
+            `Password must be at least ${BACKUP_PASSWORD_MIN_LENGTH} characters`,
           );
         }
         const saltOffset = BACKUP_V2_MAGIC_HEADER.length;
@@ -197,7 +210,7 @@ export class BackupService {
           encryptedData.length - BACKUP_AES_AUTH_TAG_LENGTH,
         );
 
-        const key = deriveKeyFromPassword(password, salt);
+        const key = deriveKeyFromPassword(trimmedPassword, salt);
         const decipher = createDecipheriv(BACKUP_AES_ALGORITHM, key, iv);
         decipher.setAuthTag(authTag);
         try {
@@ -451,9 +464,7 @@ export class BackupService {
       activeConfig.interval === 'daily' ||
       (activeConfig.interval === 'custom' && activeConfig.customIntervalDays === 1)
     ) {
-      const lastDay = lastDate.toISOString().split('T')[0];
-      const today = now.toISOString().split('T')[0];
-      return lastDay !== today;
+      return formatLocalCalendarDay(lastDate) !== formatLocalCalendarDay(now);
     }
 
     const intervalDays = this.getIntervalDays(

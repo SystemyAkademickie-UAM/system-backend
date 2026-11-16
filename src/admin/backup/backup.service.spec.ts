@@ -179,6 +179,16 @@ describe('BackupService', () => {
       const nowRightTime = new Date();
       nowRightTime.setHours(2, 0, 0, 0);
       expect(await service.isAutoBackupDue(nowRightTime, scheduleDaily)).toBe(true);
+
+      const earlierToday = new Date(nowRightTime);
+      earlierToday.setHours(1, 0, 0, 0);
+      const metaPath = path.join(tempDir, BACKUP_METADATA_FILENAME);
+      await fs.promises.writeFile(
+        metaPath,
+        JSON.stringify({ lastAutoBackupAt: earlierToday.toISOString() }),
+        'utf8',
+      );
+      expect(await service.isAutoBackupDue(nowRightTime, scheduleDaily)).toBe(false);
     });
   });
 
@@ -208,7 +218,10 @@ describe('BackupService', () => {
       const pastTime = (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000;
       await fs.promises.utimes(oldPath, pastTime, pastTime);
 
-      const recentFilename = `${BACKUP_AUTO_FILE_PREFIX}2026-11-01T00-00-00-000Z${BACKUP_FILE_EXTENSION}`;
+      const recentStamp = new Date(Date.now() - 24 * 60 * 60 * 1000)
+        .toISOString()
+        .replace(/[:.]/g, '-');
+      const recentFilename = `${BACKUP_AUTO_FILE_PREFIX}${recentStamp}${BACKUP_FILE_EXTENSION}`;
       const recentPath = path.join(tempDir, recentFilename);
       await fs.promises.writeFile(recentPath, 'recent data');
 
@@ -310,6 +323,13 @@ describe('BackupService', () => {
   describe('Password-protected backups', () => {
     it('rejects createBackupStream when password is shorter than 8 chars', async () => {
       await expect(service.createBackupStream({ password: 'short' })).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('rejects a short password for a V2 backup before decrypting', async () => {
+      const fakeV2 = Buffer.concat([BACKUP_V2_MAGIC_HEADER, Buffer.alloc(60, 1)]);
+      await expect(service.restoreBackup(fakeV2, 'short')).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });
