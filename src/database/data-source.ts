@@ -18,6 +18,7 @@ import { BroadcastEntity } from './entities/broadcast.entity';
 import { MaintenanceModeEntity } from './entities/maintenance-mode.entity';
 import { SystemDocumentEntity } from './entities/system-document.entity';
 import { PatchNoteEntity } from './entities/patch-note.entity';
+import { FaqEntity } from './entities/faq.entity';
 import { UserBroadcastStatusEntity } from './entities/user-broadcast-status.entity';
 import { resolvePostgresSslOption } from './postgres-ssl.config';
 import { assertDatabaseEnv } from '../validate-env';
@@ -62,6 +63,7 @@ export default new DataSource({
     MaintenanceModeEntity,
     SystemDocumentEntity,
     PatchNoteEntity,
+    FaqEntity,
   ],
   migrations: [join(__dirname, 'migrations', isTypeScriptContext ? '*.ts' : '*.js')],
   synchronize: false,

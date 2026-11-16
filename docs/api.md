@@ -2025,6 +2025,62 @@ Public endpoints allowing users to check and open application legal/informationa
 | `/api/documents/:key` | `GET` | Get metadata of a specific document (`termsOfUse`, `privacyPolicy`, `documentation`). |
 | `/api/documents/:key/file` | `GET` | Serve the PDF binary of a specific document (`?download=1` for attachment). |
 
+---
+
+## FAQ knowledge base management (super role)
+
+Create, inspect, update, reorder, and delete FAQ knowledge base entries. Stored in **`services.faqs`**. Requires **`super`** role.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/faq` | `GET` | List all FAQ entries (`?category=...&search=...`). |
+| `/api/admin/faq/:id` | `GET` | Get details of a single FAQ entry. |
+| `/api/admin/faq` | `POST` | Create a new FAQ entry (`question`, `answer`, optional `category`, `orderIndex`, `isPublished`). |
+| `/api/admin/faq` | `PUT` | Replace all FAQ entries when saving the edited FAQ page (`{ "items": [...] }`). |
+| `/api/admin/faq/:id` | `PUT` | Update an existing FAQ entry. |
+| `/api/admin/faq/reorder` | `PATCH` | Batch update ordering indices for FAQ entries (`{ "items": [{ "id": 1, "orderIndex": 0 }] }`). |
+| `/api/admin/faq/:id` | `DELETE` | Delete an FAQ entry. |
+
+### Create FAQ entry
+
+**Endpoint:** `POST /api/admin/faq` (`application/json`)
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `question` | string | 1–300 chars, required | The FAQ question. |
+| `answer` | string | 1–10000 chars, required | The answer text or markdown. |
+| `category` | string | 1–100 chars (optional, default `Ogólne`) | Category name/identifier. |
+| `orderIndex` | integer | >= 0 (optional, default 0) | Display order within category. |
+| `isPublished` | boolean | optional, default true | Whether visible on public FAQ page. |
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": 1,
+  "question": "Jak zresetować hasło?",
+  "answer": "Przejdź do profilu i kliknij zmień hasło.",
+  "category": "Konto",
+  "orderIndex": 0,
+  "isPublished": true,
+  "createdByUserId": 1,
+  "updatedByUserId": 1,
+  "createdAt": "2026-11-10T20:00:00.000Z",
+  "updatedAt": "2026-11-10T20:00:00.000Z"
+}
+```
+
+---
+
+## FAQ (public / user access)
+
+Public endpoints allowing users to browse published FAQ entries and accordion categories.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/faq` | `GET` | List published FAQ entries (`?category=...`, or `?grouped=1` for category-grouped accordion payload). |
+| `/api/faq/:id` | `GET` | Get a specific published FAQ entry by ID. |
+
 
 
 
