@@ -95,6 +95,7 @@ An organization administrator may assign `student` or `lecturer`. A super admini
 | `/api/admin/organizations/:organizationId/accounts/:accountId` | `PATCH` | Any of `email`, `name`, `surname`, `nickname`, `role`. |
 | `/api/admin/organizations/:organizationId/accounts/import` | `POST` | Body `{ "users": [ ... ] }` with at most 500 rows. Response `{ "created", "updated", "skipped", "failed" }`. An existing person is reused. A role that is already present is `skipped`. `updated` stays `0`. |
 | `/api/admin/organizations/:organizationId/accounts/export` | `GET` | `text/csv` of every account in this organization. |
+| `/api/admin/organization-log` | `GET` | Organization administrator log for the session organization. Query: `category` (`all`, `organization`, `group`), `limit`, and together `before`, `beforeId`, `beforeSource`. |
 | `/api/admin/organizations/:organizationId/accounts/:accountId/magic-link` | `POST` | Sends the existing email magic link. Allowed only when the organization `loginMethod` is `email`. |
 | `/api/admin/organizations/:organizationId/accounts/:accountId` | `DELETE` | Removes the account in this organization. The user row is deleted only when no membership remains. |
 

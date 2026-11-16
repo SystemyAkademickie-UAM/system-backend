@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
@@ -19,6 +20,13 @@ import {
   ORGANIZATION_ACCOUNT_PLACEHOLDER_STUDENT_ID,
 } from '../../constants/organization-account-management-constants';
 import { ORGANIZATION_LOGIN_METHOD_EMAIL } from '../../constants/organization-constants';
+import {
+  ORGANIZATION_LOG_CATEGORY_ORGANIZATION,
+  ORGANIZATION_LOG_KIND_LOGIN_LINK_SENT,
+  ORGANIZATION_LOG_KIND_ROLE_GRANTED,
+  ORGANIZATION_LOG_KIND_ROLE_REVOKED,
+} from '../../constants/organization-log-constants';
+import { OrganizationLogService } from '../../organization-log/organization-log.service';
 import {
   ADMINISTRATOR_ROLE_NAME,
   SUPER_ROLE_NAME,
@@ -63,7 +71,8 @@ export class AdminOrganizationAccountRosterService {
     private readonly accountRepository: Repository<AccountEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-    private readonly dataSource: DataSource) {}
+    private readonly dataSource: DataSource,
+    @Optional() private readonly organizationLogService?: OrganizationLogService) {}
 
   /** Reads one account that belongs to the organization in the URL. */
   async getOrganizationAccount(
@@ -99,7 +108,7 @@ export class AdminOrganizationAccountRosterService {
     };
   }
 
-  /** Builds a CSV of every account in the organization. */
+  /** Builds a CSV of every account in the organization. The file has no account or user id. */
   async exportOrganizationAccountsCsv(req: Request, organizationId: number): Promise<string> {
     await this.requireActor(req, organizationId);
     await this.requireActiveOrganization(organizationId);
@@ -125,10 +134,11 @@ export class AdminOrganizationAccountRosterService {
     this.assertRoleAllowed(actor, dto.role);
     const email = this.normalizeEmail(dto.email);
     const existingUser = await this.findUserByEmail(email);
-    if (existingUser === null) {
-      return this.createUserAndAccount(organizationId, email, dto);
-    }
-    return this.linkExistingUser(organizationId, existingUser, dto, email);
+    const item = existingUser === null
+      ? await this.createUserAndAccount(organizationId, email, dto)
+      : await this.linkExistingUser(organizationId, existingUser, dto, email);
+    await this.recordRole(actor.userId, organizationId, item, ORGANIZATION_LOG_KIND_ROLE_GRANTED);
+    return item;
   }
 
   /** Changes role or profile fields for one account in this organization. */
@@ -143,6 +153,7 @@ export class AdminOrganizationAccountRosterService {
       throw new BadRequestException('At least one field is required');
     }
     const account = await this.findAccountInOrganization(organizationId, accountId);
+    const previousRole = account.role;
     this.assertTargetMutable(actor, account.role);
     if (dto.role !== undefined) {
       this.assertRoleAllowed(actor, dto.role);
@@ -157,7 +168,12 @@ export class AdminOrganizationAccountRosterService {
         await manager.getRepository(AccountEntity).save(account);
       }
     });
-    return this.loadAccountItem(organizationId, accountId);
+    const updated = await this.loadAccountItem(organizationId, accountId);
+    if (dto.role !== undefined && dto.role !== previousRole) {
+      await this.recordRole(actor.userId, organizationId, { ...updated, role: previousRole }, ORGANIZATION_LOG_KIND_ROLE_REVOKED);
+      await this.recordRole(actor.userId, organizationId, updated, ORGANIZATION_LOG_KIND_ROLE_GRANTED);
+    }
+    return updated;
   }
 
   /** Imports many accounts and reports which rows were created, updated, skipped, or failed. */
@@ -182,13 +198,15 @@ export class AdminOrganizationAccountRosterService {
     req: Request,
     organizationId: number,
     accountId: number): Promise<RequestMagicLinkResponse> {
-    await this.requireActor(req, organizationId);
+    const actor = await this.requireActor(req, organizationId);
     const organization = await this.requireActiveOrganization(organizationId);
     if (organization.loginMethod !== ORGANIZATION_LOGIN_METHOD_EMAIL) {
       throw new BadRequestException('Magic links are only available for email-login organizations');
     }
     const item = await this.loadAccountItem(organizationId, accountId);
-    return this.magicLinkService.requestMagicLink(item.email, organizationId, req);
+    const response = await this.magicLinkService.requestMagicLink(item.email, organizationId, req);
+    await this.recordRole(actor.userId, organizationId, item, ORGANIZATION_LOG_KIND_LOGIN_LINK_SENT);
+    return response;
   }
 
   private async importOne(
@@ -201,17 +219,36 @@ export class AdminOrganizationAccountRosterService {
     const email = this.normalizeEmail(dto.email);
     const existingUser = await this.findUserByEmail(email);
     if (existingUser === null) {
-      await this.createUserAndAccount(organizationId, email, dto);
+      const created = await this.createUserAndAccount(organizationId, email, dto);
+      await this.recordRole(actor.userId, organizationId, created, ORGANIZATION_LOG_KIND_ROLE_GRANTED);
       return 'created';
     }
     const existingAccount = await this.accountRepository.findOne({
       where: { userId: existingUser.id, organizationId, role: dto.role },
     });
     if (existingAccount === null) {
-      await this.linkExistingUser(organizationId, existingUser, dto, email);
+      const created = await this.linkExistingUser(organizationId, existingUser, dto, email);
+      await this.recordRole(actor.userId, organizationId, created, ORGANIZATION_LOG_KIND_ROLE_GRANTED);
       return 'created';
     }
     return 'skipped';
+  }
+
+  private async recordRole(
+    actorUserId: number,
+    organizationId: number,
+    item: OrganizationAccountListItem,
+    kind: string,
+  ): Promise<void> {
+    await this.organizationLogService?.record({
+      organizationId,
+      category: ORGANIZATION_LOG_CATEGORY_ORGANIZATION,
+      kind,
+      actorUserId,
+      subjectAccountId: item.accountId,
+      subjectName: `${item.name} ${item.surname}`.trim(),
+      roleName: item.role,
+    });
   }
 
   private async createUserAndAccount(

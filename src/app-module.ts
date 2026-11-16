@@ -29,6 +29,7 @@ import { DocumentsModule } from './documents/documents-module';
 import { MaintenanceModeModule } from './maintenance/maintenance-mode.module';
 import { PatchNotesModule } from './patch-notes/patch-notes-module';
 import { FaqModule } from './faq/faq-module';
+import { OrganizationLogModule } from './organization-log/organization-log.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { FaqModule } from './faq/faq-module';
     DocumentsModule,
     PatchNotesModule,
     FaqModule,
+    OrganizationLogModule,
   ],
 })
 export class AppModule {}

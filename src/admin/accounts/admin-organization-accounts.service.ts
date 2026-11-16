@@ -27,6 +27,7 @@ export type OrganizationAccountListItem = {
 export type ManageableOrganizationItem = {
   id: number;
   name: string;
+  loginMethod: string;
 };
 
 @Injectable()
@@ -56,6 +57,7 @@ export class AdminOrganizationAccountsService {
       return organizations.map((organization) => ({
         id: organization.id,
         name: organization.name,
+        loginMethod: organization.loginMethod,
       }));
     }
     const adminAccounts = await this.accountRepository.find({
@@ -73,6 +75,7 @@ export class AdminOrganizationAccountsService {
     return organizations.map((organization) => ({
       id: organization.id,
       name: organization.name,
+      loginMethod: organization.loginMethod,
     }));
   }
 

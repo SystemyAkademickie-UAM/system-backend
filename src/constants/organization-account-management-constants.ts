@@ -38,10 +38,11 @@ export const ORGANIZATION_ACCOUNT_SUPER_ASSIGNABLE_ROLES = [
 /** Download name for the organization account CSV. */
 export const ORGANIZATION_ACCOUNT_EXPORT_FILENAME = 'organization-accounts.csv';
 
-/** CSV column order for the organization account export. */
+/**
+ * CSV column order for the organization account export.
+ * Account and user ids stay out of the file. Import creates rows from email, name, surname, nickname, and role, and the database assigns new ids.
+ */
 export const ORGANIZATION_ACCOUNT_EXPORT_COLUMNS = [
-  'accountId',
-  'userId',
   'email',
   'name',
   'surname',

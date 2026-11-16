@@ -15,6 +15,7 @@ import { AdminOrganizationAccountRosterService } from './accounts/admin-organiza
 import { AdminManageableOrganizationsController } from './accounts/admin-manageable-organizations.controller';
 import { AdminOrganizationAccountsController } from './accounts/admin-organization-accounts.controller';
 import { AdminOrganizationAccountsService } from './accounts/admin-organization-accounts.service';
+import { OrganizationLogModule } from '../organization-log/organization-log.module';
 import { SuperAdminBootstrapModule } from './bootstrap/super-admin-bootstrap.module';
 import { AdminOrganizationAdministratorsController } from './organizations/admin-organization-administrators.controller';
 import { AdminOrganizationAdministratorsService } from './organizations/admin-organization-administrators.service';
@@ -34,6 +35,7 @@ import { AdminOrganizationsService } from './organizations/admin-organizations.s
     SessionModule,
     UserRolesModule,
     SuperAdminBootstrapModule,
+    OrganizationLogModule,
   ],
   controllers: [
     AdminOrganizationsController,

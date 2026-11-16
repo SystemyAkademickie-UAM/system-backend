@@ -71,8 +71,8 @@ describe('AdminOrganizationAccountsService', () => {
     ]);
 
     await expect(service.listManageableOrganizations(req)).resolves.toEqual([
-      { id: 1, name: 'Org A' },
-      { id: 2, name: 'Org B' },
+      { id: 1, name: 'Org A', loginMethod: undefined },
+      { id: 2, name: 'Org B', loginMethod: undefined },
     ]);
   });
 
@@ -85,7 +85,7 @@ describe('AdminOrganizationAccountsService', () => {
     ]);
 
     await expect(service.listManageableOrganizations(req)).resolves.toEqual([
-      { id: 5, name: 'Managed Org' },
+      { id: 5, name: 'Managed Org', loginMethod: undefined },
     ]);
   });
 

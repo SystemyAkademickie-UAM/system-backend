@@ -214,8 +214,10 @@ describe('AdminOrganizationAccountRosterService', () => {
 
     const actual = await service.exportOrganizationAccountsCsv(req, 11);
 
-    expect(actual).toContain('accountId,userId,email,name,surname,nickname,role');
-    expect(actual).toContain('a@university.example');
+    expect(actual.startsWith('email,name,surname,nickname,role\n')).toBe(true);
+    expect(actual).toContain('a@university.example,A,One,a,student');
+    expect(actual).not.toContain('accountId');
+    expect(actual).not.toContain('userId');
   });
 
   it('counts a new import row as created', async () => {

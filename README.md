@@ -93,6 +93,7 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `PATCH /api/admin/organizations/:organizationId/accounts/:accountId` — change email, name, surname, nickname, or role
 - `POST /api/admin/organizations/:organizationId/accounts/import` — body `{ "users": [ ...same fields... ] }`, up to 500 rows
 - `GET /api/admin/organizations/:organizationId/accounts/export` — CSV of that organization's accounts
+- `GET /api/admin/organization-log` — organization administrator log for the session organization (`category=all|organization|group`)
 - `POST /api/admin/organizations/:organizationId/accounts/:accountId/magic-link` — email a magic login link when the organization login method is `email`
 - `DELETE /api/admin/organizations/:organizationId/accounts/:accountId` — remove that organization's account (see [docs/api.md](./docs/api.md))
 - `POST /api/admin/broadcasts`, `GET /api/admin/broadcasts`, `DELETE /api/admin/broadcasts/:id` — super only: manage platform-wide announcements

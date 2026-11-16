@@ -1,8 +1,13 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import {
+  ORGANIZATION_LOG_CATEGORY_ORGANIZATION,
+  ORGANIZATION_LOG_KIND_SIGNED_IN,
+} from '../../constants/organization-log-constants';
 import { ROLE_PRIORITY_ORDER } from '../../constants/role-name-constants';
+import { OrganizationLogService } from '../../organization-log/organization-log.service';
 import { AccountEntity } from '../../database/entities/account.entity';
 import { OrganizationEntity } from '../../database/entities/organization.entity';
 import { UserEntity } from '../../database/entities/user.entity';
@@ -38,6 +43,7 @@ export class LoginContextService {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     private readonly sessionIssuanceService: SessionIssuanceService,
+    @Optional() private readonly organizationLogService?: OrganizationLogService,
   ) {}
 
   /**
@@ -109,6 +115,7 @@ export class LoginContextService {
         remembered.organizationId,
         remembered.role,
       );
+      await this.recordSignIn(userId, remembered.organizationId, remembered.role);
       return;
     }
 
@@ -120,6 +127,7 @@ export class LoginContextService {
         pairs[0].role,
       );
       await this.remember(userId, pairs[0].organizationId, pairs[0].role);
+      await this.recordSignIn(userId, pairs[0].organizationId, pairs[0].role);
       return;
     }
 
@@ -135,6 +143,9 @@ export class LoginContextService {
       loginOrganization.organizationId,
       role,
     );
+    if (role !== null) {
+      await this.recordSignIn(userId, loginOrganization.organizationId, role);
+    }
   }
 
   /**
@@ -179,6 +190,25 @@ export class LoginContextService {
       match.role,
     );
     await this.remember(userId, match.organizationId, match.role);
+    await this.recordSignIn(userId, match.organizationId, match.role);
+  }
+
+  private async recordSignIn(userId: number, organizationId: number, role: string): Promise<void> {
+    if (!this.organizationLogService) {
+      return;
+    }
+    const account = await this.accountRepository.findOne({
+      where: { userId, organizationId, role },
+      select: ['id'],
+    });
+    await this.organizationLogService?.record({
+      organizationId,
+      category: ORGANIZATION_LOG_CATEGORY_ORGANIZATION,
+      kind: ORGANIZATION_LOG_KIND_SIGNED_IN,
+      actorUserId: userId,
+      subjectAccountId: account?.id ?? null,
+      roleName: role,
+    });
   }
 
   private async remember(userId: number, organizationId: number, role: string): Promise<void> {

@@ -6,6 +6,7 @@ import { AccountEntity } from '../../database/entities/account.entity';
 import { MagicLinkTokenEntity } from '../../database/entities/magic-link-token.entity';
 import { OrganizationEntity } from '../../database/entities/organization.entity';
 import { UserEntity } from '../../database/entities/user.entity';
+import { OrganizationLogModule } from '../../organization-log/organization-log.module';
 import { RegistrationModule } from '../../registration/registration.module';
 import { UserRolesModule } from '../../user-roles/user-roles-module';
 import { AuthTokenSessionModule } from '../api-token/auth-token-session-module';
@@ -34,6 +35,7 @@ import { SamlLinkedUserService } from './saml-linked-user.service';
     OrganizationLoginModule,
     forwardRef(() => SamlModule),
     RegistrationModule,
+    OrganizationLogModule,
   ],
   controllers: [LoginController, LogoutController],
   providers: [

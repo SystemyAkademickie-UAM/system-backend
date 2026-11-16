@@ -13,6 +13,7 @@ import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserRolesModule } from '../user-roles/user-roles-module';
 import { GroupAuthorizationModule } from '../groups/group-authorization.module';
 import { GamificationModule } from '../gamification/gamification-module';
+import { OrganizationLogModule } from '../organization-log/organization-log.module';
 import { BacklogModule } from '../backlog/backlog-module';
 import { ReportsService } from './reports-service';
 import { StudentBadgesService } from './student-badges-service';
@@ -41,6 +42,7 @@ import { StudentProgressService } from './student-progress-service';
     GroupAuthorizationModule,
     GamificationModule,
     BacklogModule,
+    OrganizationLogModule,
   ],
   controllers: [StudentManagementController],
   providers: [StudentManagementService, StudentBadgesService, StudentProgressService, ReportsService],

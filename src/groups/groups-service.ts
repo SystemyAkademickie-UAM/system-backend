@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, Optional, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { In, QueryFailedError, Repository } from 'typeorm';
@@ -17,7 +17,9 @@ import {
   GENERATE_CODE_RESULT_NOT_AUTHORIZED,
   GROUP_GENERATE_CODE_API_JSON_STATUS_OK,
 } from '../constants/group-generate-code-api-constants';
+import { ORGANIZATION_LOG_KIND_GROUP_CREATED } from '../constants/organization-log-constants';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { OrganizationLogService } from '../organization-log/organization-log.service';
 import { AccountEntity } from '../database/entities/account.entity';
 import { AvatarEntity } from '../database/entities/avatar.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
@@ -137,7 +139,8 @@ export class GroupsService {
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(StudentStatsEntity)
-    private readonly studentStatsRepository: Repository<StudentStatsEntity>) { }
+    private readonly studentStatsRepository: Repository<StudentStatsEntity>,
+    @Optional() private readonly organizationLogService?: OrganizationLogService) { }
 
   async assertLecturerOwnsGroupAndGetAccountId(
     userId: number,
@@ -256,6 +259,11 @@ export class GroupsService {
         const savedGroup = await manager.save(entity);
         await this.shopItemsService.ensureDefaultExtraLifeItem(savedGroup.id, manager);
         return savedGroup;
+      });
+      await this.organizationLogService?.recordForGroup({
+        groupId: saved.id,
+        kind: ORGANIZATION_LOG_KIND_GROUP_CREATED,
+        actorAccountId: lecturerAccountId,
       });
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,

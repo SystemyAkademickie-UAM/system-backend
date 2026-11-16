@@ -1,11 +1,13 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, Optional, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
 import { BacklogService } from '../backlog/backlog-service';
+import { ORGANIZATION_LOG_KIND_REMOVED_FROM_GROUP } from '../constants/organization-log-constants';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { OrganizationLogService } from '../organization-log/organization-log.service';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
@@ -70,7 +72,8 @@ export class StudentManagementService {
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
     private readonly ranksService: RanksService,
-    private readonly groupAuthorizationService: GroupAuthorizationService) {}
+    private readonly groupAuthorizationService: GroupAuthorizationService,
+    @Optional() private readonly organizationLogService?: OrganizationLogService) {}
 
   /**
    * GET /groups/:groupId/students
@@ -315,6 +318,11 @@ export class StudentManagementService {
         [enrollment.id]);
 
       await queryRunner.commitTransaction();
+      await this.organizationLogService?.recordForGroup({
+        groupId,
+        kind: ORGANIZATION_LOG_KIND_REMOVED_FROM_GROUP,
+        actorAccountId: accountId,
+      });
       this.logger.log(`Student (account=${accountId}) removed from group ${groupId}`);
       return { removed: true };
     } catch (err: unknown) {
