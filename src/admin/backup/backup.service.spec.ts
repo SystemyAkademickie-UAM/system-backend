@@ -132,7 +132,8 @@ describe('BackupService', () => {
       const pastTime = (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000;
       await fs.promises.utimes(oldPath, pastTime, pastTime);
 
-      const recentFilename = `${BACKUP_AUTO_FILE_PREFIX}2026-11-01T00-00-00-000Z${BACKUP_FILE_EXTENSION}`;
+      const recentTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().replace(/:/g, '-');
+      const recentFilename = `${BACKUP_AUTO_FILE_PREFIX}${recentTime}${BACKUP_FILE_EXTENSION}`;
       const recentPath = path.join(tempDir, recentFilename);
       await fs.promises.writeFile(recentPath, 'recent data');
 

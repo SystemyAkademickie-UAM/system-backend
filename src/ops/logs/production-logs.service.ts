@@ -35,11 +35,15 @@ export class ProductionLogsService {
     clientPublicKeyBase64: string,
     day: string | undefined,
     queryAuth?: string,
+    organizationId?: string,
   ): Promise<{ day: string; algorithm: string; serverPublicKey: string; iv: string; ciphertext: string; authTag: string }> {
     await this.adminAccessService.assertSuperAdmin(req, queryAuth);
     const calendarDate = this.resolveDay(day);
     const clientPublicKey = this.parseClientPublicKey(clientPublicKeyBase64);
-    const plaintext = this.logStore.readDayPlaintext(calendarDate);
+    let plaintext = this.logStore.readDayPlaintext(calendarDate);
+    if (organizationId && organizationId.trim() !== '' && organizationId.trim().toLowerCase() !== 'all') {
+      plaintext = this.filterPlaintextByOrganization(plaintext, organizationId.trim());
+    }
     const encrypted = encryptLogPayload(plaintext, clientPublicKey);
     return { day: calendarDate, ...encrypted };
   }
@@ -83,5 +87,40 @@ export class ProductionLogsService {
       throw new BadRequestException('Invalid client public key');
     }
     return decoded;
+  }
+
+  private filterPlaintextByOrganization(plaintext: Buffer, organizationId: string): Buffer {
+    const text = plaintext.toString('utf8');
+    const lines = text.split(/\r?\n/);
+    const targetTag = `[org:${organizationId.toLowerCase()}]`;
+    const targetIdMatch = `organizationId=${organizationId}`;
+    const targetIdColon = `organizationId: ${organizationId}`;
+    const isSystemFilter = organizationId.toLowerCase() === 'system';
+
+    const filtered = lines.filter((line) => {
+      if (!line.trim()) {
+        return false;
+      }
+      const lower = line.toLowerCase();
+      if (isSystemFilter) {
+        return (
+          lower.includes('[org:system]') ||
+          lower.includes('[backupservice]') ||
+          lower.includes('[backupcontroller]') ||
+          lower.includes('[superadminbootstrapservice]') ||
+          lower.includes('[maintenancemodeservice]') ||
+          lower.includes('[patchnotesservice]') ||
+          lower.includes('[documentsservice]') ||
+          lower.includes('super admin')
+        );
+      }
+      return (
+        lower.includes(targetTag) ||
+        line.includes(targetIdMatch) ||
+        line.includes(targetIdColon)
+      );
+    });
+
+    return Buffer.from(filtered.join('\n') + (filtered.length > 0 ? '\n' : ''), 'utf8');
   }
 }

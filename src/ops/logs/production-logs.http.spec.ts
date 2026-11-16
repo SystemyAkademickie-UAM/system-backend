@@ -108,6 +108,24 @@ describe('Production logs HTTP (supertest)', () => {
       .expect(404);
   });
 
+  it('exports logs filtered by organizationId', async () => {
+    logStore.appendLine('log', 'HTTP', '[org:42] GET /api/courses 200');
+    logStore.appendLine('log', 'HTTP', '[org:99] GET /api/other 200');
+    const client = createECDH(PRODUCTION_LOG_ECDH_CURVE);
+    client.generateKeys();
+    const response = await request(app.getHttpServer())
+      .post('/api/admin/logs/export')
+      .send({
+        clientPublicKey: client.getPublicKey(undefined, 'uncompressed').toString('base64'),
+        day: 'today',
+        organizationId: '42',
+      })
+      .expect(200);
+    const plain = decryptLogPayload(response.body, client.getPrivateKey()).toString('utf8');
+    expect(plain).toContain('[org:42]');
+    expect(plain).not.toContain('[org:99]');
+  });
+
   it('accepts an authenticated browser ingest into the same store', async () => {
     await request(app.getHttpServer())
       .post('/api/client-logs')
