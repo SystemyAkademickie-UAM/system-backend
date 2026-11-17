@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
@@ -10,6 +10,8 @@ import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { RankEntity } from '../database/entities/rank.entity';
 import { RanksService } from '../gamification/ranks-service';
+import { ORGANIZATION_LOG_KIND_BADGE_REVOKED } from '../constants/organization-log-constants';
+import { OrganizationLogService } from '../organization-log/organization-log.service';
 import { BacklogService } from '../backlog/backlog-service';
 import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
@@ -45,7 +47,8 @@ export class StudentBadgesService {
     private readonly earnedBadgeRepository: Repository<EarnedBadgeEntity>,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
-    private readonly groupAuthorizationService: GroupAuthorizationService) {}
+    private readonly groupAuthorizationService: GroupAuthorizationService,
+    @Optional() private readonly organizationLogService?: OrganizationLogService) {}
 
   /** GET /groups/:groupId/students/:accountId/badges */
   async getStudentBadges(req: Request, groupId: number, accountId: number): Promise<{ badges: StudentBadgeItem[] }> {
@@ -98,6 +101,13 @@ export class StudentBadgesService {
           groupId,
           rewardAmount);
         isEarned = false;
+        await this.organizationLogService?.recordForGroup({
+          groupId,
+          kind: ORGANIZATION_LOG_KIND_BADGE_REVOKED,
+          actorAccountId: accountId,
+          detail: { badgeName: badge.name },
+          manager: queryRunner.manager,
+        });
         this.logger.log(`Badge ${badgeId} revoked from enrollment ${enrollment.id}`);
       } else {
         const earned = queryRunner.manager.create(EarnedBadgeEntity, {

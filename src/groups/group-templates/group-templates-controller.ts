@@ -1,10 +1,12 @@
-import { Body, Controller, ForbiddenException, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req, BadRequestException } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, HttpCode, HttpStatus, Optional, Param, ParseIntPipe, Post, Req, BadRequestException } from '@nestjs/common';
 import type { Request } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { SessionService } from '../../auth/session/session.service';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET, toInternalGroupId } from '../../constants/group-api-constants';
+import { ORGANIZATION_LOG_KIND_GROUP_CREATED } from '../../constants/organization-log-constants';
+import { OrganizationLogService } from '../../organization-log/organization-log.service';
 import { AccountEntity } from '../../database/entities/account.entity';
 import { UserRolesService } from '../../user-roles/user-roles-service';
 import { GroupsService } from '../groups-service';
@@ -23,6 +25,7 @@ export class GroupTemplatesController {
     private readonly importService: GroupTemplatesImportService,
     @InjectRepository(AccountEntity)
     private readonly accountRepository: Repository<AccountEntity>,
+    @Optional() private readonly organizationLogService?: OrganizationLogService,
   ) {}
 
   @Post(':groupId/save-as-template')
@@ -102,6 +105,11 @@ export class GroupTemplatesController {
       lecturerAccountId,
       dto.name,
       dto.subjectName);
+    await this.organizationLogService?.recordForGroup({
+      groupId: newGroup.id,
+      kind: ORGANIZATION_LOG_KIND_GROUP_CREATED,
+      actorAccountId: lecturerAccountId,
+    });
 
     return {
       statusCode: HttpStatus.CREATED,

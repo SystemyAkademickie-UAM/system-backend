@@ -88,6 +88,15 @@ export class SessionService {
   }
 
   /**
+   * Drops the subject cached on this request.
+   * Login context and role changes write a new session row and then read it again
+   * in the same request. Without this, that second read would still see the old organization and role.
+   */
+  forgetRequestSubject(req: Request): void {
+    delete (req as unknown as { _maqCachedSessionSubject?: SessionSubject | null })._maqCachedSessionSubject;
+  }
+
+  /**
    * Resolves subject from plaintext session id.
    */
   async resolveSubject(plaintextSession: string): Promise<SessionSubject | null> {

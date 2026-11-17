@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
@@ -18,6 +19,8 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { StageEntity } from '../database/entities/stage.entity';
 import { RankEntity } from '../database/entities/rank.entity';
 import { RanksService } from '../gamification/ranks-service';
+import { ORGANIZATION_LOG_KIND_ACTIVITY_COMPLETION_REMOVED } from '../constants/organization-log-constants';
+import { OrganizationLogService } from '../organization-log/organization-log.service';
 import { BacklogService } from '../backlog/backlog-service';
 import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
@@ -75,7 +78,8 @@ export class StudentProgressService {
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
     private readonly backlogService: BacklogService,
-    private readonly groupAuthorizationService: GroupAuthorizationService) {}
+    private readonly groupAuthorizationService: GroupAuthorizationService,
+    @Optional() private readonly organizationLogService?: OrganizationLogService) {}
 
   /** GET /groups/:groupId/students/:accountId/progress */
   async getStudentProgress(
@@ -319,6 +323,17 @@ export class StudentProgressService {
       return;
     }
     await queryRunner.manager.remove(ActivityBacklogEntity, existing);
+    const removedActivity = await queryRunner.manager.findOne(ActivityEntity, {
+      where: { id: activityId },
+      select: ['name'],
+    });
+    await this.organizationLogService?.recordForGroup({
+      groupId,
+      kind: ORGANIZATION_LOG_KIND_ACTIVITY_COMPLETION_REMOVED,
+      actorAccountId: accountId,
+      detail: { activityName: removedActivity?.name ?? '' },
+      manager: queryRunner.manager,
+    });
     await applyActivityCurrencyDelta(
       queryRunner,
       this.ranksService,

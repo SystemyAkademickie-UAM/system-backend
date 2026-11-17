@@ -1,5 +1,8 @@
 import { join } from 'node:path';
 
+/** Bytes read from the start of a stored file to tell an image from another file. */
+export const DRIVE_MIME_SNIFF_BYTES = 16;
+
 /** JSON `statusCode` on successful drive `post` / `remove` responses (matches API examples). */
 export const DRIVE_API_JSON_STATUS_OK = 200;
 

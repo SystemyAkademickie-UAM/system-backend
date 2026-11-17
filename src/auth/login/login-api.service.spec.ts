@@ -10,6 +10,7 @@ import { LoginApiService } from './login-api.service';
 describe('LoginApiService role and context switching', () => {
   const req = {} as Request;
   let resolveSubjectFromRequest: jest.Mock;
+  let forgetRequestSubject: jest.Mock;
   let listMemberships: jest.Mock;
   let selectContext: jest.Mock;
   let setActiveRole: jest.Mock;
@@ -23,6 +24,7 @@ describe('LoginApiService role and context switching', () => {
       organizationId: 2,
       activeRole: 'lecturer',
     });
+    forgetRequestSubject = jest.fn();
     listMemberships = jest.fn().mockResolvedValue([
       { organizationId: 1, name: 'Internal', roles: ['super'] },
       { organizationId: 2, name: 'Localhost IdP', roles: ['lecturer', 'student'] },
@@ -35,6 +37,7 @@ describe('LoginApiService role and context switching', () => {
       {
         resolveSubjectFromRequest,
         extractSessionToken: jest.fn().mockReturnValue('session-token'),
+        forgetRequestSubject,
       } as never,
       { setActiveRole } as never,
       {
@@ -67,6 +70,7 @@ describe('LoginApiService role and context switching', () => {
   it('allows role switching when maintenance mode is inactive', async () => {
     await service.setActiveRole(req, 'student');
     expect(setActiveRole).toHaveBeenCalledWith('session-token', 'student');
+    expect(forgetRequestSubject).toHaveBeenCalledWith(req);
 
     await service.selectLoginContext(req, 2, 'student');
     expect(selectContext).toHaveBeenCalledWith('session-token', 7, 2, 'student');

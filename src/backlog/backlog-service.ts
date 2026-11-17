@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager, In } from 'typeorm';
 import type { Request } from 'express';
@@ -22,6 +22,8 @@ import {
   BacklogPayload,
   serializeBacklogPayload,
 } from './backlog-payload';
+import { ORGANIZATION_LOG_INBOX_KIND_BY_TYPE } from '../constants/organization-log-constants';
+import { OrganizationLogService } from '../organization-log/organization-log.service';
 
 export interface BacklogItemResponse {
   id: number;
@@ -69,7 +71,8 @@ export class BacklogService {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     private readonly sessionService: SessionService,
-    private readonly userRolesService: UserRolesService) {}
+    private readonly userRolesService: UserRolesService,
+    @Optional() private readonly organizationLogService?: OrganizationLogService) {}
 
   async logEvent(
     internalGroupId: number,
@@ -121,7 +124,21 @@ export class BacklogService {
       date: new Date(),
       value: serializeBacklogPayload(payloadToLog),
     });
-    return repo.save(entry);
+    const saved = await repo.save(entry);
+    const archiveKind = ORGANIZATION_LOG_INBOX_KIND_BY_TYPE[type];
+    if (archiveKind !== undefined && this.organizationLogService) {
+      const detail = typeof payloadToLog === 'object' && payloadToLog !== null && !Array.isArray(payloadToLog)
+        ? payloadToLog
+        : null;
+      await this.organizationLogService.recordForGroup({
+        groupId: internalGroupId,
+        kind: archiveKind,
+        actorAccountId: accountId,
+        detail,
+        manager,
+      });
+    }
+    return saved;
   }
 
   async notifyEnrolledStudents(
@@ -146,6 +163,16 @@ export class BacklogService {
       ),
     );
 
+    const archiveKind = ORGANIZATION_LOG_INBOX_KIND_BY_TYPE[type];
+    if (archiveKind !== undefined && this.organizationLogService) {
+      await this.organizationLogService.recordForGroup({
+        groupId: internalGroupId,
+        kind: archiveKind,
+        actorAccountId: null,
+        detail: payload,
+        manager,
+      });
+    }
     if (studentAccountIds.length === 0) {
       return;
     }

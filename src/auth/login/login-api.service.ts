@@ -208,6 +208,7 @@ export class LoginApiService {
       organizationId,
       normalizedRole,
     );
+    this.sessionService.forgetRequestSubject(req);
     return this.resolveAuthenticatedUser(req, normalizedRole);
   }
 
@@ -239,6 +240,7 @@ export class LoginApiService {
     );
     const token = this.sessionService.extractSessionToken(req);
     await this.sessionIssuanceService.setActiveRole(token, normalizedRole);
+    this.sessionService.forgetRequestSubject(req);
     return this.resolveAuthenticatedUser(req, normalizedRole);
   }
 

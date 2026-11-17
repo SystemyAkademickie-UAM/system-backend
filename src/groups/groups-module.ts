@@ -15,6 +15,7 @@ import { UserRolesModule } from '../user-roles/user-roles-module';
 import { GroupAuthorizationModule } from './group-authorization.module';
 import { GroupsEnrollmentService } from './groups-enrollment-service';
 import { EnrollmentCodesService } from './enrollment-codes-service';
+import { OrganizationLogModule } from '../organization-log/organization-log.module';
 import { BacklogModule } from '../backlog/backlog-module';
 import { GroupsController } from './groups-controller';
 import { GroupsService } from './groups-service';
@@ -46,6 +47,7 @@ import { ShopSchedulerService } from './shop-scheduler-service';
     GroupAuthorizationModule,
     GamificationModule,
     BacklogModule,
+    OrganizationLogModule,
   ],
   controllers: [
     GroupsController,
