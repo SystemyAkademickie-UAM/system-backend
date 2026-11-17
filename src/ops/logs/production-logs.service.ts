@@ -90,37 +90,65 @@ export class ProductionLogsService {
   }
 
   private filterPlaintextByOrganization(plaintext: Buffer, organizationId: string): Buffer {
-    const text = plaintext.toString('utf8');
-    const lines = text.split(/\r?\n/);
-    const targetTag = `[org:${organizationId.toLowerCase()}]`;
-    const targetIdMatch = `organizationId=${organizationId}`;
-    const targetIdColon = `organizationId: ${organizationId}`;
+    const lines = plaintext.toString('utf8').split(/\r?\n/);
     const isSystemFilter = organizationId.toLowerCase() === 'system';
-
     const filtered = lines.filter((line) => {
       if (!line.trim()) {
         return false;
       }
-      const lower = line.toLowerCase();
       if (isSystemFilter) {
-        return (
-          lower.includes('[org:system]') ||
-          lower.includes('[backupservice]') ||
-          lower.includes('[backupcontroller]') ||
-          lower.includes('[superadminbootstrapservice]') ||
-          lower.includes('[maintenancemodeservice]') ||
-          lower.includes('[patchnotesservice]') ||
-          lower.includes('[documentsservice]') ||
-          lower.includes('super admin')
-        );
+        return this.lineMatchesSystem(line);
       }
-      return (
-        lower.includes(targetTag) ||
-        line.includes(targetIdMatch) ||
-        line.includes(targetIdColon)
-      );
+      return this.lineMentionsOrganization(line, organizationId);
     });
-
     return Buffer.from(filtered.join('\n') + (filtered.length > 0 ? '\n' : ''), 'utf8');
+  }
+
+  private lineMatchesSystem(line: string): boolean {
+    const lower = line.toLowerCase();
+    return (
+      lower.includes('[org:system]') ||
+      lower.includes('[backupservice]') ||
+      lower.includes('[backupcontroller]') ||
+      lower.includes('[superadminbootstrapservice]') ||
+      lower.includes('[maintenancemodeservice]') ||
+      lower.includes('[patchnotesservice]') ||
+      lower.includes('[documentsservice]') ||
+      lower.includes('super admin')
+    );
+  }
+
+  /**
+   * Matches an organization tag or id only when the next character is not another digit,
+   * so organization 4 does not also select organization 42.
+   */
+  private lineMentionsOrganization(line: string, organizationId: string): boolean {
+    const lowerLine = line.toLowerCase();
+    const lowerId = organizationId.toLowerCase();
+    if (lowerLine.includes(`[org:${lowerId}]`)) {
+      return true;
+    }
+    const markers = [
+      `organizationid=${lowerId}`,
+      `organizationid:${lowerId}`,
+      `organizationid: ${lowerId}`,
+    ];
+    return markers.some((marker) => this.markerEndsBeforeDigit(lowerLine, marker));
+  }
+
+  private markerEndsBeforeDigit(line: string, marker: string): boolean {
+    let from = 0;
+    while (from < line.length) {
+      const index = line.indexOf(marker, from);
+      if (index < 0) {
+        return false;
+      }
+      const next = line.charAt(index + marker.length);
+      if (next === '' || next < '0' || next > '9') {
+        return true;
+      }
+      from = index + 1;
+    }
+    return false;
   }
 }
