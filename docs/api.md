@@ -1902,7 +1902,7 @@ Control global technical break / maintenance screen. Managed as a singleton row 
 
 When maintenance mode is enabled (`isEnabled: true`):
 - All general API requests return **`HTTP 503 Service Unavailable`** with JSON `{ "statusCode": 503, "message": "...", "estimatedEndAt": "..." }`.
-- System probe endpoints (`/api/system/*`), authentication endpoints (`/api/auth/*`), documentation (`/api/docs`), and requests authenticated with **`super`** role are exempted to allow administration and verification.
+- System probe endpoints (`/api/system/*`, `/api/counter/health`), authentication/login/logout endpoints (`/api/auth/*`, `/api/login/*`, `/api/logout`), onboarding avatar catalog (`/api/profile/avatars`), documentation (`/api/docs`), and requests authenticated with **`super`** role are exempted so all users can sign in/out (and view the maintenance screen) while platform data remains locked down.
 
 ---
 
