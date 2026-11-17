@@ -1835,7 +1835,9 @@ Manage global announcements displayed to active users across the platform. Store
 | Endpoint | Method | Description |
 | -------- | ------ | ----------- |
 | `/api/admin/broadcasts` | `POST` | Create a new broadcast announcement. |
-| `/api/admin/broadcasts` | `GET` | List all broadcasts (supports `?limit=50&offset=0`). |
+| `/api/admin/broadcasts` | `GET` | List all broadcasts (supports `?take=50&skip=0`). |
+| `/api/admin/broadcasts/:id` | `GET` | Get a single broadcast announcement by ID. |
+| `/api/admin/broadcasts/:id` | `PUT` / `PATCH` | Update an existing broadcast announcement. |
 | `/api/admin/broadcasts/:id` | `DELETE` | Delete a broadcast announcement. |
 
 ### Create broadcast
@@ -1846,13 +1848,29 @@ Manage global announcements displayed to active users across the platform. Store
 
 | Field | Type | Rules | Description |
 | ----- | ---- | ----- | ----------- |
-| `title` | string | 1–255 chars | Short headline of the announcement. |
-| `message` | string | 1–4000 chars | Announcement body text or markdown. |
+| `title` | string | 1–200 chars | Short headline of the announcement. |
+| `content` | string | 1–4000 chars | Announcement body text or markdown. |
 | `level` | string | `info`, `warning`, `critical` (default `info`) | Visual severity indicator. |
 | `targetRole` | string | `all`, `student`, `lecturer`, `administrator` (default `all`) | Target user audience. |
-| `expiresAt` | string | ISO-8601 date string (optional) | When the broadcast stops being visible. Null = never expires. |
+| `expiresAt` | string | ISO-8601 date string (optional, nullable) | When the broadcast stops being visible. Null = never expires. |
 
 **Response:** `201 Created` with created broadcast object.
+
+### Update broadcast
+
+**Endpoint:** `PUT /api/admin/broadcasts/:id` (or `PATCH /api/admin/broadcasts/:id`)
+
+**Request body (JSON, all fields optional):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `title` | string | 1–200 chars (optional) | Updated headline of the announcement. |
+| `content` | string | 1–4000 chars (optional) | Updated announcement body text or markdown. |
+| `level` | string | `info`, `warning`, `critical` (optional) | Updated visual severity indicator. |
+| `targetRole` | string | `all`, `student`, `lecturer`, `administrator` (optional) | Updated target user audience. |
+| `expiresAt` | string | ISO-8601 date string (optional, nullable) | Updated expiration timestamp. Send `null` or empty string to remove expiration. |
+
+**Response:** `200 OK` with updated broadcast object.
 
 ---
 
