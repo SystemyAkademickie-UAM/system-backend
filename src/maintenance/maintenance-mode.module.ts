@@ -1,18 +1,16 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { SessionModule } from '../auth/session/session.module';
-import { MaintenanceModeEntity } from '../database/entities/maintenance-mode.entity';
 import { UserRolesModule } from '../user-roles/user-roles-module';
 import { AdminMaintenanceController } from './admin-maintenance-controller';
 import { MaintenanceModeGuard } from './maintenance-mode-guard';
-import { MaintenanceModeService } from './maintenance-mode-service';
+import { MaintenanceStatusModule } from './maintenance-status.module';
 import { SystemStatusController } from './system-status-controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([MaintenanceModeEntity]),
+    MaintenanceStatusModule,
     SessionModule,
     UserRolesModule,
   ],
@@ -21,7 +19,6 @@ import { SystemStatusController } from './system-status-controller';
     SystemStatusController,
   ],
   providers: [
-    MaintenanceModeService,
     MaintenanceModeGuard,
     {
       provide: APP_GUARD,
@@ -29,7 +26,7 @@ import { SystemStatusController } from './system-status-controller';
     },
   ],
   exports: [
-    MaintenanceModeService,
+    MaintenanceStatusModule,
     MaintenanceModeGuard,
   ],
 })

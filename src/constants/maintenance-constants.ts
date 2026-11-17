@@ -26,3 +26,8 @@ export const MAINTENANCE_BYPASS_PATH_PREFIXES = [
 ] as const;
 
 export const MAINTENANCE_API_PREFIX = '/api';
+
+export const MAINTENANCE_ROLE_SWITCH_BLOCKED_ERROR = 'MAINTENANCE_ROLE_SWITCH_BLOCKED';
+
+export const MAINTENANCE_ROLE_SWITCH_BLOCKED_MESSAGE =
+  'Cannot change role while technical maintenance mode is active.';

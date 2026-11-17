@@ -253,7 +253,7 @@ After login, a remembered organization and role are applied when that account st
 | `organizationId` | number | Active organization the user belongs to. |
 | `role` | string | Role held in that organization (`super`, `administrator`, `lecturer`, `student`). |
 
-**Response:** `200 OK` — same shape as `GET /api/login/me`, with `selectionRequired` false. `400` when the user does not hold that role in the organization. `401` when the session is missing.
+**Response:** `200 OK` — same shape as `GET /api/login/me`, with `selectionRequired` false. `400` when the user does not hold that role in the organization. `401` when the session is missing. `409 Conflict` (`error: "MAINTENANCE_ROLE_SWITCH_BLOCKED"`) when attempting to change role (or pick a non-`super` role while holding `super`) during active maintenance mode.
 
 ---
 
@@ -281,6 +281,7 @@ Lets a user with more than one role choose which role is active for the UI. The 
 | ------ | ---- |
 | `400 Bad Request` | The requested role is not held in the session organization. |
 | `401 Unauthorized` | No valid session. |
+| `409 Conflict` | Role switching is disabled while technical maintenance mode is active (`error: "MAINTENANCE_ROLE_SWITCH_BLOCKED"`). |
 
 ---
 
@@ -1903,6 +1904,7 @@ Control global technical break / maintenance screen. Managed as a singleton row 
 When maintenance mode is enabled (`isEnabled: true`):
 - All general API requests return **`HTTP 503 Service Unavailable`** with JSON `{ "statusCode": 503, "message": "...", "estimatedEndAt": "..." }`.
 - System probe endpoints (`/api/system/*`, `/api/counter/health`), authentication/login/logout endpoints (`/api/auth/*`, `/api/login/*`, `/api/logout`), onboarding avatar catalog (`/api/profile/avatars`), documentation (`/api/docs`), and requests authenticated with **`super`** role are exempted so all users can sign in/out (and view the maintenance screen) while platform data remains locked down.
+- Role switching (`POST /api/login/context`, `POST /api/login/active-role`) is blocked during active maintenance with **`HTTP 409 Conflict`** (`{ "statusCode": 409, "error": "MAINTENANCE_ROLE_SWITCH_BLOCKED", "message": "Cannot change role while technical maintenance mode is active." }`) so a multirole `super` user cannot switch roles and lock themselves out from disabling maintenance mode.
 
 ---
 

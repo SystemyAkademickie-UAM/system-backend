@@ -15,6 +15,7 @@ import {
 import { Throttle, ThrottlerGuard, seconds } from '@nestjs/throttler';
 import {
   ApiBadRequestResponse,
+  ApiConflictResponse,
   ApiCookieAuth,
   ApiOkResponse,
   ApiOperation,
@@ -95,6 +96,7 @@ export class LoginController {
   @ApiOkResponse({ description: 'Updated session view with the new active role' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid session' })
   @ApiBadRequestResponse({ description: 'Requested role is not assigned to the user' })
+  @ApiConflictResponse({ description: 'Role changes are disabled while maintenance mode is active' })
   async setActiveRole(
     @Req() req: Request,
     @Body() body: SelectActiveRoleDto) {
@@ -110,6 +112,7 @@ export class LoginController {
   @ApiOkResponse({ description: 'Updated session view with the confirmed organization and role' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid session' })
   @ApiBadRequestResponse({ description: 'User does not hold that role in the organization' })
+  @ApiConflictResponse({ description: 'Role changes are disabled while maintenance mode is active' })
   async selectLoginContext(
     @Req() req: Request,
     @Body() body: SelectLoginContextDto) {

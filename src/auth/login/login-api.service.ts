@@ -1,8 +1,20 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpStatus,
+  Injectable,
+  Optional,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request, Response } from 'express';
 import { Repository } from 'typeorm';
 
+import {
+  MAINTENANCE_ROLE_SWITCH_BLOCKED_ERROR,
+  MAINTENANCE_ROLE_SWITCH_BLOCKED_MESSAGE,
+} from '../../constants/maintenance-constants';
+import { SUPER_ROLE_NAME } from '../../constants/role-name-constants';
 import {
   LEGACY_MAQ_ACTIVE_ROLE_COOKIE_NAME,
   LEGACY_MAQ_AUTH_COOKIE_NAME,
@@ -12,6 +24,7 @@ import {
 import { SAML_PENDING_ORG_COOKIE_NAME, SAML_SESSION_COOKIE_NAME } from '../../constants/saml-constants';
 import { buildSamlSessionCookieOptions, buildClearSamlCookieOptions, resolvePendingOrgCookieSameSite } from '../saml/saml-cookie-options.util';
 import { UserEntity } from '../../database/entities/user.entity';
+import { MaintenanceModeService } from '../../maintenance/maintenance-mode-service';
 import { UserRolesService } from '../../user-roles/user-roles-service';
 import { SessionService } from '../session/session.service';
 import { SessionIssuanceService, CreateSessionOptions } from '../session/session-issuance.service';
@@ -60,7 +73,9 @@ export class LoginApiService {
     private readonly userRolesService: UserRolesService,
     private readonly loginContextService: LoginContextService,
     @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>) {}
+    private readonly userRepository: Repository<UserEntity>,
+    @Optional()
+    private readonly maintenanceModeService?: MaintenanceModeService) {}
 
   /**
    * Creates a new session for the user and sets the HttpOnly cookie.
@@ -182,6 +197,11 @@ export class LoginApiService {
     }
     const token = this.sessionService.extractSessionToken(req);
     const normalizedRole = role.trim();
+    await this.assertRoleChangeAllowedDuringMaintenance(
+      subject.userId,
+      subject.activeRole,
+      normalizedRole,
+    );
     await this.loginContextService.select(
       token,
       subject.userId,
@@ -212,8 +232,45 @@ export class LoginApiService {
         `Role "${normalizedRole}" is not assigned in this organization`,
       );
     }
+    await this.assertRoleChangeAllowedDuringMaintenance(
+      subject.userId,
+      subject.activeRole,
+      normalizedRole,
+    );
     const token = this.sessionService.extractSessionToken(req);
     await this.sessionIssuanceService.setActiveRole(token, normalizedRole);
     return this.resolveAuthenticatedUser(req, normalizedRole);
+  }
+
+  private async assertRoleChangeAllowedDuringMaintenance(
+    userId: number,
+    currentActiveRole: string | null,
+    requestedRole: string,
+  ): Promise<void> {
+    if (!this.maintenanceModeService) {
+      return;
+    }
+    const isMaintenance = await this.maintenanceModeService.isMaintenanceActive();
+    if (!isMaintenance) {
+      return;
+    }
+    if (currentActiveRole !== null) {
+      if (requestedRole !== currentActiveRole) {
+        this.throwMaintenanceRoleSwitchBlocked();
+      }
+      return;
+    }
+    const holdsSuperRole = await this.userRolesService.userHasRole(userId, SUPER_ROLE_NAME);
+    if (holdsSuperRole && requestedRole !== SUPER_ROLE_NAME) {
+      this.throwMaintenanceRoleSwitchBlocked();
+    }
+  }
+
+  private throwMaintenanceRoleSwitchBlocked(): never {
+    throw new ConflictException({
+      statusCode: HttpStatus.CONFLICT,
+      error: MAINTENANCE_ROLE_SWITCH_BLOCKED_ERROR,
+      message: MAINTENANCE_ROLE_SWITCH_BLOCKED_MESSAGE,
+    });
   }
 }
