@@ -3,6 +3,7 @@ import {
   Catch,
   ExceptionFilter,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { EntityNotFoundError, QueryFailedError, TypeORMError } from 'typeorm';
@@ -25,9 +26,16 @@ type DatabaseErrorBody = {
  */
 @Catch(TypeORMError)
 export class DatabaseExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(DatabaseExceptionFilter.name);
+
   catch(exception: TypeORMError, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
     const body = this.resolveBody(exception);
+    if (body.statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logger.error(`Database stability error [${exception.name}]: ${exception.message}`, exception.stack);
+    } else {
+      this.logger.warn(`Database query warning [${exception.name}]: ${exception.message}`);
+    }
     response.status(body.statusCode).json(body);
   }
 

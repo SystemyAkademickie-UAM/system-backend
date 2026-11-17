@@ -96,7 +96,7 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/admin/organization-log` — organization administrator log for the session organization (`category=all|organization|group`)
 - `POST /api/admin/organizations/:organizationId/accounts/:accountId/magic-link` — email a magic login link when the organization login method is `email`
 - `DELETE /api/admin/organizations/:organizationId/accounts/:accountId` — remove that organization's account (see [docs/api.md](./docs/api.md))
-- `POST /api/admin/broadcasts`, `GET /api/admin/broadcasts`, `DELETE /api/admin/broadcasts/:id` — super only: manage platform-wide announcements
+- `POST /api/admin/broadcasts`, `GET /api/admin/broadcasts`, `GET /api/admin/broadcasts/:id`, `PUT /api/admin/broadcasts/:id`, `PATCH /api/admin/broadcasts/:id`, `DELETE /api/admin/broadcasts/:id` — super only: manage platform-wide announcements
 - `GET /api/admin/maintenance`, `PUT /api/admin/maintenance` — super only: manage global technical break / maintenance mode
 - `POST /api/admin/patch-notes`, `GET /api/admin/patch-notes`, `DELETE /api/admin/patch-notes/:id` — super only: upload, list, and delete patch note PDF documents
 - `GET /api/patch-notes`, `GET /api/patch-notes/latest`, `GET /api/patch-notes/latest/file`, `GET /api/patch-notes/:id/file` — public/user access to patch note PDF history and files

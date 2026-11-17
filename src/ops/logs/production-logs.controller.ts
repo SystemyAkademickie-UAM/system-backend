@@ -41,6 +41,7 @@ export class ProductionLogsController {
       dto.clientPublicKey,
       dto.day,
       dto.auth,
+      dto.organizationId,
     );
   }
 }
