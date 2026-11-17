@@ -127,7 +127,7 @@ export class AdminOrganizationsService {
   }
 
   async getOrganization(req: Request, organizationId: number, queryAuth?: string): Promise<OrganizationDetail> {
-    await this.assertSuperAdmin(req, queryAuth);
+    await this.adminAccessService.resolveAccountDeletionActor(req, organizationId, queryAuth);
     const row = await this.organizationRepository.findOne({ where: { id: organizationId } });
     if (row === null) {
       throw new NotFoundException(`Organization ${organizationId} not found`);
