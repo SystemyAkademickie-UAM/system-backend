@@ -7,6 +7,7 @@ import { MagicLinkTokenEntity } from '../../database/entities/magic-link-token.e
 import { OrganizationEntity } from '../../database/entities/organization.entity';
 import { UserEntity } from '../../database/entities/user.entity';
 import { RegistrationModule } from '../../registration/registration.module';
+import { MaintenanceStatusModule } from '../../maintenance/maintenance-status.module';
 import { UserRolesModule } from '../../user-roles/user-roles-module';
 import { AuthTokenSessionModule } from '../api-token/auth-token-session-module';
 import { OrganizationLoginModule } from '../organization-login/organization-login.module';
@@ -30,6 +31,7 @@ import { SamlLinkedUserService } from './saml-linked-user.service';
     ]),
     AuthTokenSessionModule,
     UserRolesModule,
+    MaintenanceStatusModule,
     SuperAdminBootstrapModule,
     OrganizationLoginModule,
     forwardRef(() => SamlModule),
