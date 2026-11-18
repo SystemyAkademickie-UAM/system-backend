@@ -5,8 +5,11 @@ import { AuthTokenSessionModule } from '../auth/api-token/auth-token-session-mod
 import { LoginModule } from '../auth/login/login-module';
 import { SessionModule } from '../auth/session/session.module';
 import { AccountEntity } from '../database/entities/account.entity';
+import { DriveEntity } from '../database/entities/drive.entity';
+import { GroupEntity } from '../database/entities/group.entity';
 import { IdpCertificateEntity } from '../database/entities/idp-certificate.entity';
 import { OrganizationEntity } from '../database/entities/organization.entity';
+import { OrganizationLogEntity } from '../database/entities/organization-log.entity';
 import { UserEntity } from '../database/entities/user.entity';
 import { UserRolesModule } from '../user-roles/user-roles-module';
 import { AdminAccessService } from './admin-access.service';
@@ -21,6 +24,8 @@ import { AdminOrganizationAdministratorsController } from './organizations/admin
 import { AdminOrganizationAdministratorsService } from './organizations/admin-organization-administrators.service';
 import { AdminOrganizationsController } from './organizations/admin-organizations.controller';
 import { AdminOrganizationsService } from './organizations/admin-organizations.service';
+import { AdminOrganizationStorageController } from './storage/admin-organization-storage.controller';
+import { AdminOrganizationStorageService } from './storage/admin-organization-storage.service';
 
 @Module({
   imports: [
@@ -29,6 +34,9 @@ import { AdminOrganizationsService } from './organizations/admin-organizations.s
       IdpCertificateEntity,
       AccountEntity,
       UserEntity,
+      GroupEntity,
+      DriveEntity,
+      OrganizationLogEntity,
     ]),
     AuthTokenSessionModule,
     LoginModule,
@@ -42,6 +50,7 @@ import { AdminOrganizationsService } from './organizations/admin-organizations.s
     AdminOrganizationAdministratorsController,
     AdminManageableOrganizationsController,
     AdminOrganizationAccountsController,
+    AdminOrganizationStorageController,
   ],
   providers: [
     AdminAccessService,
@@ -50,6 +59,7 @@ import { AdminOrganizationsService } from './organizations/admin-organizations.s
     AdminOrganizationAccountsService,
     AdminOrganizationAccountRosterService,
     AccountRemovalService,
+    AdminOrganizationStorageService,
   ],
 })
 export class AdminModule {}

@@ -81,7 +81,13 @@ describe('AdminOrganizationsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminOrganizationsService,
-        { provide: AdminAccessService, useValue: { assertSuperAdmin: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: AdminAccessService,
+          useValue: {
+            assertSuperAdmin: jest.fn().mockResolvedValue(undefined),
+            resolveAccountDeletionActor: jest.fn().mockResolvedValue({ userId: 1, isSuperAdmin: true }),
+          },
+        },
         { provide: getRepositoryToken(OrganizationEntity), useValue: organizationRepository },
         { provide: getRepositoryToken(IdpCertificateEntity), useValue: { findOne: jest.fn().mockResolvedValue(null), save: jest.fn(), create: jest.fn(), update: jest.fn() } },
       ],
