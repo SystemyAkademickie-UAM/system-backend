@@ -2,6 +2,7 @@ import {
   ADMINISTRATOR_ROLE_NAME,
   LECTURER_ROLE_NAME,
   STUDENT_ROLE_NAME,
+  SUPER_ROLE_NAME,
 } from './role-name-constants';
 
 /** Page size for `GET .../accounts/page` when the caller omits `limit`. */
@@ -33,6 +34,7 @@ export const ORGANIZATION_ACCOUNT_SUPER_ASSIGNABLE_ROLES = [
   STUDENT_ROLE_NAME,
   LECTURER_ROLE_NAME,
   ADMINISTRATOR_ROLE_NAME,
+  SUPER_ROLE_NAME,
 ] as const;
 
 /** Download name for the organization account CSV. */
