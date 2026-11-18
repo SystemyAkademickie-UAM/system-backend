@@ -388,7 +388,7 @@ export class AdminOrganizationAccountRosterService {
   }
 
   private assertRoleAllowed(actor: AccountDeletionActor, role: string): void {
-    if (role === SUPER_ROLE_NAME) {
+    if (role === SUPER_ROLE_NAME && !actor.isSuperAdmin) {
       throw new ForbiddenException('Super administrator role cannot be assigned here');
     }
     if (actor.isSuperAdmin) {
@@ -400,7 +400,7 @@ export class AdminOrganizationAccountRosterService {
   }
 
   private assertTargetMutable(actor: AccountDeletionActor, role: string): void {
-    if (role === SUPER_ROLE_NAME) {
+    if (role === SUPER_ROLE_NAME && !actor.isSuperAdmin) {
       throw new ForbiddenException('Super administrator accounts cannot be changed here');
     }
     if (!actor.isSuperAdmin && role === ADMINISTRATOR_ROLE_NAME) {
