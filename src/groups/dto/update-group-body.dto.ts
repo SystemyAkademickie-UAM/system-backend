@@ -94,6 +94,10 @@ export class UpdateGroupPayloadDto {
   @IsOptional()
   @Type(() => Boolean)
   rankShowMemberAvatars?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  teacherAccountId?: number;
 }
 
 export class UpdateGroupBodyDto {

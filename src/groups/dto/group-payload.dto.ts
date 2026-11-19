@@ -95,4 +95,12 @@ export class GroupPayloadDto {
   @IsOptional()
   @Type(() => Boolean)
   rankShowMemberAvatars?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  teacherAccountId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  studentAccountIds?: number[];
 }

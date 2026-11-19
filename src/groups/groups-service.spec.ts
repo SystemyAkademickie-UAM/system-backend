@@ -5,6 +5,7 @@ import type { Request } from 'express';
 import { SessionService, type SessionSubject } from '../auth/session/session.service';
 import { GROUP_API_JSON_STATUS_OK, GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
 import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { AccountEntity } from '../database/entities/account.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
@@ -59,6 +60,8 @@ describe('GroupsService', () => {
     const mockUserRolesService = {
       findAccountIdForRole: jest.fn(),
       findAccountIdForRoleInOrganization: jest.fn(),
+      userHasRole: jest.fn().mockResolvedValue(false),
+      userHasRoleInOrganization: jest.fn().mockResolvedValue(false),
     };
     const mockEnrollmentCodesService = {
       findLatestActiveCode: jest.fn(),
@@ -92,6 +95,7 @@ describe('GroupsService', () => {
       update: jest.fn(),
     };
     enrollmentRepository = { find: jest.fn().mockResolvedValue([]) };
+    const accountRepository = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null) };
     studentStatsRepository = { find: jest.fn().mockResolvedValue([]), save: jest.fn().mockResolvedValue([]) };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -102,6 +106,7 @@ describe('GroupsService', () => {
         { provide: ShopItemsService, useValue: mockShopItemsService },
         { provide: BacklogService, useValue: mockBacklogService },
         { provide: getRepositoryToken(GroupEntity), useValue: groupRepository },
+        { provide: getRepositoryToken(AccountEntity), useValue: accountRepository },
         { provide: getRepositoryToken(EnrollmentEntity), useValue: enrollmentRepository },
         { provide: getRepositoryToken(StudentStatsEntity), useValue: studentStatsRepository },
       ],
