@@ -5,7 +5,7 @@ import { DataSource } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
 import { GROUP_RESPONSE_GROUP_ID_OFFSET } from '../constants/group-api-constants';
-import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { ADMINISTRATOR_ROLE_NAME, LECTURER_ROLE_NAME, STUDENT_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
 import { UserRolesService } from '../user-roles/user-roles-service';
 
 export type StudentProfileBadgeItem = {
@@ -121,29 +121,49 @@ export class StudentProfileService {
 
     let targetStudentAccountId: number;
 
-    if (requestedStudentAccountId !== undefined) {
-      const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
-        subject.userId,
-        LECTURER_ROLE_NAME,
-      );
-      if (lecturerAccountId !== null) {
-        const isOwner = await this.dataSource.query<{ id: number }[]>(
-          `SELECT id FROM education.groups WHERE id = $1 AND teacher_account_id = $2`,
-          [internalGroupId, lecturerAccountId],
-        );
-        if (!isOwner || isOwner.length === 0) {
-          return { error: 'Forbidden' };
-        }
-        targetStudentAccountId = requestedStudentAccountId;
+    const isSuper = await this.userRolesService.userHasRole(subject.userId, SUPER_ROLE_NAME);
+    const isAdmin =
+      subject.organizationId != null
+        ? await this.userRolesService.userHasRoleInOrganization(
+            subject.userId,
+            subject.organizationId,
+            ADMINISTRATOR_ROLE_NAME,
+          )
+        : await this.userRolesService.userHasRole(subject.userId, ADMINISTRATOR_ROLE_NAME);
+
+    const impersonated = req.headers?.['x-impersonate-student'];
+    const parsedImpersonated = impersonated ? parseInt(String(impersonated), 10) : undefined;
+    const effectiveRequestedId =
+      requestedStudentAccountId ??
+      (Number.isFinite(parsedImpersonated) ? parsedImpersonated : undefined);
+
+    if (effectiveRequestedId !== undefined) {
+      if (isSuper || isAdmin) {
+        targetStudentAccountId = effectiveRequestedId;
       } else {
-        const studentAccountId = await this.userRolesService.findAccountIdForRole(
+        const lecturerAccountId = await this.userRolesService.findAccountIdForRole(
           subject.userId,
-          STUDENT_ROLE_NAME,
+          LECTURER_ROLE_NAME,
         );
-        if (studentAccountId === null || studentAccountId !== requestedStudentAccountId) {
-          return { error: 'Unauthorized' };
+        if (lecturerAccountId !== null) {
+          const isOwner = await this.dataSource.query<{ id: number }[]>(
+            `SELECT id FROM education.groups WHERE id = $1 AND teacher_account_id = $2`,
+            [internalGroupId, lecturerAccountId],
+          );
+          if (!isOwner || isOwner.length === 0) {
+            return { error: 'Forbidden' };
+          }
+          targetStudentAccountId = effectiveRequestedId;
+        } else {
+          const studentAccountId = await this.userRolesService.findAccountIdForRole(
+            subject.userId,
+            STUDENT_ROLE_NAME,
+          );
+          if (studentAccountId === null || studentAccountId !== effectiveRequestedId) {
+            return { error: 'Unauthorized' };
+          }
+          targetStudentAccountId = studentAccountId;
         }
-        targetStudentAccountId = studentAccountId;
       }
     } else {
       const studentAccountId = await this.userRolesService.findAccountIdForRole(

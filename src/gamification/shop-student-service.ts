@@ -14,7 +14,7 @@ import { InventoryHistoryItemDto } from './dto/inventory-history.dto';
 import { BacklogService } from '../backlog/backlog-service';
 import { SessionService } from '../auth/session/session.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
-import { STUDENT_ROLE_NAME, LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+import { STUDENT_ROLE_NAME, LECTURER_ROLE_NAME, ADMINISTRATOR_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
 
 import { ShopListingBadgePromotionEntity } from '../database/entities/shop-listing-badge-promotion.entity';
 import { ShopListingRankPromotionEntity } from '../database/entities/shop-listing-rank-promotion.entity';
@@ -45,6 +45,24 @@ export class ShopStudentService {
     const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
       throw new ForbiddenException('Unauthorized');
+    }
+    const impersonated = req.headers?.['x-impersonate-student'];
+    if (impersonated) {
+      const impersonatedId = parseInt(String(impersonated), 10);
+      if (Number.isFinite(impersonatedId)) {
+        const isSuper = await this.userRolesService.userHasRole(subject.userId, SUPER_ROLE_NAME);
+        const isAdmin =
+          subject.organizationId != null
+            ? await this.userRolesService.userHasRoleInOrganization(
+                subject.userId,
+                subject.organizationId,
+                ADMINISTRATOR_ROLE_NAME,
+              )
+            : await this.userRolesService.userHasRole(subject.userId, ADMINISTRATOR_ROLE_NAME);
+        if (isSuper || isAdmin) {
+          return impersonatedId;
+        }
+      }
     }
     const studentAccountId = await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
     if (!studentAccountId) {
@@ -423,5 +441,68 @@ export class ShopStudentService {
 
       return { success: true, message: 'Item used successfully' };
     });
+  }
+
+  async removePurchasedItem(
+    req: Request,
+    internalGroupId: number,
+    itemId: number,
+  ): Promise<{ success: boolean; message?: string }> {
+    const studentAccountId = await this.getStudentAccountId(req);
+    return this.dataSource.transaction(async (manager) => {
+      const enrollment = await manager.findOne(EnrollmentEntity, {
+        where: { groupId: internalGroupId, studentAccountId },
+      });
+      if (!enrollment) {
+        throw new NotFoundException('Student is not enrolled in this group');
+      }
+      const earnedItem = await manager.findOne(EarnedItemEntity, {
+        where: { enrollmentId: enrollment.id, itemId },
+      });
+      if (!earnedItem) {
+        throw new NotFoundException('Earned item not found');
+      }
+      earnedItem.quantity -= 1;
+      if (earnedItem.quantity <= 0) {
+        await manager.remove(EarnedItemEntity, earnedItem);
+      } else {
+        await manager.save(EarnedItemEntity, earnedItem);
+      }
+      return { success: true, message: 'Przedmiot został usunięty z ekwipunku.' };
+    });
+  }
+
+  async removeUsedItemHistory(
+    req: Request,
+    internalGroupId: number,
+    historyId: number,
+  ): Promise<{ success: boolean; message?: string }> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      throw new ForbiddenException('Unauthorized');
+    }
+    const isSuper = await this.userRolesService.userHasRole(subject.userId, SUPER_ROLE_NAME);
+    const isAdmin =
+      subject.organizationId != null
+        ? await this.userRolesService.userHasRoleInOrganization(
+            subject.userId,
+            subject.organizationId,
+            ADMINISTRATOR_ROLE_NAME,
+          )
+        : await this.userRolesService.userHasRole(subject.userId, ADMINISTRATOR_ROLE_NAME);
+    const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
+    if (!isSuper && !isAdmin && !isLecturer) {
+      throw new ForbiddenException('Not authorized');
+    }
+
+    const backlogRepo = this.dataSource.getRepository(BacklogEntity);
+    const record = await backlogRepo.findOne({
+      where: { id: historyId, groupId: internalGroupId },
+    });
+    if (!record) {
+      throw new NotFoundException('Record not found');
+    }
+    await backlogRepo.remove(record);
+    return { success: true, message: 'Pozycja została usunięta z historii.' };
   }
 }

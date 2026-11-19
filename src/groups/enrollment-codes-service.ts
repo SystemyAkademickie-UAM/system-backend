@@ -16,7 +16,7 @@ import { SessionService } from '../auth/session/session.service';
 import {
   ENROLLMENT_CODE_GENERATED_BYTE_LENGTH,
 } from '../constants/enrollment-code-constants';
-import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+import { ADMINISTRATOR_ROLE_NAME, LECTURER_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentCodeEntity } from '../database/entities/enrollment-code.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
@@ -220,6 +220,25 @@ export class EnrollmentCodesService {
     const subject = await this.sessionService.resolveSubjectFromRequest(req, queryAuth);
     if (subject === null) {
       throw new ForbiddenException('Not authorized');
+    }
+    const isSuper = await this.userRolesService.userHasRole(subject.userId, SUPER_ROLE_NAME);
+    if (isSuper) {
+      return;
+    }
+    if (subject.organizationId != null) {
+      const isAdminInOrg = await this.userRolesService.userHasRoleInOrganization(
+        subject.userId,
+        subject.organizationId,
+        ADMINISTRATOR_ROLE_NAME,
+      );
+      if (isAdminInOrg) {
+        return;
+      }
+    } else {
+      const isAdmin = await this.userRolesService.userHasRole(subject.userId, ADMINISTRATOR_ROLE_NAME);
+      if (isAdmin) {
+        return;
+      }
     }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {

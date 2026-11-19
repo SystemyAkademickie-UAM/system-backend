@@ -10,7 +10,7 @@ import type { Request } from 'express';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 
 import { SessionService, type SessionSubject } from '../auth/session/session.service';
-import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { ADMINISTRATOR_ROLE_NAME, LECTURER_ROLE_NAME, STUDENT_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
 import {
   EXTRA_LIFE_DEFAULT_BASE_PRICE,
   EXTRA_LIFE_DEFAULT_EDUCATIONAL_DESCRIPTION,
@@ -598,8 +598,26 @@ export class ShopItemsService {
     }
   }
 
+  private async isSuperOrAdmin(subject: { userId: number; organizationId: number | null }): Promise<boolean> {
+    const isSuper = await this.userRolesService.userHasRole(subject.userId, SUPER_ROLE_NAME);
+    if (isSuper) {
+      return true;
+    }
+    if (subject.organizationId != null) {
+      return this.userRolesService.userHasRoleInOrganization(
+        subject.userId,
+        subject.organizationId,
+        ADMINISTRATOR_ROLE_NAME,
+      );
+    }
+    return this.userRolesService.userHasRole(subject.userId, ADMINISTRATOR_ROLE_NAME);
+  }
+
   private async assertLecturerOwnsGroup(req: Request, groupId: number, queryAuth?: string): Promise<void> {
     const subject = await this.resolveSubject(req, queryAuth);
+    if (await this.isSuperOrAdmin(subject)) {
+      return;
+    }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
       throw new ForbiddenException('Not authorized');
@@ -616,6 +634,9 @@ export class ShopItemsService {
 
   private async assertCanReadGroupShop(req: Request, groupId: number, queryAuth?: string): Promise<boolean> {
     const subject = await this.resolveSubject(req, queryAuth);
+    if (await this.isSuperOrAdmin(subject)) {
+      return true;
+    }
     await this.assertGroupExists(groupId);
     const group = await this.groupRepository.findOne({ where: { id: groupId }, select: ['id', 'teacherAccountId'] });
     if (group === null) {
