@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import type { Request } from 'express';
@@ -11,12 +11,14 @@ import { AccountEntity } from '../../database/entities/account.entity';
 import { OrganizationEntity } from '../../database/entities/organization.entity';
 import { UserEntity } from '../../database/entities/user.entity';
 import { ADMINISTRATOR_ROLE_NAME } from '../../constants/role-name-constants';
+import { ORGANIZATION_LOGIN_METHOD_SAML } from '../../constants/organization-constants';
 
 describe('AdminOrganizationAdministratorsService', () => {
   let service: AdminOrganizationAdministratorsService;
   let adminAccessService: { assertSuperAdmin: jest.Mock; resolveAccountDeletionActor: jest.Mock };
   let accountRemovalService: { removeOrganizationAccountRecord: jest.Mock };
   let organizationRepository: { findOne: jest.Mock };
+  let rosterService: { createOrganizationAccount: jest.Mock };
   let accountRepository: {
     findOne: jest.Mock;
     find: jest.Mock;
@@ -48,6 +50,16 @@ describe('AdminOrganizationAdministratorsService', () => {
         accountLimit: 100,
       }),
     };
+    rosterService = {
+      createOrganizationAccount: jest.fn().mockResolvedValue({
+        accountId: 11,
+        userId: 12,
+        email: 'ada@university.example',
+        nickname: '',
+        name: 'Ada',
+        surname: 'Lovelace',
+      }),
+    };
     accountRepository = {
       findOne: jest.fn().mockResolvedValue({
         id: 42,
@@ -71,7 +83,7 @@ describe('AdminOrganizationAdministratorsService', () => {
         { provide: getRepositoryToken(UserEntity), useValue: { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) } },
         {
           provide: AdminOrganizationAccountRosterService,
-          useValue: { createOrganizationAccount: jest.fn() },
+          useValue: rosterService,
         },
       ],
     }).compile();
@@ -188,5 +200,40 @@ describe('AdminOrganizationAdministratorsService', () => {
         surname: 'Administrator',
       },
     ]);
+  });
+
+  it('grants an administrator by email in an organization that already has people', async () => {
+    accountRepository.count.mockResolvedValue(4);
+
+    const actual = await service.grantAdministratorByEmail(req, 1, {
+      email: 'ada@university.example',
+      name: 'Ada',
+      surname: 'Lovelace',
+    });
+
+    expect(accountRepository.count).not.toHaveBeenCalled();
+    expect(rosterService.createOrganizationAccount).toHaveBeenCalledWith(req, 1, {
+      email: 'ada@university.example',
+      name: 'Ada',
+      surname: 'Lovelace',
+      role: ADMINISTRATOR_ROLE_NAME,
+    });
+    expect(actual.accountId).toBe(11);
+  });
+
+  it('refuses email grant for a SAML organization', async () => {
+    organizationRepository.findOne.mockResolvedValue({
+      id: 1,
+      isActive: true,
+      loginMethod: ORGANIZATION_LOGIN_METHOD_SAML,
+      accountLimit: 100,
+    });
+
+    await expect(service.grantAdministratorByEmail(req, 1, {
+      email: 'ada@university.example',
+      name: 'Ada',
+      surname: 'Lovelace',
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(rosterService.createOrganizationAccount).not.toHaveBeenCalled();
   });
 });

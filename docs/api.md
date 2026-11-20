@@ -75,7 +75,7 @@ Manage institutional SAML configuration stored in **`auth.organizations`** and *
 | `/api/admin/organizations/:organizationId/administrators` | `GET` | List organization administrators (`administrator` role). |
 | `/api/admin/organizations/:organizationId/administrators/candidates` | `GET` | People already in the organization who do not hold `administrator`. |
 | `/api/admin/organizations/:organizationId/administrators` | `POST` | Grant `administrator` to one of those people. Body: `{ "userId": 7 }`. The caller cannot grant the role to themselves. |
-| `/api/admin/organizations/:organizationId/administrators/first` | `POST` | Email organizations with nobody in them yet. Body: `{ "email", "name", "surname" }`. Creates the user and the administrator account so a magic link can sign them in. |
+| `/api/admin/organizations/:organizationId/administrators/email` | `POST` | Email organizations only. Body: `{ "email", "name", "surname" }`. Creates the person when they do not exist yet, or reuses them, and grants `administrator`. Works whether or not the organization already has other accounts. Magic-link login can then find them. SAML organizations do not use this call. |
 | `/api/admin/organizations/:organizationId/administrators/:accountId` | `DELETE` | Revoke organization administrator role. |
 
 **Bootstrap super admin:** set `SUPERADMIN_BOOTSTRAP_EMAIL` in `.env`. On first startup (or first SAML login with that email), when no `super` account exists, the API inserts one row in `auth.accounts`. Optional `SUPERADMIN_BOOTSTRAP_ORGANIZATION_ID` (default: first active organization).

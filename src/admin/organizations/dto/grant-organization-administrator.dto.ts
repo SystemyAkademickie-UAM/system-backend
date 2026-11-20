@@ -20,7 +20,7 @@ export class GrantOrganizationAdministratorDto {
   userId: number;
 }
 
-export class CreateFirstOrganizationAdministratorDto {
+export class GrantOrganizationAdministratorByEmailDto {
   @ApiPropertyOptional({ description: 'Opaque token when `maq_auth` cookie is unavailable' })
   @IsOptional()
   @IsString()

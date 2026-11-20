@@ -23,7 +23,7 @@ import type { Request } from 'express';
 
 import { MAQ_SESSION_COOKIE_NAME } from '../../constants/session-constants';
 import {
-  CreateFirstOrganizationAdministratorDto,
+  GrantOrganizationAdministratorByEmailDto,
   GrantOrganizationAdministratorDto,
 } from './dto/grant-organization-administrator.dto';
 import { AdminOrganizationAdministratorsService } from './admin-organization-administrators.service';
@@ -55,16 +55,16 @@ export class AdminOrganizationAdministratorsController {
     return this.adminOrganizationAdministratorsService.listCandidates(req, organizationId);
   }
 
-  @Post('first')
+  @Post('email')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create the first person in an email organization and grant administrator' })
-  @ApiCreatedResponse({ description: 'User and administrator account created. Magic-link login can find them.' })
+  @ApiOperation({ summary: 'Grant administrator in an email organization by name and email' })
+  @ApiCreatedResponse({ description: 'User is created or reused, and the administrator account exists. Magic-link login can find them.' })
   @ApiForbiddenResponse({ description: 'Caller lacks super role, or the caller is granting the role to themselves' })
-  createFirstAdministrator(
+  grantAdministratorByEmail(
     @Req() req: Request,
     @Param('organizationId', ParseIntPipe) organizationId: number,
-    @Body() dto: CreateFirstOrganizationAdministratorDto) {
-    return this.adminOrganizationAdministratorsService.createFirstAdministrator(req, organizationId, dto);
+    @Body() dto: GrantOrganizationAdministratorByEmailDto) {
+    return this.adminOrganizationAdministratorsService.grantAdministratorByEmail(req, organizationId, dto);
   }
 
   @Post()

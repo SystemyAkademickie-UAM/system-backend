@@ -128,7 +128,7 @@ describe('AdminOrganizationsService', () => {
     expect(created.address.country).toBe('PL');
   });
 
-  it('lists id, name, isActive, and domain', async () => {
+  it('lists id, name, status, domain, login method, and account limit', async () => {
     organizationRepository.find.mockResolvedValue([
       organizationRow(2, 'Local', 'localhost'),
       organizationRow(11, 'AMU', 'amu.edu.pl'),
@@ -137,8 +137,8 @@ describe('AdminOrganizationsService', () => {
     const actual = await service.listOrganizations(req);
 
     expect(actual).toEqual([
-      { id: 2, name: 'Local', isActive: true, domain: 'localhost' },
-      { id: 11, name: 'AMU', isActive: true, domain: 'amu.edu.pl' },
+      { id: 2, name: 'Local', isActive: true, domain: 'localhost', loginMethod: 'email', accountLimit: 100 },
+      { id: 11, name: 'AMU', isActive: true, domain: 'amu.edu.pl', loginMethod: 'email', accountLimit: 100 },
     ]);
   });
 

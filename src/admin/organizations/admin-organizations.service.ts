@@ -39,6 +39,8 @@ export type OrganizationListItem = {
   name: string;
   isActive: boolean;
   domain: string | null;
+  loginMethod: string;
+  accountLimit: number;
 };
 
 export type OrganizationRepresentative = {
@@ -349,6 +351,8 @@ export class AdminOrganizationsService {
       name: row.name,
       isActive: row.isActive,
       domain: row.domain,
+      loginMethod: row.loginMethod,
+      accountLimit: row.accountLimit,
     };
   }
 

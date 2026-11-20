@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -29,7 +28,7 @@ import { OrganizationEntity } from '../../database/entities/organization.entity'
 import { UserEntity } from '../../database/entities/user.entity';
 import { OrganizationLogService } from '../../organization-log/organization-log.service';
 import {
-  CreateFirstOrganizationAdministratorDto,
+  GrantOrganizationAdministratorByEmailDto,
   GrantOrganizationAdministratorDto,
 } from './dto/grant-organization-administrator.dto';
 
@@ -191,24 +190,21 @@ export class AdminOrganizationAdministratorsService {
   }
 
   /**
-   * Creates the first person in an email organization and grants the administrator role.
-   * Magic-link login can then find that account.
+   * Creates or reuses a person in an email organization and grants the administrator role.
+   * Email organizations have no self-registration, so this is how every administering person is added.
+   * Magic-link login can find the account afterwards. SAML organizations grant from an existing account.
    */
-  async createFirstAdministrator(
+  async grantAdministratorByEmail(
     req: Request,
     organizationId: number,
-    dto: CreateFirstOrganizationAdministratorDto,
+    dto: GrantOrganizationAdministratorByEmailDto,
   ): Promise<OrganizationAdministratorListItem> {
     await this.requireSuperActor(req, dto.auth);
     const organization = await this.requireActiveOrganization(organizationId);
     if (organization.loginMethod !== ORGANIZATION_LOGIN_METHOD_EMAIL) {
       throw new BadRequestException(
-        'People in a SAML organization appear here after they sign in. Choose one of them.',
+        'SAML organizations grant this role to a person who already has an account. Sign-in does not assign it.',
       );
-    }
-    const existingCount = await this.accountRepository.count({ where: { organizationId } });
-    if (existingCount > 0) {
-      throw new ConflictException('This organization already has people. Choose one from the list.');
     }
     const created = await this.rosterService.createOrganizationAccount(req, organizationId, {
       email: dto.email,
