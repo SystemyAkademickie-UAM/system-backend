@@ -7,6 +7,8 @@ import {
   IsEmail,
   IsIn,
   IsInt,
+  Max,
+  Min,
   IsOptional,
   IsString,
   IsUrl,
@@ -35,6 +37,8 @@ import {
   ORGANIZATION_COUNTRY_CODE_PATTERN,
   ORGANIZATION_DOMAIN_INVALID_MESSAGE,
   ORGANIZATION_DOMAIN_PATTERN,
+  ORGANIZATION_ACCOUNT_LIMIT_MAX,
+  ORGANIZATION_ACCOUNT_LIMIT_MIN,
   ORGANIZATION_LOGIN_METHOD_EMAIL,
   ORGANIZATION_LOGIN_METHOD_SAML,
 } from '../../../constants/organization-constants';
@@ -234,6 +238,13 @@ export class CreateOrganizationDto {
   })
   @IsIn([ORGANIZATION_LOGIN_METHOD_SAML, ORGANIZATION_LOGIN_METHOD_EMAIL])
   loginMethod: string;
+
+  @ApiProperty({ example: 200, description: 'Maximum account rows in this organization' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(ORGANIZATION_ACCOUNT_LIMIT_MIN)
+  @Max(ORGANIZATION_ACCOUNT_LIMIT_MAX)
+  accountLimit: number;
 }
 
 export class UpdateOrganizationDto {
@@ -292,6 +303,13 @@ export class UpdateOrganizationDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(ORGANIZATION_ACCOUNT_LIMIT_MIN)
+  @Max(ORGANIZATION_ACCOUNT_LIMIT_MAX)
+  accountLimit?: number;
 }
 
 export class UploadOrganizationCertificateDto {

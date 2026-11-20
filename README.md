@@ -80,12 +80,14 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `POST /api/admin/logs/export` — super only: one day of logs as ECDH+AES-GCM ciphertext (not plaintext)
 - `POST /api/client-logs` — authenticated browser error/warn line into the same daily file
 - `GET /api/admin/organizations` — super only: `id`, `name`, `isActive`, `domain`
-- `POST /api/admin/organizations` — super only: create requires `name`, `loginMethod` (`saml` or `email`), `domain`, `representative` (`fullName`, `email`, optional `phone`), `address` (`town`, `street`), and for `saml` either `metadataUrl` or `entityId` + `ssoLoginUrl` + `certificatePem`. Those fields are written to `auth.organizations`
+- `POST /api/admin/organizations` — super only: create requires `name`, `loginMethod` (`saml` or `email`), `accountLimit` (1–100000), `domain`, `representative` (`fullName`, `email`, optional `phone`), `address` (`town`, `street`), and for `saml` either `metadataUrl` or `entityId` + `ssoLoginUrl` + `certificatePem`. Those fields are written to `auth.organizations`. `PUT` can change `accountLimit`
 - `POST /api/admin/organizations/bulk` — super only: body `{ "ids": [11, 12] }` (1–50). Each item is the full stored organization, not a name/domain sample
 - `GET /api/admin/organizations/administrators` — super only: every administrator of an active organization (`accountId`, `userId`, `organizationId`, `organizationName`, `email`, `nickname`, `name`, `surname`)
 - `GET /api/admin/organizations/:organizationId/administrators` — super only: administrators of one organization
-- `POST /api/admin/organizations/:organizationId/administrators` — super only: body `{ "email" }`; grants `administrator` when that user has already signed in
-- `DELETE /api/admin/organizations/:organizationId/administrators/:accountId` — super only: revoke that administrator account
+- `GET /api/admin/organizations/:organizationId/administrators/candidates` — super only: people in that organization who are not administrators yet
+- `POST /api/admin/organizations/:organizationId/administrators` — super only: body `{ "userId" }`; grants `administrator` to a person already in the organization. The caller cannot grant it to themselves
+- `POST /api/admin/organizations/:organizationId/administrators/first` — super only, email organizations with no people yet: body `{ "email", "name", "surname" }` creates the user and the administrator account so magic-link login can find them
+- `DELETE /api/admin/organizations/:organizationId/administrators/:accountId` — super only: revoke that administrator account. The caller cannot revoke their own role
 - `GET /api/admin/organizations/:organizationId/accounts` — every account in that organization (super, or the organization administrator whose session is that organization)
 - `GET /api/admin/organizations/:organizationId/accounts/page?afterAccountId=&limit=` — next page by account id (default and maximum 100)
 - `GET /api/admin/organizations/:organizationId/accounts/:accountId` — one account in that organization

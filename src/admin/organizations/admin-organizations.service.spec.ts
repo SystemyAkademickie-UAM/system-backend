@@ -31,6 +31,7 @@ function organizationRow(id: number, name: string, domain: string): Organization
     ssoLoginUrl: null,
     ssoLogoutUrl: null,
     certificateId: null,
+    accountLimit: 100,
     isActive: true,
     createdAt: new Date('2026-11-01T17:00:00.000Z'),
     updatedAt: new Date('2026-11-01T17:00:00.000Z'),
@@ -61,6 +62,7 @@ describe('AdminOrganizationsService', () => {
       postalCode: '61-712',
       country: 'pl',
     },
+    accountLimit: 200,
   };
 
   beforeEach(async () => {
@@ -118,6 +120,7 @@ describe('AdminOrganizationsService', () => {
       addressPostalCode: '61-712',
       addressCountry: 'PL',
       contactEmail: 'it-helpdesk@amu.edu.pl',
+      accountLimit: 200,
     }));
     expect(created.domain).toBe('amu.edu.pl');
     expect(created.representative.fullName).toBe('Anna Nowak');

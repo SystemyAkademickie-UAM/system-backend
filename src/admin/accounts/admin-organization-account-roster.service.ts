@@ -15,9 +15,11 @@ import {
   ORGANIZATION_ACCOUNT_DEFAULT_AVATAR_ID,
   ORGANIZATION_ACCOUNT_DEFAULT_LANGUAGE,
   ORGANIZATION_ACCOUNT_EXPORT_COLUMNS,
+  ORGANIZATION_ACCOUNT_LIMIT_REACHED_MESSAGE,
   ORGANIZATION_ACCOUNT_ORG_ADMIN_ROLES,
   ORGANIZATION_ACCOUNT_PAGE_SIZE_DEFAULT,
   ORGANIZATION_ACCOUNT_PLACEHOLDER_STUDENT_ID,
+  ORGANIZATION_ACCOUNT_SELF_ROLE_MESSAGE,
 } from '../../constants/organization-account-management-constants';
 import { ORGANIZATION_LOGIN_METHOD_EMAIL } from '../../constants/organization-constants';
 import {
@@ -130,10 +132,12 @@ export class AdminOrganizationAccountRosterService {
     organizationId: number,
     dto: CreateOrganizationAccountDto): Promise<OrganizationAccountListItem> {
     const actor = await this.requireActor(req, organizationId);
-    await this.requireActiveOrganization(organizationId);
+    const organization = await this.requireActiveOrganization(organizationId);
     this.assertRoleAllowed(actor, dto.role);
     const email = this.normalizeEmail(dto.email);
     const existingUser = await this.findUserByEmail(email);
+    this.assertNotSelf(actor.userId, existingUser?.id);
+    await this.assertAccountCapacity(organization);
     const item = existingUser === null
       ? await this.createUserAndAccount(organizationId, email, dto)
       : await this.linkExistingUser(organizationId, existingUser, dto, email);
@@ -155,6 +159,9 @@ export class AdminOrganizationAccountRosterService {
     const account = await this.findAccountInOrganization(organizationId, accountId);
     const previousRole = account.role;
     this.assertTargetMutable(actor, account.role);
+    if (dto.role !== undefined) {
+      this.assertNotSelf(actor.userId, account.userId);
+    }
     if (dto.role !== undefined) {
       this.assertRoleAllowed(actor, dto.role);
       await this.assertRoleAvailable(account, dto.role);
@@ -214,11 +221,13 @@ export class AdminOrganizationAccountRosterService {
     organizationId: number,
     dto: CreateOrganizationAccountDto): Promise<ImportOutcome> {
     const actor = await this.requireActor(req, organizationId);
-    await this.requireActiveOrganization(organizationId);
+    const organization = await this.requireActiveOrganization(organizationId);
     this.assertRoleAllowed(actor, dto.role);
     const email = this.normalizeEmail(dto.email);
     const existingUser = await this.findUserByEmail(email);
+    this.assertNotSelf(actor.userId, existingUser?.id);
     if (existingUser === null) {
+      await this.assertAccountCapacity(organization);
       const created = await this.createUserAndAccount(organizationId, email, dto);
       await this.recordRole(actor.userId, organizationId, created, ORGANIZATION_LOG_KIND_ROLE_GRANTED);
       return 'created';
@@ -227,6 +236,7 @@ export class AdminOrganizationAccountRosterService {
       where: { userId: existingUser.id, organizationId, role: dto.role },
     });
     if (existingAccount === null) {
+      await this.assertAccountCapacity(organization);
       const created = await this.linkExistingUser(organizationId, existingUser, dto, email);
       await this.recordRole(actor.userId, organizationId, created, ORGANIZATION_LOG_KIND_ROLE_GRANTED);
       return 'created';
@@ -385,6 +395,19 @@ export class AdminOrganizationAccountRosterService {
       throw new BadRequestException(`Organization ${organizationId} is inactive`);
     }
     return organization;
+  }
+
+  private assertNotSelf(actorUserId: number, targetUserId: number | undefined): void {
+    if (targetUserId !== undefined && targetUserId === actorUserId) {
+      throw new ForbiddenException(ORGANIZATION_ACCOUNT_SELF_ROLE_MESSAGE);
+    }
+  }
+
+  private async assertAccountCapacity(organization: OrganizationEntity): Promise<void> {
+    const count = await this.accountRepository.count({ where: { organizationId: organization.id } });
+    if (count >= organization.accountLimit) {
+      throw new BadRequestException(ORGANIZATION_ACCOUNT_LIMIT_REACHED_MESSAGE);
+    }
   }
 
   private assertRoleAllowed(actor: AccountDeletionActor, role: string): void {
