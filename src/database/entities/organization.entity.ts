@@ -14,6 +14,7 @@ import {
   AUTH_ORGANIZATION_REPRESENTATIVE_NAME_MAX_LENGTH,
 } from '../../constants/database-entity-constants';
 import {
+  ORGANIZATION_ACCOUNT_LIMIT_DEFAULT,
   ORGANIZATION_LOGIN_METHOD_SAML,
 } from '../../constants/organization-constants';
 
@@ -137,6 +138,15 @@ export class OrganizationEntity {
 
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true })
   isActive: boolean;
+
+  /** How many account rows this organization may hold. */
+  @Column({
+    name: 'account_limit',
+    type: 'integer',
+    nullable: false,
+    default: ORGANIZATION_ACCOUNT_LIMIT_DEFAULT,
+  })
+  accountLimit: number;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

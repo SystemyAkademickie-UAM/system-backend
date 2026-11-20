@@ -14,6 +14,12 @@ export const ORGANIZATION_ACCOUNT_PAGE_SIZE_MAX = 100;
 /** Maximum rows accepted by one account import request. */
 export const ORGANIZATION_ACCOUNT_IMPORT_MAX_ROWS = 500;
 
+/** Returned when the caller tries to grant, change, or revoke their own role. */
+export const ORGANIZATION_ACCOUNT_SELF_ROLE_MESSAGE = 'You cannot change your own role';
+
+/** Returned when another account would pass the organization's account limit. */
+export const ORGANIZATION_ACCOUNT_LIMIT_REACHED_MESSAGE = 'This organization has reached its account limit';
+
 /** `auth.users.student_id` for an account created by an administrator, before a real student id exists. */
 export const ORGANIZATION_ACCOUNT_PLACEHOLDER_STUDENT_ID = 0;
 

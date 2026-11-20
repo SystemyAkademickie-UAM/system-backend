@@ -68,6 +68,7 @@ export type OrganizationDetail = OrganizationListItem & {
   metadataUrl: string | null;
   ssoLogoutUrl: string | null;
   certificateId: number | null;
+  accountLimit: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -161,6 +162,7 @@ export class AdminOrganizationsService {
       ssoLoginUrl: dto.ssoLoginUrl?.trim() ?? null,
       ssoLogoutUrl: dto.ssoLogoutUrl?.trim() ?? null,
       isActive: true,
+      accountLimit: dto.accountLimit,
     });
     const saved = await this.saveOrganization(entity, domain);
     const metadataUrl = saved.metadataUrl?.trim() ?? '';
@@ -217,6 +219,9 @@ export class AdminOrganizationsService {
     }
     if (dto.isActive !== undefined) {
       row.isActive = dto.isActive;
+    }
+    if (dto.accountLimit !== undefined) {
+      row.accountLimit = dto.accountLimit;
     }
     await this.saveOrganization(row, row.domain);
     if (dto.metadataUrl !== undefined) {
@@ -376,6 +381,7 @@ export class AdminOrganizationsService {
       metadataUrl: row.metadataUrl,
       ssoLogoutUrl: row.ssoLogoutUrl,
       certificateId: row.certificateId,
+      accountLimit: row.accountLimit,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

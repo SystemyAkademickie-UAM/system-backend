@@ -62,7 +62,7 @@ Manage institutional SAML configuration stored in **`auth.organizations`** and *
 
 | Endpoint | Method | Description |
 | -------- | ------ | ----------- |
-| `/api/admin/organizations` | `POST` | Create organization. Required: `name`, `loginMethod` (`saml` or `email`), `domain`, `representative` (`fullName`, `email`), `address` (`town`, `street`). `saml` also requires `metadataUrl`, or `entityId` + `ssoLoginUrl` + `certificatePem`. Domain may be a hostname, `localhost`, `127.0.0.1`, or `192.168.0.0`–`192.168.0.255`. |
+| `/api/admin/organizations` | `POST` | Create organization. Required: `name`, `loginMethod` (`saml` or `email`), `accountLimit` (1–100000), `domain`, `representative` (`fullName`, `email`), `address` (`town`, `street`). `saml` also requires `metadataUrl`, or `entityId` + `ssoLoginUrl` + `certificatePem`. Domain may be a hostname, `localhost`, `127.0.0.1`, or `192.168.0.0`–`192.168.0.255`. `PUT` accepts `accountLimit`. Creating another account past the limit returns 400. |
 | `/api/admin/organizations` | `GET` | List organizations. Each row is `id`, `name`, `isActive`, `domain`. |
 | `/api/admin/organizations/bulk` | `POST` | Body `{ "ids": [11, 12] }`, 1–50 ids. Returns `{ "organizations": [...] }` where each item is the full stored record (login method, domain, representative, address, SAML fields, certificate summary, timestamps). |
 | `/api/admin/organizations/:id` | `GET` | Full organization record, including domain, representative, and address. |
@@ -73,7 +73,9 @@ Manage institutional SAML configuration stored in **`auth.organizations`** and *
 | `/api/admin/organizations/:id/certificates/:certId` | `DELETE` | Revoke certificate. |
 | `/api/admin/organizations/administrators` | `GET` | Administrators of every active organization. Each item adds `organizationId` and `organizationName`. |
 | `/api/admin/organizations/:organizationId/administrators` | `GET` | List organization administrators (`administrator` role). |
-| `/api/admin/organizations/:organizationId/administrators` | `POST` | Grant `administrator` role by user email (user must exist after SAML login). Body: `{ "email": "..." }`. |
+| `/api/admin/organizations/:organizationId/administrators/candidates` | `GET` | People already in the organization who do not hold `administrator`. |
+| `/api/admin/organizations/:organizationId/administrators` | `POST` | Grant `administrator` to one of those people. Body: `{ "userId": 7 }`. The caller cannot grant the role to themselves. |
+| `/api/admin/organizations/:organizationId/administrators/first` | `POST` | Email organizations with nobody in them yet. Body: `{ "email", "name", "surname" }`. Creates the user and the administrator account so a magic link can sign them in. |
 | `/api/admin/organizations/:organizationId/administrators/:accountId` | `DELETE` | Revoke organization administrator role. |
 
 **Bootstrap super admin:** set `SUPERADMIN_BOOTSTRAP_EMAIL` in `.env`. On first startup (or first SAML login with that email), when no `super` account exists, the API inserts one row in `auth.accounts`. Optional `SUPERADMIN_BOOTSTRAP_ORGANIZATION_ID` (default: first active organization).

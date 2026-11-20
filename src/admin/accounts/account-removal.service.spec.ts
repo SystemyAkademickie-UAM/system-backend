@@ -92,6 +92,19 @@ describe('AccountRemovalService', () => {
     service = module.get(AccountRemovalService);
   });
 
+  it('refuses to delete the caller own account', async () => {
+    adminAccessService.resolveAccountDeletionActor.mockResolvedValue({ userId: 10, isSuperAdmin: true });
+    accountRepository.findOne.mockResolvedValue({
+      id: 5,
+      userId: 10,
+      organizationId: 12,
+      role: STUDENT_ROLE_NAME,
+    });
+
+    await expect(service.deleteOrganizationAccount(req, 12, 5)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(queryRunner.startTransaction).not.toHaveBeenCalled();
+  });
+
   it('allows org administrator to delete a student account', async () => {
     const result = await service.deleteOrganizationAccount(req, 12, 5);
     expect(result).toEqual({ accountId: 5, userId: 10, userRemoved: true });
