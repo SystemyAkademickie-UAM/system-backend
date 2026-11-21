@@ -1,8 +1,9 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import type { Request } from 'express';
 
+import { AdminOrganizationAccountRosterService } from '../accounts/admin-organization-account-roster.service';
 import { AdminOrganizationAdministratorsService } from './admin-organization-administrators.service';
 import { AdminAccessService } from '../admin-access.service';
 import { AccountRemovalService } from '../accounts/account-removal.service';
@@ -13,16 +14,24 @@ import { ADMINISTRATOR_ROLE_NAME } from '../../constants/role-name-constants';
 
 describe('AdminOrganizationAdministratorsService', () => {
   let service: AdminOrganizationAdministratorsService;
-  let adminAccessService: { assertSuperAdmin: jest.Mock };
+  let adminAccessService: { assertSuperAdmin: jest.Mock; resolveAccountDeletionActor: jest.Mock };
   let accountRemovalService: { removeOrganizationAccountRecord: jest.Mock };
   let organizationRepository: { findOne: jest.Mock };
-  let accountRepository: { findOne: jest.Mock; createQueryBuilder?: jest.Mock };
+  let accountRepository: {
+    findOne: jest.Mock;
+    find: jest.Mock;
+    count: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    createQueryBuilder?: jest.Mock;
+  };
 
   const req = {} as Request;
 
   beforeEach(async () => {
     adminAccessService = {
       assertSuperAdmin: jest.fn().mockResolvedValue(undefined),
+      resolveAccountDeletionActor: jest.fn().mockResolvedValue({ userId: 8, isSuperAdmin: true }),
     };
     accountRemovalService = {
       removeOrganizationAccountRecord: jest.fn().mockResolvedValue({
@@ -32,14 +41,24 @@ describe('AdminOrganizationAdministratorsService', () => {
       }),
     };
     organizationRepository = {
-      findOne: jest.fn().mockResolvedValue({ id: 1, isActive: true }),
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        isActive: true,
+        loginMethod: 'email',
+        accountLimit: 100,
+      }),
     };
     accountRepository = {
       findOne: jest.fn().mockResolvedValue({
         id: 42,
+        userId: 9,
         organizationId: 1,
         role: ADMINISTRATOR_ROLE_NAME,
       }),
+      find: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+      create: jest.fn((row) => row),
+      save: jest.fn(async (row) => ({ id: 50, ...row })),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -49,7 +68,11 @@ describe('AdminOrganizationAdministratorsService', () => {
         { provide: AccountRemovalService, useValue: accountRemovalService },
         { provide: getRepositoryToken(OrganizationEntity), useValue: organizationRepository },
         { provide: getRepositoryToken(AccountEntity), useValue: accountRepository },
-        { provide: getRepositoryToken(UserEntity), useValue: { findOne: jest.fn() } },
+        { provide: getRepositoryToken(UserEntity), useValue: { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: AdminOrganizationAccountRosterService,
+          useValue: { createOrganizationAccount: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -59,7 +82,19 @@ describe('AdminOrganizationAdministratorsService', () => {
   it('revokeAdministrator uses full account removal cascade', async () => {
     await service.revokeAdministrator(req, 1, 42);
 
-    expect(accountRemovalService.removeOrganizationAccountRecord).toHaveBeenCalledWith(1, 42);
+    expect(accountRemovalService.removeOrganizationAccountRecord).toHaveBeenCalledWith(1, 42, 8);
+  });
+
+  it('refuses to revoke the caller own administrator role', async () => {
+    accountRepository.findOne.mockResolvedValue({
+      id: 42,
+      userId: 8,
+      organizationId: 1,
+      role: ADMINISTRATOR_ROLE_NAME,
+    });
+
+    await expect(service.revokeAdministrator(req, 1, 42)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(accountRemovalService.removeOrganizationAccountRecord).not.toHaveBeenCalled();
   });
 
   it('revokeAdministrator rejects missing administrator account', async () => {

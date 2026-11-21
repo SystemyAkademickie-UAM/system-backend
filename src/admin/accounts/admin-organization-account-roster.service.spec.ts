@@ -42,7 +42,12 @@ describe('AdminOrganizationAccountRosterService', () => {
     };
     magicLinkService = { requestMagicLink: jest.fn().mockResolvedValue({ sent: true, message: 'sent' }) };
     organizationRepository = {
-      findOne: jest.fn().mockResolvedValue({ id: 11, isActive: true, loginMethod: ORGANIZATION_LOGIN_METHOD_EMAIL }),
+      findOne: jest.fn().mockResolvedValue({
+        id: 11,
+        isActive: true,
+        loginMethod: ORGANIZATION_LOGIN_METHOD_EMAIL,
+        accountLimit: 100,
+      }),
     };
     accountRepository = {
       find: jest.fn().mockResolvedValue([]),
@@ -138,6 +143,21 @@ describe('AdminOrganizationAccountRosterService', () => {
       role: STUDENT_ROLE_NAME,
     }));
     expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a new account when the organization has reached its limit', async () => {
+    mockEmailLookup(null);
+    accountRepository.count.mockResolvedValue(100);
+
+    await expect(service.createOrganizationAccount(req, 11, inputDto)).rejects.toBeInstanceOf(BadRequestException);
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects granting a role to the caller', async () => {
+    mockEmailLookup({ id: 4, email: 'ada@university.example' } as UserEntity);
+
+    await expect(service.createOrganizationAccount(req, 11, inputDto)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(accountRepository.count).not.toHaveBeenCalled();
   });
 
   it('reuses an existing person and does not overwrite their name', async () => {

@@ -57,6 +57,25 @@ describe('MagicLinkUserService', () => {
     });
   }
 
+  it('reads a lowercase organization id from the database driver', async () => {
+    mockUserFound(7);
+    accountRepository.createQueryBuilder.mockReturnValue({
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([{ organizationid: String(clientOrgId) }]),
+    });
+    const target = await service.resolveEmailMagicLinkTargetForOrganization(
+      'player@example.com',
+      clientOrgId,
+      null,
+    );
+    expect(target).toEqual({ userId: 7, organizationId: clientOrgId });
+  });
+
   it('should resolve organization selected in the login form', async () => {
     mockUserFound(7);
     mockEmailOrganizationsForUser([clientOrgId]);

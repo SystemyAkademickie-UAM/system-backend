@@ -30,6 +30,18 @@ export const ORGANIZATIONS_ID_SEQUENCE = 'auth.organizacje_id_seq';
 /** Maximum ids accepted by `POST /api/admin/organizations/bulk`. */
 export const ORGANIZATION_BULK_MAX_IDS = 50;
 
+/** Smallest account limit a supervising person can store on an organization. */
+export const ORGANIZATION_ACCOUNT_LIMIT_MIN = 1;
+
+/** Largest account limit a supervising person can store on an organization. */
+export const ORGANIZATION_ACCOUNT_LIMIT_MAX = 100000;
+
+/**
+ * Account limit written for organizations that existed before the setting.
+ * New organizations must send their own limit.
+ */
+export const ORGANIZATION_ACCOUNT_LIMIT_DEFAULT = 100;
+
 /**
  * Hostname, `localhost`, `127.0.0.1`, or `192.168.0.0`–`192.168.0.255`.
  * No scheme and no path.

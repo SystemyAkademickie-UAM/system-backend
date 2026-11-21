@@ -22,7 +22,10 @@ import {
 import type { Request } from 'express';
 
 import { MAQ_SESSION_COOKIE_NAME } from '../../constants/session-constants';
-import { GrantOrganizationAdministratorDto } from './dto/grant-organization-administrator.dto';
+import {
+  CreateFirstOrganizationAdministratorDto,
+  GrantOrganizationAdministratorDto,
+} from './dto/grant-organization-administrator.dto';
 import { AdminOrganizationAdministratorsService } from './admin-organization-administrators.service';
 
 @ApiTags('Admin organizations')
@@ -42,12 +45,34 @@ export class AdminOrganizationAdministratorsController {
     return this.adminOrganizationAdministratorsService.listAdministrators(req, organizationId);
   }
 
+  @Get('candidates')
+  @ApiOperation({ summary: 'List people in the organization who can receive the administrator role' })
+  @ApiOkResponse({ description: 'People who already belong to the organization and are not administrators' })
+  @ApiForbiddenResponse({ description: 'Caller lacks super role' })
+  listCandidates(
+    @Req() req: Request,
+    @Param('organizationId', ParseIntPipe) organizationId: number) {
+    return this.adminOrganizationAdministratorsService.listCandidates(req, organizationId);
+  }
+
+  @Post('first')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create the first person in an email organization and grant administrator' })
+  @ApiCreatedResponse({ description: 'User and administrator account created. Magic-link login can find them.' })
+  @ApiForbiddenResponse({ description: 'Caller lacks super role, or the caller is granting the role to themselves' })
+  createFirstAdministrator(
+    @Req() req: Request,
+    @Param('organizationId', ParseIntPipe) organizationId: number,
+    @Body() dto: CreateFirstOrganizationAdministratorDto) {
+    return this.adminOrganizationAdministratorsService.createFirstAdministrator(req, organizationId, dto);
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Grant organization administrator role by user email (super role)' })
+  @ApiOperation({ summary: 'Grant the administrator role to a person already in the organization' })
   @ApiCreatedResponse({ description: 'Administrator account created or returned if already granted' })
-  @ApiNotFoundResponse({ description: 'User must log in via SAML before grant' })
-  @ApiForbiddenResponse({ description: 'Caller lacks super role' })
+  @ApiNotFoundResponse({ description: 'That person is not in this organization' })
+  @ApiForbiddenResponse({ description: 'Caller lacks super role, or the caller is granting the role to themselves' })
   grantAdministrator(
     @Req() req: Request,
     @Param('organizationId', ParseIntPipe) organizationId: number,

@@ -14,6 +14,7 @@ import { DataSource, QueryRunner, Repository } from 'typeorm';
 import {
   ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE,
 } from '../../constants/account-deletion-constants';
+import { ORGANIZATION_ACCOUNT_SELF_ROLE_MESSAGE } from '../../constants/organization-account-management-constants';
 import { ADMINISTRATOR_ROLE_NAME } from '../../constants/role-name-constants';
 import {
   ORGANIZATION_LOG_CATEGORY_ORGANIZATION,
@@ -133,6 +134,9 @@ export class AccountRemovalService {
   private async assertDeletionAllowed(
     actor: AccountDeletionActor,
     targetAccount: AccountEntity): Promise<void> {
+    if (targetAccount.userId === actor.userId) {
+      throw new ForbiddenException(ORGANIZATION_ACCOUNT_SELF_ROLE_MESSAGE);
+    }
     if (targetAccount.role === ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE) {
       throw new ForbiddenException('Super administrator accounts cannot be deleted');
     }
