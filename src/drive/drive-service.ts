@@ -1,11 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, open, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
+import { Repository } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
+import { DriveEntity } from '../database/entities/drive.entity';
 import {
   DRIVE_API_JSON_STATUS_FORBIDDEN,
   DRIVE_API_JSON_STATUS_OK,
@@ -106,9 +110,20 @@ function parseDriveCommandJson(raw: unknown): DriveCommandPayload | null {
   };
 }
 
-function resolveOrganizationId(payload: DriveCommandPayload): number {
+function resolveOrganizationId(
+  payload: DriveCommandPayload,
+  subjectOrganizationId?: number | null,
+): number {
   if (payload.drive.organizationId !== undefined && payload.drive.organizationId !== null) {
     return payload.drive.organizationId;
+  }
+  if (
+    subjectOrganizationId !== undefined &&
+    subjectOrganizationId !== null &&
+    Number.isFinite(subjectOrganizationId) &&
+    subjectOrganizationId > 0
+  ) {
+    return subjectOrganizationId;
   }
   return DRIVE_DEFAULT_ORGANIZATION_ID;
 }
@@ -147,7 +162,11 @@ export class DriveService {
   constructor(
     private readonly sessionService: SessionService,
     private readonly userRolesService: UserRolesService,
-    @Optional() private readonly organizationLogService?: OrganizationLogService) {}
+    @Optional() private readonly organizationLogService?: OrganizationLogService,
+    @Optional()
+    @InjectRepository(DriveEntity)
+    private readonly driveRepository?: Repository<DriveEntity>,
+  ) {}
 
   async handleDrive(input: DriveHandleInput): Promise<DriveHandleResponseBody> {
     const payload = parseDriveCommandJson(input.jsonField);
@@ -155,7 +174,7 @@ export class DriveService {
       throw new BadRequestException('json form field must be a valid JSON string');
     }
     const subject = await this.sessionService.resolveSubjectFromRequest(input.req, payload.auth);
-    const organizationId = resolveOrganizationId(payload);
+    const organizationId = resolveOrganizationId(payload, subject?.organizationId);
     const isAllowed =
       subject !== null &&
       (await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME));
@@ -196,7 +215,8 @@ export class DriveService {
 
   private async postObject(
     organizationId: number,
-    bannerFile: Express.Multer.File | undefined): Promise<DriveHandleResponseBody> {
+    bannerFile: Express.Multer.File | undefined,
+  ): Promise<DriveHandleResponseBody> {
     if (!bannerFile) {
       throw new BadRequestException('banner file is required for method post');
     }
@@ -205,6 +225,22 @@ export class DriveService {
     await mkdir(dirname(absolutePath), { recursive: true });
     await writeFile(absolutePath, bannerFile.buffer);
     const stats = await stat(absolutePath);
+    const mimeType = detectMimeType(bannerFile.buffer);
+
+    if (this.driveRepository) {
+      try {
+        await this.driveRepository.save({
+          ref: objectId,
+          size: stats.size,
+          mimeType: mimeType.slice(0, 32),
+          createdAt: new Date(),
+          organizationId,
+        });
+      } catch {
+        // DB logging should not block file upload
+      }
+    }
+
     return {
       statusCode: DRIVE_API_JSON_STATUS_OK,
       method: 'post',
@@ -227,6 +263,15 @@ export class DriveService {
     } catch {
       // ignore missing files — removal is idempotent for clients
     }
+
+    if (this.driveRepository) {
+      try {
+        await this.driveRepository.delete({ ref: trimmedRef });
+      } catch {
+        // ignore DB delete failure
+      }
+    }
+
     return {
       statusCode: DRIVE_API_JSON_STATUS_OK,
       method: 'remove',
@@ -295,18 +340,63 @@ export class DriveService {
    */
   async serveObject(
     organizationId: number,
-    driveRef: string): Promise<{ buffer: Buffer; contentType: string }> {
+    driveRef: string,
+  ): Promise<{ buffer: Buffer; contentType: string }> {
     if (!DriveService.isValidDriveRef(driveRef)) {
       throw new BadRequestException('Invalid driveRef format — expected UUID v4');
     }
-    const absolutePath = buildAbsoluteDriveObjectPath(organizationId, driveRef);
-    let buffer: Buffer;
-    try {
-      buffer = await readFile(absolutePath);
-    } catch {
-      throw new NotFoundException('Drive object not found');
+
+    // 1. Primary path in requested organization directory
+    const primaryPath = buildAbsoluteDriveObjectPath(organizationId, driveRef);
+    if (existsSync(primaryPath)) {
+      const buffer = await readFile(primaryPath);
+      return { buffer, contentType: detectMimeType(buffer) };
     }
-    const contentType = detectMimeType(buffer);
-    return { buffer, contentType };
+
+    // 2. Check DriveEntity database record for actual organizationId
+    if (this.driveRepository) {
+      try {
+        const dbRecord = await this.driveRepository.findOne({ where: { ref: driveRef } });
+        if (dbRecord) {
+          const dbPath = buildAbsoluteDriveObjectPath(dbRecord.organizationId, driveRef);
+          if (existsSync(dbPath)) {
+            const buffer = await readFile(dbPath);
+            return { buffer, contentType: detectMimeType(buffer) };
+          }
+        }
+      } catch {
+        // Ignore DB query errors
+      }
+    }
+
+    // 3. Check default organization folder (storage/drive/1)
+    if (organizationId !== DRIVE_DEFAULT_ORGANIZATION_ID) {
+      const defaultPath = buildAbsoluteDriveObjectPath(DRIVE_DEFAULT_ORGANIZATION_ID, driveRef);
+      if (existsSync(defaultPath)) {
+        const buffer = await readFile(defaultPath);
+        return { buffer, contentType: detectMimeType(buffer) };
+      }
+    }
+
+    // 4. Fallback: inspect any organization folder under storage/drive
+    const driveRoot = join(resolveDriveStorageRoot(), 'drive');
+    if (existsSync(driveRoot)) {
+      try {
+        const entries = await readdir(driveRoot, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const candidatePath = join(driveRoot, entry.name, driveRef);
+            if (existsSync(candidatePath)) {
+              const buffer = await readFile(candidatePath);
+              return { buffer, contentType: detectMimeType(buffer) };
+            }
+          }
+        }
+      } catch {
+        // Ignore filesystem iteration errors
+      }
+    }
+
+    throw new NotFoundException('Drive object not found');
   }
 }

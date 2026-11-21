@@ -53,6 +53,8 @@ describe('AdminOrganizationStorageService', () => {
     addressPostalCode: '61-614',
     addressCountry: 'pl',
     isActive: true,
+    accountLimit: 200,
+    storageQuotaBytes: 104857600,
     createdAt: new Date('2026-10-01T12:00:00.000Z'),
     updatedAt: new Date('2026-10-01T12:00:00.000Z'),
   };
