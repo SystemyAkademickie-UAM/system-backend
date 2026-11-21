@@ -166,7 +166,7 @@ export class DriveService {
     @Optional()
     @InjectRepository(DriveEntity)
     private readonly driveRepository?: Repository<DriveEntity>,
-  ) {}
+  ) { }
 
   async handleDrive(input: DriveHandleInput): Promise<DriveHandleResponseBody> {
     const payload = parseDriveCommandJson(input.jsonField);
