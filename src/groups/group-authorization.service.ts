@@ -4,13 +4,13 @@ import type { Request } from 'express';
 import { Repository } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
-import { LECTURER_ROLE_NAME } from '../constants/role-name-constants';
+import { ADMINISTRATOR_ROLE_NAME, LECTURER_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
 import { GroupEntity } from '../database/entities/group.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 
 /**
- * Ensures lecturer-only group management actions run only for the group owner
- * (`education.groups.teacher_account_id`), not for other lecturers who joined as participants.
+ * Ensures lecturer-only group management actions run for the group owner
+ * (`education.groups.teacher_account_id`), or administrators / superadmins managing the organization.
  */
 @Injectable()
 export class GroupAuthorizationService {
@@ -25,6 +25,27 @@ export class GroupAuthorizationService {
     groupId: number,
     organizationId?: number | null,
   ): Promise<number> {
+    const isSuper = await this.userRolesService.userHasRole(userId, SUPER_ROLE_NAME);
+    const isAdmin =
+      organizationId != null
+        ? await this.userRolesService.userHasRoleInOrganization(
+            userId,
+            organizationId,
+            ADMINISTRATOR_ROLE_NAME,
+          )
+        : await this.userRolesService.userHasRole(userId, ADMINISTRATOR_ROLE_NAME);
+
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+    });
+    if (!group) {
+      throw new ForbiddenException('Group not found');
+    }
+
+    if (isSuper || isAdmin) {
+      return group.teacherAccountId;
+    }
+
     const lecturerAccountId =
       organizationId != null
         ? await this.userRolesService.findAccountIdForRoleInOrganization(
@@ -35,10 +56,7 @@ export class GroupAuthorizationService {
     if (lecturerAccountId === null) {
       throw new ForbiddenException('Not authorized');
     }
-    const isOwner = await this.groupRepository.exist({
-      where: { id: groupId, teacherAccountId: lecturerAccountId },
-    });
-    if (!isOwner) {
+    if (group.teacherAccountId !== lecturerAccountId) {
       throw new ForbiddenException('Not authorized to manage this group');
     }
     return lecturerAccountId;
@@ -60,6 +78,22 @@ export class GroupAuthorizationService {
     groupId: number,
     organizationId?: number | null,
   ): Promise<boolean> {
+    const isSuper = await this.userRolesService.userHasRole(userId, SUPER_ROLE_NAME);
+    if (isSuper) {
+      return true;
+    }
+    const isAdmin =
+      organizationId != null
+        ? await this.userRolesService.userHasRoleInOrganization(
+            userId,
+            organizationId,
+            ADMINISTRATOR_ROLE_NAME,
+          )
+        : await this.userRolesService.userHasRole(userId, ADMINISTRATOR_ROLE_NAME);
+    if (isAdmin) {
+      return true;
+    }
+
     const lecturerAccountId =
       organizationId != null
         ? await this.userRolesService.findAccountIdForRoleInOrganization(

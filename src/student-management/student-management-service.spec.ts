@@ -84,6 +84,7 @@ describe('StudentManagementService', () => {
           provide: UserRolesService,
           useValue: {
             userHasRole: jest.fn(),
+            userHasRoleInOrganization: jest.fn(),
             findAccountIdForRole: jest.fn(),
             findAccountIdForRoleInOrganization: jest.fn(),
           },
