@@ -118,6 +118,7 @@ export class LoginApiService {
     res.clearCookie(LEGACY_MAQ_ACTIVE_ROLE_COOKIE_NAME, sessionClearOptions);
     res.clearCookie(SAML_SESSION_COOKIE_NAME, sessionClearOptions);
     res.clearCookie(SAML_PENDING_ORG_COOKIE_NAME, pendingOrgClearOptions);
+    res.clearCookie('maq_remember_me', sessionClearOptions);
     return { success: true };
   }
 

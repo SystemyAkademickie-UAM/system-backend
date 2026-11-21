@@ -25,6 +25,7 @@ import { EnrollGroupBodyDto } from './dto/enroll-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
 import { JoinGroupQueryDto } from './dto/join-group-query.dto';
 import { UpdateEnrollmentCodeDto } from './dto/update-enrollment-code.dto';
+import { UpdateGroupMembersDto } from './dto/manage-group-members.dto';
 import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
 import { UpdateLivesConfigDto } from './dto/update-lives-config.dto';
 import { UpdateShopStatusDto } from './dto/update-shop-status.dto';
@@ -71,6 +72,17 @@ export class GroupsController {
   }
 
   /**
+   * Returns eligible lecturers and students in caller's organization.
+   * GET /groups/organization-candidates
+   */
+  @Get('organization-candidates')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get lecturers and students in the organization' })
+  getOrganizationCandidates(@Req() req: Request) {
+    return this.groupsService.getOrganizationCandidates(req);
+  }
+
+  /**
    * Returns public group metadata and access flags for the authenticated user.
    * GET /groups/:groupId/preview
    */
@@ -109,6 +121,46 @@ export class GroupsController {
     @Req() req: Request,
     @Body() body: UpdateGroupBodyDto): Promise<UpdateGroupResponseBody> {
     return this.groupsService.updateGroup(req, publicGroupId, body);
+  }
+
+  /**
+   * Deletes a group and cascades all associated data.
+   * DELETE /groups/:groupId
+   */
+  @Delete(':groupId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a course group' })
+  deleteGroup(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request) {
+    return this.groupsService.deleteGroup(req, publicGroupId);
+  }
+
+  /**
+   * Returns members management data: lecturer, enrolled students, available candidates.
+   * GET /groups/:groupId/members-manage
+   */
+  @Get(':groupId/members-manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get members management data for a group' })
+  getGroupMembersManage(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request) {
+    return this.groupsService.getGroupMembersManage(req, publicGroupId);
+  }
+
+  /**
+   * Updates lecturer and adds/removes students from a group.
+   * PATCH /groups/:groupId/members-manage
+   */
+  @Patch(':groupId/members-manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update group members (lecturer and students)' })
+  updateGroupMembersManage(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Req() req: Request,
+    @Body() dto: UpdateGroupMembersDto) {
+    return this.groupsService.updateGroupMembersManage(req, publicGroupId, dto);
   }
 
   /**
@@ -501,6 +553,26 @@ export class GroupsController {
     @Req() req: Request,
     @Body() body: { auth?: string }) {
     return this.shopStudentService.useItem(req, toInternalGroupId(publicGroupId), itemId, body?.auth);
+  }
+
+  @Delete(':groupId/inventory/:itemId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a purchased item from student inventory' })
+  removePurchasedItem(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @Req() req: Request) {
+    return this.shopStudentService.removePurchasedItem(req, toInternalGroupId(publicGroupId), itemId);
+  }
+
+  @Delete(':groupId/inventory-history/:historyId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete an entry from inventory history (used item)' })
+  removeUsedItemHistory(
+    @Param('groupId', ParseIntPipe) publicGroupId: number,
+    @Param('historyId', ParseIntPipe) historyId: number,
+    @Req() req: Request) {
+    return this.shopStudentService.removeUsedItemHistory(req, toInternalGroupId(publicGroupId), historyId);
   }
 
   // ========================================
