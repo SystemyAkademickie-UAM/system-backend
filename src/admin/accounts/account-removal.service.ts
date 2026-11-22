@@ -14,7 +14,6 @@ import { DataSource, QueryRunner, Repository } from 'typeorm';
 import {
   ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE,
 } from '../../constants/account-deletion-constants';
-import { ORGANIZATION_ACCOUNT_SELF_ROLE_MESSAGE } from '../../constants/organization-account-management-constants';
 import { ADMINISTRATOR_ROLE_NAME } from '../../constants/role-name-constants';
 import {
   ORGANIZATION_LOG_CATEGORY_ORGANIZATION,
@@ -131,20 +130,27 @@ export class AccountRemovalService {
     }
   }
 
+  private actingAsSuper(actor: AccountDeletionActor): boolean {
+    if (actor.activeRole === undefined) {
+      return actor.isSuperAdmin;
+    }
+    return actor.isSuperAdmin && actor.activeRole === ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE;
+  }
+
   private async assertDeletionAllowed(
     actor: AccountDeletionActor,
     targetAccount: AccountEntity): Promise<void> {
-    if (targetAccount.userId === actor.userId) {
-      throw new ForbiddenException(ORGANIZATION_ACCOUNT_SELF_ROLE_MESSAGE);
-    }
     if (targetAccount.role === ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE) {
       throw new ForbiddenException('Super administrator accounts cannot be deleted');
     }
-    const targetUserRoles = await this.userRolesService.listRolesForUser(targetAccount.userId);
-    if (targetUserRoles.includes(ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE)) {
-      throw new ForbiddenException('Users with a super administrator role cannot be deleted');
+    const isSelf = targetAccount.userId === actor.userId;
+    if (!isSelf) {
+      const targetUserRoles = await this.userRolesService.listRolesForUser(targetAccount.userId);
+      if (targetUserRoles.includes(ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE)) {
+        throw new ForbiddenException('Users with a super administrator role cannot be deleted');
+      }
     }
-    if (actor.isSuperAdmin) {
+    if (this.actingAsSuper(actor)) {
       return;
     }
     if (targetAccount.role === ADMINISTRATOR_ROLE_NAME) {

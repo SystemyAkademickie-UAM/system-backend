@@ -41,6 +41,7 @@ describe('AdminAccessService', () => {
     await expect(service.resolveAccountDeletionActor(req, 11)).resolves.toEqual({
       userId: 4,
       isSuperAdmin: true,
+      activeRole: SUPER_ROLE_NAME,
     });
   });
 
@@ -55,6 +56,7 @@ describe('AdminAccessService', () => {
     await expect(service.resolveAccountDeletionActor(req, 11)).resolves.toEqual({
       userId: 8,
       isSuperAdmin: false,
+      activeRole: ADMINISTRATOR_ROLE_NAME,
     });
     expect(userRolesService.userHasRoleInOrganization).toHaveBeenCalledWith(8, 11, ADMINISTRATOR_ROLE_NAME);
   });
