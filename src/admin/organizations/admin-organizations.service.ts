@@ -26,6 +26,10 @@ import {
   ORGANIZATION_LOGIN_METHOD_SAML,
 } from '../../constants/organization-constants';
 import {
+  ORGANIZATION_DEFAULT_STORAGE_QUOTA_BYTES,
+  ORGANIZATION_DEFAULT_STORAGE_QUOTA_MB,
+} from '../../constants/organization-storage-constants';
+import {
   BulkOrganizationsDto,
   CreateOrganizationDto,
   UpdateOrganizationAddressDto,
@@ -71,6 +75,8 @@ export type OrganizationDetail = OrganizationListItem & {
   ssoLogoutUrl: string | null;
   certificateId: number | null;
   accountLimit: number;
+  storageQuotaBytes: number;
+  storageQuotaMb: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -144,20 +150,22 @@ export class AdminOrganizationsService {
     const loginMethod = dto.loginMethod;
     const domain = this.normalizeDomain(dto.domain);
     await this.assertDomainAvailable(domain);
-    const representativePhone = this.blankToNull(dto.representative.phone);
+    const representativePhone = this.blankToNull(dto.representative?.phone);
+    const storageQuotaMb = dto.storageQuotaMb ?? ORGANIZATION_DEFAULT_STORAGE_QUOTA_MB;
+    const storageQuotaBytes = storageQuotaMb * 1024 * 1024;
     const entity = this.organizationRepository.create({
       name: dto.name.trim(),
       loginMethod,
       domain,
-      representativeFullName: dto.representative.fullName.trim(),
-      representativeEmail: dto.representative.email.trim(),
+      representativeFullName: dto.representative?.fullName?.trim() || 'Administrator',
+      representativeEmail: dto.representative?.email?.trim() || `admin@${domain}`,
       representativePhone,
-      addressTown: dto.address.town.trim(),
-      addressStreet: dto.address.street.trim(),
-      addressBuilding: this.blankToNull(dto.address.building),
-      addressPostalCode: this.blankToNull(dto.address.postalCode),
-      addressCountry: this.normalizeCountry(dto.address.country),
-      contactEmail: dto.representative.email.trim(),
+      addressTown: dto.address?.town?.trim() || '-',
+      addressStreet: dto.address?.street?.trim() || '-',
+      addressBuilding: this.blankToNull(dto.address?.building),
+      addressPostalCode: this.blankToNull(dto.address?.postalCode),
+      addressCountry: this.normalizeCountry(dto.address?.country),
+      contactEmail: dto.representative?.email?.trim() || `admin@${domain}`,
       contactPhone: representativePhone,
       entityId: dto.entityId?.trim() ?? null,
       metadataUrl: dto.metadataUrl?.trim() ?? null,
@@ -165,6 +173,7 @@ export class AdminOrganizationsService {
       ssoLogoutUrl: dto.ssoLogoutUrl?.trim() ?? null,
       isActive: true,
       accountLimit: dto.accountLimit,
+      storageQuotaBytes,
     });
     const saved = await this.saveOrganization(entity, domain);
     const metadataUrl = saved.metadataUrl?.trim() ?? '';
@@ -224,6 +233,9 @@ export class AdminOrganizationsService {
     }
     if (dto.accountLimit !== undefined) {
       row.accountLimit = dto.accountLimit;
+    }
+    if (dto.storageQuotaMb !== undefined) {
+      row.storageQuotaBytes = dto.storageQuotaMb * 1024 * 1024;
     }
     await this.saveOrganization(row, row.domain);
     if (dto.metadataUrl !== undefined) {
@@ -386,6 +398,10 @@ export class AdminOrganizationsService {
       ssoLogoutUrl: row.ssoLogoutUrl,
       certificateId: row.certificateId,
       accountLimit: row.accountLimit,
+      storageQuotaBytes: Number(row.storageQuotaBytes) || ORGANIZATION_DEFAULT_STORAGE_QUOTA_BYTES,
+      storageQuotaMb: Math.round(
+        (Number(row.storageQuotaBytes) || ORGANIZATION_DEFAULT_STORAGE_QUOTA_BYTES) / (1024 * 1024),
+      ),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

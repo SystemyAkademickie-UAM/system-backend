@@ -155,7 +155,8 @@ export class BroadcastsService {
 
   /**
    * Retrieves active, unread broadcasts matching the user's roles.
-   * Model: Fan-out on read — queries `services.broadcasts` excluding already read entries.
+   * Model: Fan-out on read — queries `services.broadcasts` excluding already read entries
+   * and excluding broadcasts created by the user themselves.
    */
   async listActiveForUser(
     userId: number,
@@ -167,6 +168,7 @@ export class BroadcastsService {
       .createQueryBuilder('b')
       .where('b.target_role IN (:...roles)', { roles })
       .andWhere('(b.expires_at IS NULL OR b.expires_at > :now)', { now })
+      .andWhere('(b.created_by_user_id IS NULL OR b.created_by_user_id != :userId)', { userId })
       .andWhere(
         `NOT EXISTS (
           SELECT 1 FROM services.user_broadcast_status ubs

@@ -11,6 +11,7 @@ export interface AutoBackupScheduleConfig {
   customIntervalDays?: number | null;
   timeOfDay: string;
   nextRunAt?: string | null;
+  retentionDays?: number;
 }
 
 export interface BackupFileSummary {
