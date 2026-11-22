@@ -23,7 +23,10 @@ import {
   ORGANIZATION_LOG_CATEGORY_ORGANIZATION,
   ORGANIZATION_LOG_KIND_ROLE_GRANTED,
 } from '../../constants/organization-log-constants';
-import { ADMINISTRATOR_ROLE_NAME } from '../../constants/role-name-constants';
+import {
+  ADMINISTRATOR_ROLE_NAME,
+  STUDENT_ROLE_NAME,
+} from '../../constants/role-name-constants';
 import { AccountEntity } from '../../database/entities/account.entity';
 import { OrganizationEntity } from '../../database/entities/organization.entity';
 import { UserEntity } from '../../database/entities/user.entity';
@@ -241,6 +244,21 @@ export class AdminOrganizationAdministratorsService {
         `Administrator account ${accountId} not found for organization ${organizationId}`);
     }
     this.assertNotSelf(actor.userId, row.userId);
+    const otherAccountsInOrg = await this.accountRepository.find({
+      where: { userId: row.userId, organizationId },
+    });
+    const hasOtherRoleInOrg = otherAccountsInOrg.some((acc) => acc.id !== row.id);
+
+    // If the user has no other role in this organization, grant them student role so they stay in the organization
+    if (!hasOtherRoleInOrg) {
+      const studentAccount = this.accountRepository.create({
+        userId: row.userId,
+        organizationId,
+        role: STUDENT_ROLE_NAME,
+      });
+      await this.accountRepository.save(studentAccount);
+    }
+
     const result = await this.accountRemovalService.removeOrganizationAccountRecord(
       organizationId,
       accountId,

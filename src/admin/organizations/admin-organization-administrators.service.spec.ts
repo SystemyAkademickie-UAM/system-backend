@@ -10,7 +10,7 @@ import { AccountRemovalService } from '../accounts/account-removal.service';
 import { AccountEntity } from '../../database/entities/account.entity';
 import { OrganizationEntity } from '../../database/entities/organization.entity';
 import { UserEntity } from '../../database/entities/user.entity';
-import { ADMINISTRATOR_ROLE_NAME } from '../../constants/role-name-constants';
+import { ADMINISTRATOR_ROLE_NAME, STUDENT_ROLE_NAME } from '../../constants/role-name-constants';
 
 describe('AdminOrganizationAdministratorsService', () => {
   let service: AdminOrganizationAdministratorsService;
@@ -80,8 +80,30 @@ describe('AdminOrganizationAdministratorsService', () => {
   });
 
   it('revokeAdministrator uses full account removal cascade', async () => {
+    accountRepository.find.mockResolvedValue([
+      { id: 42, userId: 9, organizationId: 1, role: ADMINISTRATOR_ROLE_NAME },
+      { id: 43, userId: 9, organizationId: 1, role: 'lecturer' },
+    ]);
+
     await service.revokeAdministrator(req, 1, 42);
 
+    expect(accountRemovalService.removeOrganizationAccountRecord).toHaveBeenCalledWith(1, 42, 8);
+    expect(accountRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('revokeAdministrator creates student role if user had no other roles in organization', async () => {
+    accountRepository.find.mockResolvedValue([
+      { id: 42, userId: 9, organizationId: 1, role: ADMINISTRATOR_ROLE_NAME },
+    ]);
+
+    await service.revokeAdministrator(req, 1, 42);
+
+    expect(accountRepository.create).toHaveBeenCalledWith({
+      userId: 9,
+      organizationId: 1,
+      role: STUDENT_ROLE_NAME,
+    });
+    expect(accountRepository.save).toHaveBeenCalled();
     expect(accountRemovalService.removeOrganizationAccountRecord).toHaveBeenCalledWith(1, 42, 8);
   });
 
