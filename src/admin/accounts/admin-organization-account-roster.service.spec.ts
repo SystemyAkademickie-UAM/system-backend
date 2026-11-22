@@ -195,6 +195,19 @@ describe('AdminOrganizationAccountRosterService', () => {
     })).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('rejects the administering role while the selected role is administrator', async () => {
+    adminAccessService.resolveAccountDeletionActor.mockResolvedValue({
+      userId: 8,
+      isSuperAdmin: true,
+      activeRole: ADMINISTRATOR_ROLE_NAME,
+    });
+
+    await expect(service.createOrganizationAccount(req, 11, {
+      ...inputDto,
+      role: ADMINISTRATOR_ROLE_NAME,
+    })).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   it('rejects a magic link for an organization that does not use email login', async () => {
     organizationRepository.findOne.mockResolvedValue({
       id: 11,
