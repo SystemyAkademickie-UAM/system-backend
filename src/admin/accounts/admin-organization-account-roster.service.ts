@@ -410,11 +410,18 @@ export class AdminOrganizationAccountRosterService {
     }
   }
 
+  private actingAsSuper(actor: AccountDeletionActor): boolean {
+    if (actor.activeRole === undefined) {
+      return actor.isSuperAdmin;
+    }
+    return actor.isSuperAdmin && actor.activeRole === SUPER_ROLE_NAME;
+  }
+
   private assertRoleAllowed(actor: AccountDeletionActor, role: string): void {
-    if (role === SUPER_ROLE_NAME && !actor.isSuperAdmin) {
+    if (role === SUPER_ROLE_NAME && !this.actingAsSuper(actor)) {
       throw new ForbiddenException('Super administrator role cannot be assigned here');
     }
-    if (actor.isSuperAdmin) {
+    if (this.actingAsSuper(actor)) {
       return;
     }
     if (!ORGANIZATION_ACCOUNT_ORG_ADMIN_ROLES.includes(role as typeof ORGANIZATION_ACCOUNT_ORG_ADMIN_ROLES[number])) {
@@ -423,10 +430,10 @@ export class AdminOrganizationAccountRosterService {
   }
 
   private assertTargetMutable(actor: AccountDeletionActor, role: string): void {
-    if (role === SUPER_ROLE_NAME && !actor.isSuperAdmin) {
+    if (role === SUPER_ROLE_NAME && !this.actingAsSuper(actor)) {
       throw new ForbiddenException('Super administrator accounts cannot be changed here');
     }
-    if (!actor.isSuperAdmin && role === ADMINISTRATOR_ROLE_NAME) {
+    if (!this.actingAsSuper(actor) && role === ADMINISTRATOR_ROLE_NAME) {
       throw new ForbiddenException('Organization administrators cannot change privileged accounts');
     }
   }

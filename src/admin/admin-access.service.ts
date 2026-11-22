@@ -8,6 +8,8 @@ import { UserRolesService } from '../user-roles/user-roles-service';
 export type AccountDeletionActor = {
   userId: number;
   isSuperAdmin: boolean;
+  /** Selected session role. Missing only on older test doubles. */
+  activeRole?: string | null;
 };
 
 /** Shared super-role gate for `/api/admin/*` routes. */
@@ -39,7 +41,7 @@ export class AdminAccessService {
     }
     const isSuperAdmin = await this.userRolesService.userHasRole(subject.userId, SUPER_ROLE_NAME);
     if (isSuperAdmin) {
-      return { userId: subject.userId, isSuperAdmin: true };
+      return { userId: subject.userId, isSuperAdmin: true, activeRole: subject.activeRole };
     }
     if (organizationId === undefined || subject.organizationId !== organizationId) {
       throw new ForbiddenException('Not authorized');
@@ -52,6 +54,6 @@ export class AdminAccessService {
     if (!isOrgAdministrator) {
       throw new ForbiddenException('Not authorized');
     }
-    return { userId: subject.userId, isSuperAdmin: false };
+    return { userId: subject.userId, isSuperAdmin: false, activeRole: subject.activeRole };
   }
 }
