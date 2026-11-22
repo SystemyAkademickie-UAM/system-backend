@@ -334,7 +334,6 @@ export class GroupsService {
               const enrollment = manager.create(EnrollmentEntity, {
                 groupId: savedGroup.id,
                 studentAccountId: studentAccount.id,
-                enrolledAt: new Date(),
               });
               const savedEnrollment = await manager.save(EnrollmentEntity, enrollment);
               const studentStats = manager.create(StudentStatsEntity, {
@@ -1139,7 +1138,6 @@ export class GroupsService {
         'user.surname AS surname',
         'user.nickname AS nickname',
         'user.email AS email',
-        'enrollment.enrolled_at AS enrolled_at',
         'stats.currency AS currency',
         'stats.lives AS lives',
       ])
@@ -1153,7 +1151,6 @@ export class GroupsService {
       surname: r.surname ?? '',
       nickname: r.nickname ?? '',
       email: r.email ?? '',
-      enrolledAt: r.enrolled_at ? new Date(r.enrolled_at).toISOString() : null,
       currency: Number(r.currency ?? 0),
       lives: r.lives !== null && r.lives !== undefined ? Number(r.lives) : null,
     }));
@@ -1220,7 +1217,6 @@ export class GroupsService {
             const enrollment = manager.create(EnrollmentEntity, {
               groupId: internalGroupId,
               studentAccountId,
-              enrolledAt: new Date(),
             });
             const savedEnrollment = await manager.save(EnrollmentEntity, enrollment);
             const studentStats = manager.create(StudentStatsEntity, {
