@@ -136,7 +136,9 @@ export class AdminOrganizationAccountRosterService {
     this.assertRoleAllowed(actor, dto.role);
     const email = this.normalizeEmail(dto.email);
     const existingUser = await this.findUserByEmail(email);
-    this.assertNotSelf(actor.userId, existingUser?.id);
+    if (!this.actingAsSuper(actor)) {
+      this.assertNotSelf(actor.userId, existingUser?.id);
+    }
     await this.assertAccountCapacity(organization);
     const item = existingUser === null
       ? await this.createUserAndAccount(organizationId, email, dto)
@@ -159,7 +161,7 @@ export class AdminOrganizationAccountRosterService {
     const account = await this.findAccountInOrganization(organizationId, accountId);
     const previousRole = account.role;
     this.assertTargetMutable(actor, account.role);
-    if (dto.role !== undefined) {
+    if (dto.role !== undefined && !this.actingAsSuper(actor)) {
       this.assertNotSelf(actor.userId, account.userId);
     }
     if (dto.role !== undefined) {
@@ -225,7 +227,9 @@ export class AdminOrganizationAccountRosterService {
     this.assertRoleAllowed(actor, dto.role);
     const email = this.normalizeEmail(dto.email);
     const existingUser = await this.findUserByEmail(email);
-    this.assertNotSelf(actor.userId, existingUser?.id);
+    if (!this.actingAsSuper(actor)) {
+      this.assertNotSelf(actor.userId, existingUser?.id);
+    }
     if (existingUser === null) {
       await this.assertAccountCapacity(organization);
       const created = await this.createUserAndAccount(organizationId, email, dto);

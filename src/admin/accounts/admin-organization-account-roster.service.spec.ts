@@ -153,11 +153,24 @@ describe('AdminOrganizationAccountRosterService', () => {
     expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 
-  it('rejects granting a role to the caller', async () => {
+  it('rejects granting a role to the caller for non-super admins', async () => {
+    adminAccessService.resolveAccountDeletionActor.mockResolvedValue({ userId: 4, isSuperAdmin: false });
     mockEmailLookup({ id: 4, email: 'ada@university.example' } as UserEntity);
 
     await expect(service.createOrganizationAccount(req, 11, inputDto)).rejects.toBeInstanceOf(ForbiddenException);
     expect(accountRepository.count).not.toHaveBeenCalled();
+  });
+
+  it('allows granting an additional role to the caller when caller is super admin', async () => {
+    adminAccessService.resolveAccountDeletionActor.mockResolvedValue({ userId: 4, isSuperAdmin: true });
+    mockEmailLookup({ id: 4, email: 'ada@university.example', name: 'Super', surname: 'User', nickname: 'super' } as UserEntity);
+    accountRepository.findOne.mockResolvedValue(null);
+
+    const result = await service.createOrganizationAccount(req, 11, {
+      ...inputDto,
+      role: LECTURER_ROLE_NAME,
+    });
+    expect(result.role).toBe(LECTURER_ROLE_NAME);
   });
 
   it('reuses an existing person and does not overwrite their name', async () => {
