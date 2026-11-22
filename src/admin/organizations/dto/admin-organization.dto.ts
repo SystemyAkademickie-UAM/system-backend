@@ -187,15 +187,17 @@ export class CreateOrganizationDto {
   @Matches(ORGANIZATION_DOMAIN_PATTERN, { message: ORGANIZATION_DOMAIN_INVALID_MESSAGE })
   domain: string;
 
-  @ApiProperty({ type: OrganizationRepresentativeDto })
+  @ApiPropertyOptional({ type: OrganizationRepresentativeDto })
+  @IsOptional()
   @ValidateNested()
   @Type(() => OrganizationRepresentativeDto)
-  representative: OrganizationRepresentativeDto;
+  representative?: OrganizationRepresentativeDto;
 
-  @ApiProperty({ type: OrganizationAddressDto })
+  @ApiPropertyOptional({ type: OrganizationAddressDto })
+  @IsOptional()
   @ValidateNested()
   @Type(() => OrganizationAddressDto)
-  address: OrganizationAddressDto;
+  address?: OrganizationAddressDto;
 
   @ApiPropertyOptional({ example: 'it-helpdesk@amu.edu.pl' })
   @IsOptional()

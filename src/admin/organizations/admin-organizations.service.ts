@@ -148,22 +148,22 @@ export class AdminOrganizationsService {
     const loginMethod = dto.loginMethod;
     const domain = this.normalizeDomain(dto.domain);
     await this.assertDomainAvailable(domain);
-    const representativePhone = this.blankToNull(dto.representative.phone);
+    const representativePhone = this.blankToNull(dto.representative?.phone);
     const storageQuotaMb = dto.storageQuotaMb ?? ORGANIZATION_DEFAULT_STORAGE_QUOTA_MB;
     const storageQuotaBytes = storageQuotaMb * 1024 * 1024;
     const entity = this.organizationRepository.create({
       name: dto.name.trim(),
       loginMethod,
       domain,
-      representativeFullName: dto.representative.fullName.trim(),
-      representativeEmail: dto.representative.email.trim(),
+      representativeFullName: dto.representative?.fullName?.trim() || 'Administrator',
+      representativeEmail: dto.representative?.email?.trim() || `admin@${domain}`,
       representativePhone,
-      addressTown: dto.address.town.trim(),
-      addressStreet: dto.address.street.trim(),
-      addressBuilding: this.blankToNull(dto.address.building),
-      addressPostalCode: this.blankToNull(dto.address.postalCode),
-      addressCountry: this.normalizeCountry(dto.address.country),
-      contactEmail: dto.representative.email.trim(),
+      addressTown: dto.address?.town?.trim() || '-',
+      addressStreet: dto.address?.street?.trim() || '-',
+      addressBuilding: this.blankToNull(dto.address?.building),
+      addressPostalCode: this.blankToNull(dto.address?.postalCode),
+      addressCountry: this.normalizeCountry(dto.address?.country),
+      contactEmail: dto.representative?.email?.trim() || `admin@${domain}`,
       contactPhone: representativePhone,
       entityId: dto.entityId?.trim() ?? null,
       metadataUrl: dto.metadataUrl?.trim() ?? null,
