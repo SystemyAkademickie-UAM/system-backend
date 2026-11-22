@@ -321,7 +321,8 @@ export class BackupService {
       return { purgedCount: 0, freedBytes: 0 };
     }
 
-    const retentionDays = this.getRetentionDays();
+    const metadata = await this.readMetadata();
+    const retentionDays = this.getRetentionDays(metadata);
     const cutoffTimestamp = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
 
     let purgedCount = 0;
@@ -361,6 +362,7 @@ export class BackupService {
       interval: (metadata.schedule?.interval as AutoBackupScheduleInterval) ?? BACKUP_DEFAULT_SCHEDULE_INTERVAL,
       customIntervalDays: metadata.schedule?.customIntervalDays ?? null,
       timeOfDay: metadata.schedule?.timeOfDay ?? BACKUP_DEFAULT_SCHEDULE_TIME,
+      retentionDays: this.getRetentionDays(metadata),
     };
     config.nextRunAt = this.calculateNextRunAt(config, metadata.lastAutoBackupAt);
     return config;
@@ -379,6 +381,12 @@ export class BackupService {
         );
       }
     }
+    if (dto.retentionDays !== undefined && (dto.retentionDays < 1 || dto.retentionDays > 365)) {
+      throw new BadRequestException('retentionDays must be an integer between 1 and 365');
+    }
+
+    const current = await this.readMetadata();
+    const retentionDays = dto.retentionDays ?? current.schedule?.retentionDays ?? BACKUP_DEFAULT_RETENTION_DAYS;
 
     await this.writeMetadata({
       schedule: {
@@ -386,10 +394,11 @@ export class BackupService {
         interval: dto.interval,
         customIntervalDays: dto.interval === 'custom' ? dto.customIntervalDays : null,
         timeOfDay: dto.timeOfDay,
+        retentionDays,
       },
     });
     this.logger.log(
-      `Updated auto-backup schedule: enabled=${dto.enabled}, interval=${dto.interval}, customIntervalDays=${dto.customIntervalDays}, time=${dto.timeOfDay}`,
+      `Updated auto-backup schedule: enabled=${dto.enabled}, interval=${dto.interval}, customIntervalDays=${dto.customIntervalDays}, time=${dto.timeOfDay}, retentionDays=${retentionDays}`,
     );
     return this.getScheduleConfig();
   }
@@ -566,7 +575,7 @@ export class BackupService {
       isManualBackupOverdue,
       daysSinceLastManualBackup,
       manualBackupThresholdDays: warningThresholdDays,
-      retentionDays: this.getRetentionDays(),
+      retentionDays: this.getRetentionDays(metadata),
       autoBackupsCount: autoBackups.length,
       totalStorageSizeBytes,
       autoBackups,
@@ -622,7 +631,14 @@ export class BackupService {
     return path.resolve(raw);
   }
 
-  private getRetentionDays(): number {
+  private getRetentionDays(metadata?: BackupMetadata): number {
+    if (
+      metadata?.schedule?.retentionDays !== undefined &&
+      metadata.schedule.retentionDays !== null &&
+      metadata.schedule.retentionDays > 0
+    ) {
+      return metadata.schedule.retentionDays;
+    }
     const raw = this.configService.get<string>(
       BACKUP_RETENTION_DAYS_ENV,
       String(BACKUP_DEFAULT_RETENTION_DAYS),
@@ -670,6 +686,10 @@ export class BackupService {
                     ? data.schedule.customIntervalDays
                     : null,
                 timeOfDay: typeof data.schedule.timeOfDay === 'string' ? data.schedule.timeOfDay : '02:00',
+                retentionDays:
+                  typeof data.schedule.retentionDays === 'number' && data.schedule.retentionDays > 0
+                    ? data.schedule.retentionDays
+                    : undefined,
               }
             : undefined,
       };

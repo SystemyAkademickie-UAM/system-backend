@@ -25,6 +25,7 @@ import {
   resolveMonthlyArchiveZipPath,
   resolveProductionLogDirectory,
   resolveProductionLogTtlDays,
+  saveProductionLogRetentionTtlDays,
 } from './log-directory';
 import { LogZipStore, type ZipStoreEntry } from './log-zip-store';
 
@@ -67,6 +68,15 @@ export class LogStoreService {
       return fromZip;
     }
     throw new NotFoundException(`No logs for ${calendarDate}`);
+  }
+
+  getRetentionTtlDays(): number {
+    return resolveProductionLogTtlDays();
+  }
+
+  setRetentionTtlDays(ttlDays: number): number {
+    saveProductionLogRetentionTtlDays(ttlDays);
+    return resolveProductionLogTtlDays();
   }
 
   archiveClosedDays(now = new Date()): string[] {

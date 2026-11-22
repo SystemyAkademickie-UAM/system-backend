@@ -42,6 +42,11 @@ import {
   ORGANIZATION_LOGIN_METHOD_EMAIL,
   ORGANIZATION_LOGIN_METHOD_SAML,
 } from '../../../constants/organization-constants';
+import {
+  ORGANIZATION_DEFAULT_STORAGE_QUOTA_MB,
+  ORGANIZATION_STORAGE_QUOTA_MB_MAX,
+  ORGANIZATION_STORAGE_QUOTA_MB_MIN,
+} from '../../../constants/organization-storage-constants';
 
 export class OrganizationRepresentativeDto {
   @ApiProperty({ example: 'Anna Nowak' })
@@ -245,6 +250,18 @@ export class CreateOrganizationDto {
   @Min(ORGANIZATION_ACCOUNT_LIMIT_MIN)
   @Max(ORGANIZATION_ACCOUNT_LIMIT_MAX)
   accountLimit: number;
+
+  @ApiPropertyOptional({
+    example: 100,
+    description: 'Storage quota in megabytes (1 - 5120 MB, default 100 MB)',
+    default: ORGANIZATION_DEFAULT_STORAGE_QUOTA_MB,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(ORGANIZATION_STORAGE_QUOTA_MB_MIN)
+  @Max(ORGANIZATION_STORAGE_QUOTA_MB_MAX)
+  storageQuotaMb?: number;
 }
 
 export class UpdateOrganizationDto {
@@ -310,6 +327,13 @@ export class UpdateOrganizationDto {
   @Min(ORGANIZATION_ACCOUNT_LIMIT_MIN)
   @Max(ORGANIZATION_ACCOUNT_LIMIT_MAX)
   accountLimit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(ORGANIZATION_STORAGE_QUOTA_MB_MIN)
+  @Max(ORGANIZATION_STORAGE_QUOTA_MB_MAX)
+  storageQuotaMb?: number;
 }
 
 export class UploadOrganizationCertificateDto {

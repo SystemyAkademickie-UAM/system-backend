@@ -6,11 +6,23 @@
  * the overall host machine constraint (total server pool: ~5 GiB).
  */
 
+/** Default organization storage quota in megabytes (100 MiB). */
+export const ORGANIZATION_DEFAULT_STORAGE_QUOTA_MB = 100;
+
 /** Default organization storage quota in bytes (100 MiB). */
 export const ORGANIZATION_DEFAULT_STORAGE_QUOTA_BYTES = 100 * 1024 * 1024;
 
+/** Total host server disk pool across all organizations in megabytes (5120 MiB / 5 GiB). */
+export const SERVER_TOTAL_STORAGE_POOL_MB = 5120;
+
 /** Total host server disk pool across all organizations (5 GiB). */
 export const SERVER_TOTAL_STORAGE_POOL_BYTES = 5 * 1024 * 1024 * 1024;
+
+/** Minimum allowed quota per organization in MB (1 MB). */
+export const ORGANIZATION_STORAGE_QUOTA_MB_MIN = 1;
+
+/** Maximum allowed quota per organization in MB (5120 MB / 5 GB). */
+export const ORGANIZATION_STORAGE_QUOTA_MB_MAX = 5120;
 
 /** Estimated average banner file size in bytes (1.5 MiB). */
 export const ESTIMATED_BANNER_AVERAGE_BYTES = 1.5 * 1024 * 1024;

@@ -60,6 +60,18 @@ export class UpdateAutoBackupScheduleDto {
     message: 'timeOfDay must be in HH:mm 24-hour format (e.g. 02:00)',
   })
   timeOfDay: string;
+
+  @ApiPropertyOptional({
+    description: 'Liczba dni przechowywania automatycznych kopii zapasowych (od 1 do 365, domyślnie 14)',
+    example: 14,
+    minimum: 1,
+    maximum: 365,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  retentionDays?: number;
 }
 
 export class ExportBackupDto {

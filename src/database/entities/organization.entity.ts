@@ -17,6 +17,7 @@ import {
   ORGANIZATION_ACCOUNT_LIMIT_DEFAULT,
   ORGANIZATION_LOGIN_METHOD_SAML,
 } from '../../constants/organization-constants';
+import { ORGANIZATION_DEFAULT_STORAGE_QUOTA_BYTES } from '../../constants/organization-storage-constants';
 
 /**
  * Organization tenant (`auth.organizations`); referenced by `auth.accounts.organization_id`.
@@ -147,6 +148,19 @@ export class OrganizationEntity {
     default: ORGANIZATION_ACCOUNT_LIMIT_DEFAULT,
   })
   accountLimit: number;
+
+  /** Allocated disk space storage quota in bytes (default: 100 MB, max: 5 GB). */
+  @Column({
+    name: 'storage_quota_bytes',
+    type: 'bigint',
+    nullable: false,
+    default: ORGANIZATION_DEFAULT_STORAGE_QUOTA_BYTES,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string | number) => Number(value),
+    },
+  })
+  storageQuotaBytes: number;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

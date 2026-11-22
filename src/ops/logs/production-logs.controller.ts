@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Put, Req } from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiForbiddenResponse,
@@ -10,6 +10,7 @@ import type { Request } from 'express';
 
 import { MAQ_SESSION_COOKIE_NAME } from '../../constants/session-constants';
 import { ExportProductionLogsDto } from './dto/export-production-logs.dto';
+import { UpdateLogRetentionDto } from './dto/update-log-retention.dto';
 import { ProductionLogsService } from './production-logs.service';
 
 @ApiTags('Admin production logs')
@@ -24,6 +25,23 @@ export class ProductionLogsController {
   @ApiForbiddenResponse({ description: 'Caller lacks super role' })
   listDays(@Req() req: Request) {
     return this.productionLogsService.listDays(req);
+  }
+
+  @Get('retention')
+  @ApiOperation({ summary: 'Get production log retention policy in days (super role)' })
+  @ApiOkResponse({ description: 'Configured retention in days and default' })
+  @ApiForbiddenResponse({ description: 'Caller lacks super role' })
+  getRetention(@Req() req: Request) {
+    return this.productionLogsService.getRetention(req);
+  }
+
+  @Put('retention')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update production log retention policy in days (super role)' })
+  @ApiOkResponse({ description: 'Updated retention in days and default' })
+  @ApiForbiddenResponse({ description: 'Caller lacks super role' })
+  updateRetention(@Req() req: Request, @Body() dto: UpdateLogRetentionDto) {
+    return this.productionLogsService.updateRetention(req, dto.ttlDays);
   }
 
   @Post('export')

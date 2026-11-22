@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { open, readdir, stat } from 'node:fs/promises';
+import { copyFile, mkdir, open, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -123,7 +123,7 @@ export class AdminOrganizationStorageService {
 
     // 3. Storage metrics
     const storageFiles = await this.scanOrganizationFiles(organizationId);
-    const quotaBytes = resolveOrganizationStorageQuotaBytes();
+    const quotaBytes = Number(org.storageQuotaBytes) || resolveOrganizationStorageQuotaBytes();
     const serverTotalPoolBytes = resolveServerStoragePoolBytes();
     let usedBytes = 0;
     for (const f of storageFiles) {
@@ -217,7 +217,7 @@ export class AdminOrganizationStorageService {
     const org = await this.assertOrganizationActive(organizationId);
 
     const rawFiles = await this.scanOrganizationFiles(organizationId);
-    const quotaBytes = resolveOrganizationStorageQuotaBytes();
+    const quotaBytes = Number(org.storageQuotaBytes) || resolveOrganizationStorageQuotaBytes();
     const serverTotalPoolBytes = resolveServerStoragePoolBytes();
 
     // Map files to groups and teacher accounts
@@ -253,15 +253,17 @@ export class AdminOrganizationStorageService {
   }
 
   /**
-   * Scans disk directory `<DRIVE_STORAGE_ROOT>/drive/<organizationId>` and falls back / syncs with `services.drive`.
+   * Scans disk directory `<DRIVE_STORAGE_ROOT>/drive/<organizationId>`, finds lecturer group banners, and falls back / syncs with `services.drive`.
    */
   private async scanOrganizationFiles(
     organizationId: number,
   ): Promise<Array<{ ref: string; size: number; mimeType: string; createdAt: Date }>> {
-    const orgFolder = join(resolveDriveStorageRoot(), 'drive', String(organizationId));
+    const driveRoot = join(resolveDriveStorageRoot(), 'drive');
+    const orgFolder = join(driveRoot, String(organizationId));
     const diskFiles: Array<{ ref: string; size: number; mimeType: string; createdAt: Date }> = [];
     const scannedRefs = new Set<string>();
 
+    // 1. Scan primary organization directory: storage/drive/<organizationId>
     if (existsSync(orgFolder)) {
       try {
         const entries = await readdir(orgFolder, { withFileTypes: true });
@@ -297,7 +299,85 @@ export class AdminOrganizationStorageService {
       }
     }
 
-    // Also check database `services.drive` for any records not already scanned on disk
+    // 2. Discover banners belonging to groups created by lecturers of this organization
+    try {
+      const teacherAccounts = await this.accountRepository.find({
+        where: { organizationId, role: LECTURER_ROLE_NAME },
+      });
+      const teacherAccountIds = teacherAccounts.map((a) => a.id);
+      if (teacherAccountIds.length > 0) {
+        const groups = await this.groupRepository.find({
+          where: { teacherAccountId: In(teacherAccountIds) },
+          select: ['id', 'imageRef'],
+        });
+
+        for (const group of groups) {
+          const bannerRef = group.imageRef?.trim();
+          if (!bannerRef || !UUID_V4_REGEX.test(bannerRef) || scannedRefs.has(bannerRef)) {
+            continue;
+          }
+
+          let foundPath: string | null = null;
+          const directOrgPath = join(orgFolder, bannerRef);
+          const defaultPath = join(driveRoot, '1', bannerRef);
+
+          if (existsSync(directOrgPath)) {
+            foundPath = directOrgPath;
+          } else if (existsSync(defaultPath)) {
+            foundPath = defaultPath;
+          } else if (existsSync(driveRoot)) {
+            try {
+              const dirs = await readdir(driveRoot, { withFileTypes: true });
+              for (const dir of dirs) {
+                if (dir.isDirectory()) {
+                  const candidate = join(driveRoot, dir.name, bannerRef);
+                  if (existsSync(candidate)) {
+                    foundPath = candidate;
+                    break;
+                  }
+                }
+              }
+            } catch {
+              // Ignore traversal errors
+            }
+          }
+
+          if (foundPath) {
+            try {
+              const fileStat = await stat(foundPath);
+              const handle = await open(foundPath, 'r');
+              const header = Buffer.alloc(DRIVE_MIME_SNIFF_BYTES);
+              await handle.read(header, 0, DRIVE_MIME_SNIFF_BYTES, 0);
+              await handle.close();
+              const mimeType = detectMimeTypeFromBuffer(header);
+
+              if (foundPath !== directOrgPath) {
+                try {
+                  await mkdir(orgFolder, { recursive: true });
+                  await copyFile(foundPath, directOrgPath);
+                } catch {
+                  // Non-critical copy error
+                }
+              }
+
+              diskFiles.push({
+                ref: bannerRef,
+                size: fileStat.size,
+                mimeType,
+                createdAt: fileStat.birthtime ?? fileStat.mtime,
+              });
+              scannedRefs.add(bannerRef);
+            } catch {
+              // Ignore unreadable file
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore group query failure
+    }
+
+    // 3. Also check database `services.drive` for any records not already scanned on disk
     try {
       const dbRecords = await this.driveRepository.find({
         where: { organizationId },
@@ -310,6 +390,7 @@ export class AdminOrganizationStorageService {
             mimeType: rec.mimeType,
             createdAt: rec.createdAt,
           });
+          scannedRefs.add(rec.ref);
         }
       }
     } catch {

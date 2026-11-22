@@ -9,6 +9,7 @@ import {
   PRODUCTION_LOG_ECDH_UNCOMPRESSED_PUBLIC_KEY_LENGTH,
   PRODUCTION_LOG_TIMEZONE,
   PRODUCTION_LOG_TODAY_ALIAS,
+  PRODUCTION_LOG_TTL_DAYS_DEFAULT,
 } from '../../constants/production-log-constants';
 import { formatLogCalendarDate } from './log-calendar';
 import { encryptLogPayload } from './log-export-crypto';
@@ -28,6 +29,33 @@ export class ProductionLogsService {
   async listDays(req: Request): Promise<{ days: string[]; timeZone: string }> {
     await this.adminAccessService.assertSuperAdmin(req);
     return { days: this.logStore.listAvailableDates(), timeZone: PRODUCTION_LOG_TIMEZONE };
+  }
+
+  async getRetention(
+    req: Request,
+    queryAuth?: string,
+  ): Promise<{ ttlDays: number; defaultTtlDays: number }> {
+    await this.adminAccessService.assertSuperAdmin(req, queryAuth);
+    return {
+      ttlDays: this.logStore.getRetentionTtlDays(),
+      defaultTtlDays: PRODUCTION_LOG_TTL_DAYS_DEFAULT,
+    };
+  }
+
+  async updateRetention(
+    req: Request,
+    ttlDays: number,
+    queryAuth?: string,
+  ): Promise<{ ttlDays: number; defaultTtlDays: number }> {
+    await this.adminAccessService.assertSuperAdmin(req, queryAuth);
+    if (!Number.isFinite(ttlDays) || ttlDays < 1 || ttlDays > 3650) {
+      throw new BadRequestException('ttlDays must be an integer between 1 and 3650');
+    }
+    const updated = this.logStore.setRetentionTtlDays(Math.floor(ttlDays));
+    return {
+      ttlDays: updated,
+      defaultTtlDays: PRODUCTION_LOG_TTL_DAYS_DEFAULT,
+    };
   }
 
   async exportEncrypted(
