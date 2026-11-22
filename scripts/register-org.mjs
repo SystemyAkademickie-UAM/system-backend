@@ -257,7 +257,7 @@ async function registerEmailOnlyOrganization(client, organizationName, productio
 }
 
 async function registerSamlOrganization(client, organizationName, metadataUrl, productionTenant) {
-  console.log(`Fetching metadata from ${metadataUrl}…`);
+  console.log(`Fetching metadata from ${metadataUrl}...`);
   const metadata = await fetchIdpMetadata(metadataUrl);
   const pem = normalizePemCertificate(metadata.signingCertificatePem);
   const fingerprint = computeCertificateFingerprintSha256(pem);

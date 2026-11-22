@@ -19,6 +19,34 @@ const OID = {
   EDU_PERSON_SCOPED_AFFILIATION: 'urn:oid:1.3.6.1.4.1.5923.1.1.1.9',
 };
 
+/**
+ * PIONIER releases `givenName` and `sn` as directory strings.
+ * Several AttributeValue entries are packed into that one string, in order.
+ */
+function packAttributeString(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const parts: string[] = [];
+  for (const item of value) {
+    if (typeof item !== 'string') {
+      continue;
+    }
+    const trimmed = item.trim();
+    if (trimmed.length > 0) {
+      parts.push(trimmed);
+    }
+  }
+  if (parts.length === 0) {
+    return undefined;
+  }
+  return parts.join(' ');
+}
+
 /** Valid eduPersonAffiliation values per REFEDS standard */
 const VALID_AFFILIATIONS = new Set<EduPersonAffiliation>([
   'student',
@@ -53,16 +81,26 @@ export class SamlService {
         if (typeof val === 'string' && val.length > 0) {
           return val;
         }
-        if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string') {
+        if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string' && val[0].length > 0) {
           return val[0];
         }
       }
       return undefined;
     };
 
+    const getPackedName = (...keys: string[]): string | undefined => {
+      for (const key of keys) {
+        const packed = packAttributeString(attrs[key]);
+        if (packed !== undefined) {
+          return packed;
+        }
+      }
+      return undefined;
+    };
+
     const email = getValue('mail', 'email', OID.MAIL);
-    const givenName = getValue('givenName', OID.GIVEN_NAME);
-    const surname = getValue('sn', 'surname', OID.SURNAME);
+    const givenName = getPackedName('givenName', 'givenname', OID.GIVEN_NAME);
+    const surname = getPackedName('sn', 'surname', OID.SURNAME);
     const displayName = getValue('displayName', OID.DISPLAY_NAME, 'cn', OID.COMMON_NAME);
     const eppn = getValue('eduPersonPrincipalName', OID.EDU_PERSON_PRINCIPAL_NAME);
     const schacCode = getValue('schacPersonalUniqueCode', OID.SCHAC_PERSONAL_UNIQUE_CODE);

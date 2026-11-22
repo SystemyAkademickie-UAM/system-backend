@@ -8,6 +8,7 @@ import { GroupEntity } from '../database/entities/group.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { AccountEntity } from '../database/entities/account.entity';
 import { UserEntity } from '../database/entities/user.entity';
+import { OrganizationLogModule } from '../organization-log/organization-log.module';
 import { BacklogController } from './backlog-controller';
 import { BacklogService } from './backlog-service';
 
@@ -16,6 +17,7 @@ import { BacklogService } from './backlog-service';
     TypeOrmModule.forFeature([BacklogEntity, GroupEntity, EnrollmentEntity, AccountEntity, UserEntity]),
     AuthTokenSessionModule,
     UserRolesModule,
+    OrganizationLogModule,
   ],
   controllers: [BacklogController],
   providers: [BacklogService],

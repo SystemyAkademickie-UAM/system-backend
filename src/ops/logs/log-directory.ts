@@ -1,4 +1,5 @@
-import { join } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 
 import {
   PRODUCTION_LOG_ARCHIVE_DIR_NAME,
@@ -34,11 +35,36 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   return parsed;
 }
 
+const PRODUCTION_LOG_CONFIG_FILENAME = 'log-retention-config.json';
+
+export function resolveProductionLogRetentionConfigPath(): string {
+  return join(resolveProductionLogDirectory(), PRODUCTION_LOG_CONFIG_FILENAME);
+}
+
+export function saveProductionLogRetentionTtlDays(ttlDays: number): void {
+  const configPath = resolveProductionLogRetentionConfigPath();
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(configPath, JSON.stringify({ ttlDays }, null, 2), 'utf8');
+}
+
 /**
  * How many calendar days of logs to keep (including today).
- * `PRODUCTION_LOG_TTL_DAYS` wins; `PRODUCTION_LOG_TTL_SLOTS` is a deprecated alias.
+ * Config file wins; `PRODUCTION_LOG_TTL_DAYS` wins; `PRODUCTION_LOG_TTL_SLOTS` is a deprecated alias.
  */
 export function resolveProductionLogTtlDays(): number {
+  const configPath = resolveProductionLogRetentionConfigPath();
+  if (existsSync(configPath)) {
+    try {
+      const raw = readFileSync(configPath, 'utf8');
+      const parsed = JSON.parse(raw) as { ttlDays?: number };
+      if (typeof parsed?.ttlDays === 'number' && Number.isFinite(parsed.ttlDays) && parsed.ttlDays >= 1) {
+        return Math.floor(parsed.ttlDays);
+      }
+    } catch {
+      // Ignore unparseable config file
+    }
+  }
+
   const daysRaw = process.env[PRODUCTION_LOG_TTL_DAYS_ENV];
   if (daysRaw !== undefined && daysRaw.trim().length > 0) {
     return parsePositiveInt(daysRaw, PRODUCTION_LOG_TTL_DAYS_DEFAULT);

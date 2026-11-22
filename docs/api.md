@@ -62,19 +62,44 @@ Manage institutional SAML configuration stored in **`auth.organizations`** and *
 
 | Endpoint | Method | Description |
 | -------- | ------ | ----------- |
-| `/api/admin/organizations` | `POST` | Create organization. Set `metadataUrl` to fetch IdP entity ID, SSO URLs, and signing cert from federation metadata; or pass `certificatePem` when metadata is unavailable. |
-| `/api/admin/organizations` | `GET` | List organizations with cert summary. |
-| `/api/admin/organizations/:id` | `GET` | Organization detail. |
+| `/api/admin/organizations` | `POST` | Create organization. Required: `name`, `loginMethod` (`saml` or `email`), `accountLimit` (1–100000), `domain`, `representative` (`fullName`, `email`), `address` (`town`, `street`). `saml` also requires `metadataUrl`, or `entityId` + `ssoLoginUrl` + `certificatePem`. Domain may be a hostname, `localhost`, `127.0.0.1`, or `192.168.0.0`–`192.168.0.255`. `PUT` accepts `accountLimit`. Creating another account past the limit returns 400. |
+| `/api/admin/organizations` | `GET` | List organizations. Each row is `id`, `name`, `isActive`, `domain`. |
+| `/api/admin/organizations/bulk` | `POST` | Body `{ "ids": [11, 12] }`, 1–50 ids. Returns `{ "organizations": [...] }` where each item is the full stored record (login method, domain, representative, address, SAML fields, certificate summary, timestamps). |
+| `/api/admin/organizations/:id` | `GET` | Full organization record, including domain, representative, and address. |
 | `/api/admin/organizations/:id` | `PATCH` | Update name, contact, SSO URLs, `isActive`. |
 | `/api/admin/organizations/:id` | `DELETE` | Soft-delete (`is_active = false`). |
 | `/api/admin/organizations/:id/sync-from-metadata` | `POST` | Re-fetch IdP metadata from stored `metadata_url` and rotate signing certificate. |
 | `/api/admin/organizations/:id/certificates` | `POST` | Rotate IdP signing certificate (PEM body). |
 | `/api/admin/organizations/:id/certificates/:certId` | `DELETE` | Revoke certificate. |
+| `/api/admin/organizations/administrators` | `GET` | Administrators of every active organization. Each item adds `organizationId` and `organizationName`. |
 | `/api/admin/organizations/:organizationId/administrators` | `GET` | List organization administrators (`administrator` role). |
-| `/api/admin/organizations/:organizationId/administrators` | `POST` | Grant `administrator` role by user email (user must exist after SAML login). Body: `{ "email": "..." }`. |
+| `/api/admin/organizations/:organizationId/administrators/candidates` | `GET` | People already in the organization who do not hold `administrator`. |
+| `/api/admin/organizations/:organizationId/administrators` | `POST` | Grant `administrator` to one of those people. Body: `{ "userId": 7 }`. The caller cannot grant the role to themselves. |
+| `/api/admin/organizations/:organizationId/administrators/email` | `POST` | Email organizations only. Body: `{ "email", "name", "surname" }`. Creates the person when they do not exist yet, or reuses them, and grants `administrator`. Works whether or not the organization already has other accounts. Magic-link login can then find them. SAML organizations do not use this call. |
 | `/api/admin/organizations/:organizationId/administrators/:accountId` | `DELETE` | Revoke organization administrator role. |
 
 **Bootstrap super admin:** set `SUPERADMIN_BOOTSTRAP_EMAIL` in `.env`. On first startup (or first SAML login with that email), when no `super` account exists, the API inserts one row in `auth.accounts`. Optional `SUPERADMIN_BOOTSTRAP_ORGANIZATION_ID` (default: first active organization).
+
+---
+
+## Organization accounts (organization administrator or super)
+
+An organization administrator can use these routes only when the session organization is the organization in the URL. A super administrator can use them for any active organization. Accounts from any other organization are not listed, exported, changed, or removed.
+
+An organization administrator may assign `student` or `lecturer`. A super administrator may also assign `administrator`. The `super` role is not assigned here. Add and import reuse an existing person and do not change that person's email, name, surname, or nickname. Creating a new person and that person's account is one database transaction: if the account row fails, the person row is undone. `PATCH` is the call that edits those fields. A profile change and a role change in the same `PATCH` are one transaction. `PATCH` refuses the edit when the person also belongs to another organization.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/organizations/:organizationId/accounts` | `GET` | Every account in the organization: `accountId`, `userId`, `email`, `name`, `surname`, `nickname`, `role`. |
+| `/api/admin/organizations/:organizationId/accounts/page` | `GET` | One page ordered by `accountId`. Query `afterAccountId` (default `0`) and `limit` (default and maximum `100`). Response `{ "items": [...], "nextAfterAccountId": 100 }` or `nextAfterAccountId: null` on the last page. |
+| `/api/admin/organizations/:organizationId/accounts/:accountId` | `GET` | One account. `404` when that account is not in this organization. |
+| `/api/admin/organizations/:organizationId/accounts` | `POST` | Body `email`, `name`, `surname`, `role`, optional `nickname`. Creates the person when the email is new. When the person already exists, adds the role and leaves their email, name, surname, and nickname as stored. |
+| `/api/admin/organizations/:organizationId/accounts/:accountId` | `PATCH` | Any of `email`, `name`, `surname`, `nickname`, `role`. |
+| `/api/admin/organizations/:organizationId/accounts/import` | `POST` | Body `{ "users": [ ... ] }` with at most 500 rows. Response `{ "created", "updated", "skipped", "failed" }`. An existing person is reused. A role that is already present is `skipped`. `updated` stays `0`. |
+| `/api/admin/organizations/:organizationId/accounts/export` | `GET` | `text/csv` of every account in this organization. |
+| `/api/admin/organization-log` | `GET` | Organization administrator log for the session organization. Query: `category` (`all`, `organization`, `group`), `limit`, and together `before`, `beforeId`, `beforeSource`. |
+| `/api/admin/organizations/:organizationId/accounts/:accountId/magic-link` | `POST` | Sends the existing email magic link. Allowed only when the organization `loginMethod` is `email`. |
+| `/api/admin/organizations/:organizationId/accounts/:accountId` | `DELETE` | Removes the account in this organization. The user row is deleted only when no membership remains. |
 
 Register organizations via admin API (no migration seed). Example: UAM — `metadataUrl` = `https://sso.amu.edu.pl/simplesaml/saml2/idp/metadata.php`. Local dev IdP — see [saml-local-idp.md](./saml-local-idp.md).
 
@@ -110,17 +135,21 @@ The HTTP body is **not** log plaintext. The client sends an uncompressed P-256 p
 
 ## Admin database backup (super role)
 
-Encrypted `pg_dump` (custom format) wrapped in gzip + AES-256-GCM. Super role only. File layout: 16-byte IV, ciphertext, 16-byte auth tag. Key: `BACKUP_ENCRYPTION_KEY` (min 32 characters; SHA-256 derived). Required when `NODE_ENV=production`.
+Encrypted `pg_dump` (custom format) wrapped in gzip + AES-256-GCM. Super role only. Server-key files start with a 16-byte IV, then ciphertext and a 16-byte auth tag. Key: `BACKUP_ENCRYPTION_KEY` (min 32 characters; SHA-256 derived). Required when `NODE_ENV=production`. Password files start with `MAQBKPV2`, a 16-byte salt, and a 16-byte IV. The key is PBKDF2-SHA-256 (100000 iterations). The password is accepted only in the POST body, not in a header.
 
-**Export —** `GET /api/admin/backup/export`
+**Schedule —** `GET /api/admin/backup/schedule` and `PUT /api/admin/backup/schedule`
 
-**Authorization:** **super** role (`maq_session`). Missing or non-super → `403 Forbidden`. Missing/short key → `500`.
+**PUT body:** `{ "enabled": true, "interval": "daily", "timeOfDay": "02:00" }`. `interval` is `daily`, `every_3_days`, `weekly`, `every_2_weeks`, or `custom`. `custom` also requires `customIntervalDays` from 1 to 365. `timeOfDay` is `HH:mm` in the server's local clock. A daily run is skipped when a backup already exists on that local calendar day.
+
+**Export —** `GET /api/admin/backup/export` uses the server key. `POST /api/admin/backup/export` with `{ "password": "..." }` (at least 8 characters) writes a password file.
+
+**Authorization:** **super** role (`maq_session`). Missing or non-super → `403 Forbidden`. Missing/short key → `500`. A short password → `400`.
 
 **Response:** `200 OK` — `application/octet-stream` attachment (`backup-<iso>.enc`). Streamed; do not buffer the whole dump in the browser when possible.
 
 **Import —** `POST /api/admin/backup/import`
 
-**Content-Type:** `multipart/form-data` field `file` (`.enc` only, max 100 MiB).
+**Content-Type:** `multipart/form-data` field `file` (`.enc` only, max 100 MiB) and optional `password` for a password file. A password file without a password, or with a wrong password, → `400`.
 
 **Authorization:** **super** role. Invalid file → `400`. Restore runs `pg_restore --clean --if-exists` against the configured `DATABASE_*` (destructive).
 
@@ -183,7 +212,7 @@ Configure **`API_TOKEN_HMAC_SECRET`** (≥ 32 ASCII characters in **`NODE_ENV=
 
 **Session lifetime:** `maq_auth` and `saml_session` are **session cookies** (no `Max-Age`) — dropped on browser close. Server-side `expired_at` is the source of truth: a sliding idle window is refreshed on each authenticated request, never past the absolute cap measured from `created_at`. After idle expiry or the cap, the token is rejected and the user must re-authenticate.
 
-**Rate limiting:** `POST /api/login`, `POST /api/login/active-role`, and `GET /api/auth/saml/login` are throttled per client IP (`@nestjs/throttler`); exceeding the limit returns `429 Too Many Requests`.
+**Rate limiting:** `POST /api/login`, `POST /api/login/active-role`, `POST /api/login/context`, and `GET /api/auth/saml/login` are throttled per client IP (`@nestjs/throttler`); exceeding the limit returns `429 Too Many Requests`.
 
 ---
 
@@ -222,8 +251,11 @@ The `user` object exposes role information:
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `role` | string | **Active** role: the selected role from the `maq_active_role` cookie when valid, otherwise the highest-privilege role the user holds. |
+| `role` | string | **Active** role in the session organization. Omitted while `selectionRequired` is true and no role has been confirmed. |
 | `availableRoles` | string[] | All distinct roles the user holds, ordered highest → lowest privilege (`super`, `administrator`, `lecturer`, `student`). |
+| `organizationId` | number \| null | Organization bound to this session. |
+| `selectionRequired` | boolean | True when the user belongs to more than one organization/role pair and has not confirmed one for this session. |
+| `memberships` | object[] | Active organizations: `{ organizationId, name, roles }`. Inactive organizations are omitted. |
 
 When not authenticated, returns `{ "authenticated": false }` (still `200`).
 
@@ -231,9 +263,26 @@ Uses **strong** auth (`maq_auth` + matching `X-Browser-ID`) when the header is p
 
 ---
 
+## Organization and role selection
+
+After login, a remembered organization and role are applied when that account still exists. A user with only one organization and one role is signed in as that pair and the pair is remembered. Otherwise `user.selectionRequired` is true until the user confirms a choice. The confirmation is stored on the user, so the next login skips the question.
+
+**Endpoint:** `POST /api/login/context`
+
+**Body:**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `organizationId` | number | Active organization the user belongs to. |
+| `role` | string | Role held in that organization (`super`, `administrator`, `lecturer`, `student`). |
+
+**Response:** `200 OK` — same shape as `GET /api/login/me`, with `selectionRequired` false. `400` when the user does not hold that role in the organization. `401` when the session is missing. `409 Conflict` (`error: "MAINTENANCE_ROLE_SWITCH_BLOCKED"`) when attempting to change role (or pick a non-`super` role while holding `super`) during active maintenance mode.
+
+---
+
 ## Active role selection
 
-Lets a user with more than one role choose which role is active for the UI. The choice is persisted in the HTTP-only **`maq_active_role`** cookie and reflected by `GET /api/login/me` (`user.role`). Cleared on logout.
+Lets a user with more than one role choose which role is active for the UI. The choice is stored on the session row and reflected by `GET /api/login/me` (`user.role`). Prefer `POST /api/login/context` when the user can also belong to more than one organization. Cleared on logout.
 
 **Endpoint:** `POST /api/login/active-role`
 
@@ -245,7 +294,7 @@ Lets a user with more than one role choose which role is active for the UI. The 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `role` | string | Role to activate. Must be one of the user's `availableRoles`. |
+| `role` | string | Role to activate. Must be held in the session organization. |
 
 **Response:** `200 OK` — same shape as `GET /api/login/me`, with `user.role` set to the selected role.
 
@@ -253,8 +302,9 @@ Lets a user with more than one role choose which role is active for the UI. The 
 
 | Status | When |
 | ------ | ---- |
-| `400 Bad Request` | The requested role is not assigned to the user. |
+| `400 Bad Request` | The requested role is not held in the session organization. |
 | `401 Unauthorized` | No valid session. |
+| `409 Conflict` | Role switching is disabled while technical maintenance mode is active (`error: "MAINTENANCE_ROLE_SWITCH_BLOCKED"`). |
 
 ---
 
@@ -1809,7 +1859,9 @@ Manage global announcements displayed to active users across the platform. Store
 | Endpoint | Method | Description |
 | -------- | ------ | ----------- |
 | `/api/admin/broadcasts` | `POST` | Create a new broadcast announcement. |
-| `/api/admin/broadcasts` | `GET` | List all broadcasts (supports `?limit=50&offset=0`). |
+| `/api/admin/broadcasts` | `GET` | List all broadcasts (supports `?take=50&skip=0`). |
+| `/api/admin/broadcasts/:id` | `GET` | Get a single broadcast announcement by ID. |
+| `/api/admin/broadcasts/:id` | `PUT` / `PATCH` | Update an existing broadcast announcement. |
 | `/api/admin/broadcasts/:id` | `DELETE` | Delete a broadcast announcement. |
 
 ### Create broadcast
@@ -1820,13 +1872,29 @@ Manage global announcements displayed to active users across the platform. Store
 
 | Field | Type | Rules | Description |
 | ----- | ---- | ----- | ----------- |
-| `title` | string | 1–255 chars | Short headline of the announcement. |
-| `message` | string | 1–4000 chars | Announcement body text or markdown. |
+| `title` | string | 1–200 chars | Short headline of the announcement. |
+| `content` | string | 1–4000 chars | Announcement body text or markdown. |
 | `level` | string | `info`, `warning`, `critical` (default `info`) | Visual severity indicator. |
 | `targetRole` | string | `all`, `student`, `lecturer`, `administrator` (default `all`) | Target user audience. |
-| `expiresAt` | string | ISO-8601 date string (optional) | When the broadcast stops being visible. Null = never expires. |
+| `expiresAt` | string | ISO-8601 date string (optional, nullable) | When the broadcast stops being visible. Null = never expires. |
 
 **Response:** `201 Created` with created broadcast object.
+
+### Update broadcast
+
+**Endpoint:** `PUT /api/admin/broadcasts/:id` (or `PATCH /api/admin/broadcasts/:id`)
+
+**Request body (JSON, all fields optional):**
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `title` | string | 1–200 chars (optional) | Updated headline of the announcement. |
+| `content` | string | 1–4000 chars (optional) | Updated announcement body text or markdown. |
+| `level` | string | `info`, `warning`, `critical` (optional) | Updated visual severity indicator. |
+| `targetRole` | string | `all`, `student`, `lecturer`, `administrator` (optional) | Updated target user audience. |
+| `expiresAt` | string | ISO-8601 date string (optional, nullable) | Updated expiration timestamp. Send `null` or empty string to remove expiration. |
+
+**Response:** `200 OK` with updated broadcast object.
 
 ---
 
@@ -1876,7 +1944,8 @@ Control global technical break / maintenance screen. Managed as a singleton row 
 
 When maintenance mode is enabled (`isEnabled: true`):
 - All general API requests return **`HTTP 503 Service Unavailable`** with JSON `{ "statusCode": 503, "message": "...", "estimatedEndAt": "..." }`.
-- System probe endpoints (`/api/system/*`), authentication endpoints (`/api/auth/*`), documentation (`/api/docs`), and requests authenticated with **`super`** role are exempted to allow administration and verification.
+- System probe endpoints (`/api/system/*`, `/api/counter/health`), authentication/login/logout endpoints (`/api/auth/*`, `/api/login/*`, `/api/logout`), onboarding avatar catalog (`/api/profile/avatars`), documentation (`/api/docs`), and requests authenticated with **`super`** role are exempted so all users can sign in/out (and view the maintenance screen) while platform data remains locked down.
+- Role switching (`POST /api/login/context`, `POST /api/login/active-role`) is blocked during active maintenance with **`HTTP 409 Conflict`** (`{ "statusCode": 409, "error": "MAINTENANCE_ROLE_SWITCH_BLOCKED", "message": "Cannot change role while technical maintenance mode is active." }`) so a multirole `super` user cannot switch roles and lock themselves out from disabling maintenance mode.
 
 ---
 
@@ -1901,6 +1970,164 @@ Public probe endpoints used by client applications to verify server status and c
   }
 }
 ```
+
+---
+
+## Patch notes management (super role)
+
+Upload, inspect upload history, and delete platform patch note PDF documents. Metadata is stored in **`services.patch_notes`** and PDF binaries on disk under `PATCH_NOTES_STORAGE_DIR` (defaults to `<DRIVE_STORAGE_ROOT>/patch-notes`). Requires **`super`** role.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/patch-notes` | `POST` | Upload a new patch note PDF document (`multipart/form-data`). |
+| `/api/admin/patch-notes` | `GET` | List uploaded patch notes ordered from newest to oldest (`?take=50&skip=0`). |
+| `/api/admin/patch-notes/:id` | `DELETE` | Delete a selected patch note record and its PDF file. |
+
+### Upload patch note PDF
+
+**Endpoint:** `POST /api/admin/patch-notes` (`multipart/form-data`)
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `file` | binary (`.pdf`) | Required, max `PATCH_NOTES_MAX_FILE_BYTES` (default 20 MiB), valid `%PDF-` header | Patch note PDF file. |
+| `title` | string | 1–200 chars (optional) | Display title (defaults to filename without `.pdf`). |
+| `version` | string | 1–64 chars (optional) | Optional release version tag (e.g. `v1.2.0`). |
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": 1,
+  "title": "Patch Notes 1.2.0",
+  "version": "v1.2.0",
+  "originalFilename": "patch-notes-1.2.0.pdf",
+  "fileSizeBytes": 145280,
+  "uploadedByUserId": 1,
+  "createdAt": "2026-11-03T10:00:00.000Z",
+  "fileUrl": "/api/patch-notes/1/file"
+}
+```
+
+---
+
+## System documents management (super role)
+
+Inspect, upload/replace, and delete platform PDF documents (`termsOfUse`, `privacyPolicy`, `documentation`). Metadata is stored in **`services.system_documents`** and PDF files are stored under `DOCUMENTS_STORAGE_DIR` (defaults to `<DRIVE_STORAGE_ROOT>/documents`). Requires **`super`** role.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/documents` | `GET` | List all application documents with upload status and timestamps. |
+| `/api/admin/documents/:key` | `GET` | Get metadata and upload timestamp of a specific document (`termsOfUse`, `privacyPolicy`, `documentation`). |
+| `/api/admin/documents/:key/file` | `GET` | Inspect/download the PDF binary of a specific document (`?download=1` for attachment). |
+| `/api/admin/documents/:key` | `PUT` / `POST` | Upload or replace the PDF file for a specific document (`multipart/form-data`). |
+| `/api/admin/documents/:key` | `DELETE` | Delete the uploaded PDF file for a specific document. |
+
+### Upload or replace document PDF
+
+**Endpoint:** `PUT /api/admin/documents/:key` (or `POST /api/admin/documents/:key`, `multipart/form-data`)
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `file` | binary (`.pdf`) | Required, max `DOCUMENTS_MAX_FILE_BYTES` (default 20 MiB), valid `%PDF-` header | Replacement PDF file. |
+| `title` | string | 1–200 chars (optional) | Optional custom display title. |
+
+**Response:** `200 OK`
+
+```json
+{
+  "key": "termsOfUse",
+  "title": "Terms of Use",
+  "canonicalFilename": "warunki-uzytkowania.pdf",
+  "isUploaded": true,
+  "originalFilename": "warunki-uzytkowania.pdf",
+  "fileSizeBytes": 142509,
+  "uploadedAt": "2026-11-03T12:00:00.000Z",
+  "uploadedByUserId": 1,
+  "fileUrl": "/api/documents/termsOfUse/file"
+}
+```
+
+---
+
+## Patch notes (public / user access)
+
+Public endpoints allowing users on application pages to browse patch notes history and view or download PDF documents.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/patch-notes` | `GET` | List available patch notes ordered newest first (`?take=50&skip=0`). |
+| `/api/patch-notes/latest` | `GET` | Get metadata of the most recently uploaded patch note. |
+| `/api/patch-notes/latest/file` | `GET` | Serve the latest patch note PDF (`?download=1` for attachment). |
+| `/api/patch-notes/:id/file` | `GET` | Serve a specific patch note PDF by ID (`?download=1` for attachment). |
+
+---
+
+## System documents (public / user access)
+
+Public endpoints allowing users to check and open application legal/informational PDF documents.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/documents` | `GET` | List all application documents and their upload status. |
+| `/api/documents/:key` | `GET` | Get metadata of a specific document (`termsOfUse`, `privacyPolicy`, `documentation`). |
+| `/api/documents/:key/file` | `GET` | Serve the PDF binary of a specific document (`?download=1` for attachment). |
+
+---
+
+## FAQ knowledge base management (super role)
+
+Create, inspect, update, reorder, and delete FAQ knowledge base entries. Stored in **`services.faqs`**. Requires **`super`** role.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/admin/faq` | `GET` | List all FAQ entries (`?category=...&search=...`). |
+| `/api/admin/faq/:id` | `GET` | Get details of a single FAQ entry. |
+| `/api/admin/faq` | `POST` | Create a new FAQ entry (`question`, `answer`, optional `category`, `orderIndex`, `isPublished`). |
+| `/api/admin/faq` | `PUT` | Replace all FAQ entries when saving the edited FAQ page (`{ "items": [...] }`). |
+| `/api/admin/faq/:id` | `PUT` | Update an existing FAQ entry. |
+| `/api/admin/faq/reorder` | `PATCH` | Batch update ordering indices for FAQ entries (`{ "items": [{ "id": 1, "orderIndex": 0 }] }`). |
+| `/api/admin/faq/:id` | `DELETE` | Delete an FAQ entry. |
+
+### Create FAQ entry
+
+**Endpoint:** `POST /api/admin/faq` (`application/json`)
+
+| Field | Type | Rules | Description |
+| ----- | ---- | ----- | ----------- |
+| `question` | string | 1–300 chars, required | The FAQ question. |
+| `answer` | string | 1–10000 chars, required | The answer text or markdown. |
+| `category` | string | 1–100 chars (optional, default `Ogólne`) | Category name/identifier. |
+| `orderIndex` | integer | >= 0 (optional, default 0) | Display order within category. |
+| `isPublished` | boolean | optional, default true | Whether visible on public FAQ page. |
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": 1,
+  "question": "Jak zresetować hasło?",
+  "answer": "Przejdź do profilu i kliknij zmień hasło.",
+  "category": "Konto",
+  "orderIndex": 0,
+  "isPublished": true,
+  "createdByUserId": 1,
+  "updatedByUserId": 1,
+  "createdAt": "2026-11-10T20:00:00.000Z",
+  "updatedAt": "2026-11-10T20:00:00.000Z"
+}
+```
+
+---
+
+## FAQ (public / user access)
+
+Public endpoints allowing users to browse published FAQ entries and accordion categories.
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/faq` | `GET` | List published FAQ entries (`?category=...`, or `?grouped=1` for category-grouped accordion payload). |
+| `/api/faq/:id` | `GET` | Get a specific published FAQ entry by ID. |
+
 
 
 

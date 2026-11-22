@@ -14,6 +14,7 @@ describe('ItemCategoriesService', () => {
   let sessionService: { resolveSubjectFromRequest: jest.Mock };
   let userRolesService: {
     userHasRole: jest.Mock;
+    userHasRoleInOrganization?: jest.Mock;
     findAccountIdForRole: jest.Mock;
   };
   let groupRepository: { findOne: jest.Mock; exist: jest.Mock };
@@ -32,7 +33,13 @@ describe('ItemCategoriesService', () => {
       resolveSubjectFromRequest: jest.fn().mockResolvedValue({ userId: 1 }),
     };
     userRolesService = {
-      userHasRole: jest.fn().mockResolvedValue(true),
+      userHasRole: jest.fn().mockImplementation((_userId: number, role: string) => {
+        if (role === 'lecturer') {
+          return Promise.resolve(true);
+        }
+        return Promise.resolve(false);
+      }),
+      userHasRoleInOrganization: jest.fn().mockResolvedValue(false),
       findAccountIdForRole: jest.fn().mockImplementation((_userId: number, role: string) => {
         if (role === 'lecturer') {
           return Promise.resolve(10);

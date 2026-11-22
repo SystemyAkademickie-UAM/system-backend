@@ -9,6 +9,7 @@ import { AccountEntity } from '../../database/entities/account.entity';
 import { OrganizationEntity } from '../../database/entities/organization.entity';
 import {
   ADMINISTRATOR_ROLE_NAME,
+  LECTURER_ROLE_NAME,
   STUDENT_ROLE_NAME,
   SUPER_ROLE_NAME,
 } from '../../constants/role-name-constants';
@@ -92,11 +93,87 @@ describe('AccountRemovalService', () => {
     service = module.get(AccountRemovalService);
   });
 
+  it('allows an organization administrator to remove their own lecturer role', async () => {
+    adminAccessService.resolveAccountDeletionActor.mockResolvedValue({
+      userId: 10,
+      isSuperAdmin: false,
+      activeRole: ADMINISTRATOR_ROLE_NAME,
+    });
+    accountRepository.findOne.mockResolvedValue({
+      id: 5,
+      userId: 10,
+      organizationId: 12,
+      role: LECTURER_ROLE_NAME,
+    });
+
+    const result = await service.deleteOrganizationAccount(req, 12, 5);
+    expect(result.accountId).toBe(5);
+    expect(queryRunner.commitTransaction).toHaveBeenCalled();
+  });
+
+  it('allows a supervising person to remove their own administrator role', async () => {
+    adminAccessService.resolveAccountDeletionActor.mockResolvedValue({
+      userId: 10,
+      isSuperAdmin: true,
+      activeRole: SUPER_ROLE_NAME,
+    });
+    accountRepository.findOne.mockResolvedValue({
+      id: 5,
+      userId: 10,
+      organizationId: 12,
+      role: ADMINISTRATOR_ROLE_NAME,
+    });
+    userRolesService.listRolesForUser.mockResolvedValue([
+      SUPER_ROLE_NAME,
+      ADMINISTRATOR_ROLE_NAME,
+      LECTURER_ROLE_NAME,
+      STUDENT_ROLE_NAME,
+    ]);
+
+    const result = await service.deleteOrganizationAccount(req, 12, 5);
+    expect(result.accountId).toBe(5);
+    expect(queryRunner.commitTransaction).toHaveBeenCalled();
+  });
+
+  it('refuses to delete the caller own supervising role', async () => {
+    adminAccessService.resolveAccountDeletionActor.mockResolvedValue({
+      userId: 10,
+      isSuperAdmin: true,
+      activeRole: SUPER_ROLE_NAME,
+    });
+    accountRepository.findOne.mockResolvedValue({
+      id: 5,
+      userId: 10,
+      organizationId: 12,
+      role: SUPER_ROLE_NAME,
+    });
+
+    await expect(service.deleteOrganizationAccount(req, 12, 5)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(queryRunner.startTransaction).not.toHaveBeenCalled();
+  });
+
   it('allows org administrator to delete a student account', async () => {
     const result = await service.deleteOrganizationAccount(req, 12, 5);
     expect(result).toEqual({ accountId: 5, userId: 10, userRemoved: true });
     expect(queryRunner.manager.delete).toHaveBeenCalled();
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
+  });
+
+  it('forbids an organization administrator from removing their own administrator role', async () => {
+    adminAccessService.resolveAccountDeletionActor.mockResolvedValue({
+      userId: 10,
+      isSuperAdmin: false,
+      activeRole: ADMINISTRATOR_ROLE_NAME,
+    });
+    accountRepository.findOne.mockResolvedValue({
+      id: 5,
+      userId: 10,
+      organizationId: 12,
+      role: ADMINISTRATOR_ROLE_NAME,
+    });
+
+    await expect(service.deleteOrganizationAccount(req, 12, 5)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(queryRunner.startTransaction).not.toHaveBeenCalled();
   });
 
   it('forbids org administrator from deleting privileged accounts in the same organization', async () => {
@@ -106,6 +183,22 @@ describe('AccountRemovalService', () => {
       organizationId: 12,
       role: ADMINISTRATOR_ROLE_NAME,
     });
+    await expect(service.deleteOrganizationAccount(req, 12, 5)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('forbids deleting an administrator account while the selected role is administrator', async () => {
+    adminAccessService.resolveAccountDeletionActor.mockResolvedValue({
+      userId: 1,
+      isSuperAdmin: true,
+      activeRole: ADMINISTRATOR_ROLE_NAME,
+    });
+    accountRepository.findOne.mockResolvedValue({
+      id: 5,
+      userId: 10,
+      organizationId: 12,
+      role: ADMINISTRATOR_ROLE_NAME,
+    });
+    userRolesService.listRolesForUser.mockResolvedValue([ADMINISTRATOR_ROLE_NAME]);
     await expect(service.deleteOrganizationAccount(req, 12, 5)).rejects.toBeInstanceOf(ForbiddenException);
   });
 

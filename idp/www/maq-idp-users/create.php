@@ -12,6 +12,8 @@ $values = [
     'username' => '',
     'password' => '',
     'displayName' => '',
+    'givenName' => '',
+    'sn' => '',
     'mail' => '',
     'role' => 'student',
 ];
@@ -21,6 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'username' => trim((string) ($_POST['username'] ?? '')),
         'password' => (string) ($_POST['password'] ?? ''),
         'displayName' => trim((string) ($_POST['displayName'] ?? '')),
+        'givenName' => trim((string) ($_POST['givenName'] ?? '')),
+        'sn' => trim((string) ($_POST['sn'] ?? '')),
         'mail' => trim((string) ($_POST['mail'] ?? '')),
         'role' => trim((string) ($_POST['role'] ?? 'student')),
     ];

@@ -18,6 +18,8 @@ export type OrganizationAccountListItem = {
   accountId: number;
   userId: number;
   email: string;
+  name: string;
+  surname: string;
   nickname: string;
   role: string;
 };
@@ -25,6 +27,7 @@ export type OrganizationAccountListItem = {
 export type ManageableOrganizationItem = {
   id: number;
   name: string;
+  loginMethod: string;
 };
 
 @Injectable()
@@ -54,6 +57,7 @@ export class AdminOrganizationAccountsService {
       return organizations.map((organization) => ({
         id: organization.id,
         name: organization.name,
+        loginMethod: organization.loginMethod,
       }));
     }
     const adminAccounts = await this.accountRepository.find({
@@ -71,6 +75,7 @@ export class AdminOrganizationAccountsService {
     return organizations.map((organization) => ({
       id: organization.id,
       name: organization.name,
+      loginMethod: organization.loginMethod,
     }));
   }
 
@@ -98,6 +103,8 @@ export class AdminOrganizationAccountsService {
         accountId: row.id,
         userId: user.id,
         email: user.email,
+        name: user.name,
+        surname: user.surname,
         nickname: user.nickname,
         role: row.role,
       });

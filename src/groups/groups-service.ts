@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, Optional, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { In, QueryFailedError, Repository } from 'typeorm';
@@ -17,16 +17,24 @@ import {
   GENERATE_CODE_RESULT_NOT_AUTHORIZED,
   GROUP_GENERATE_CODE_API_JSON_STATUS_OK,
 } from '../constants/group-generate-code-api-constants';
-import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { ORGANIZATION_LOG_KIND_GROUP_CREATED } from '../constants/organization-log-constants';
+import { ADMINISTRATOR_ROLE_NAME, LECTURER_ROLE_NAME, STUDENT_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
+import { OrganizationLogService } from '../organization-log/organization-log.service';
 import { AccountEntity } from '../database/entities/account.entity';
 import { AvatarEntity } from '../database/entities/avatar.entity';
+import { BadgeEntity } from '../database/entities/badge.entity';
+import { EnrollmentCodeEntity } from '../database/entities/enrollment-code.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
+import { ItemCategoryEntity } from '../database/entities/item-category.entity';
+import { ItemEntity } from '../database/entities/item.entity';
+import { RankEntity } from '../database/entities/rank.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
 import { UserEntity } from '../database/entities/user.entity';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { CreateGroupBodyDto } from './dto/create-group-body.dto';
 import { GenerateCodeBodyDto } from './dto/generate-code-body.dto';
+import { UpdateGroupMembersDto } from './dto/manage-group-members.dto';
 import { UpdateGroupBodyDto } from './dto/update-group-body.dto';
 import { UpdateLivesConfigDto } from './dto/update-lives-config.dto';
 import { UpdateShopStatusDto } from './dto/update-shop-status.dto';
@@ -134,21 +142,41 @@ export class GroupsService {
     private readonly backlogService: BacklogService,
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
+    @InjectRepository(AccountEntity)
+    private readonly accountRepository: Repository<AccountEntity>,
     @InjectRepository(EnrollmentEntity)
     private readonly enrollmentRepository: Repository<EnrollmentEntity>,
     @InjectRepository(StudentStatsEntity)
-    private readonly studentStatsRepository: Repository<StudentStatsEntity>) { }
+    private readonly studentStatsRepository: Repository<StudentStatsEntity>,
+    @Optional() private readonly organizationLogService?: OrganizationLogService) { }
 
   async assertLecturerOwnsGroupAndGetAccountId(
     userId: number,
     internalGroupId: number,
     organizationId?: number | null,
   ): Promise<number> {
-    const lecturerAccountId = await this.assertLecturerAndGetAccountId(userId, organizationId);
+    const isSuper = await this.userRolesService.userHasRole(userId, SUPER_ROLE_NAME);
+    const isAdmin =
+      organizationId != null
+        ? await this.userRolesService.userHasRoleInOrganization(
+            userId,
+            organizationId,
+            ADMINISTRATOR_ROLE_NAME,
+          )
+        : await this.userRolesService.userHasRole(userId, ADMINISTRATOR_ROLE_NAME);
+
     const group = await this.groupRepository.findOne({
-      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+      where: { id: internalGroupId },
     });
     if (!group) {
+      throw new ForbiddenException('Not authorized to manage this group');
+    }
+    if (isSuper || isAdmin) {
+      return group.teacherAccountId;
+    }
+
+    const lecturerAccountId = await this.assertLecturerAndGetAccountId(userId, organizationId);
+    if (group.teacherAccountId !== lecturerAccountId) {
       throw new ForbiddenException('Not authorized to manage this group');
     }
     return lecturerAccountId;
@@ -166,6 +194,21 @@ export class GroupsService {
       throw new ForbiddenException('Requires lecturer privileges');
     }
     return lecturerAccountId;
+  }
+
+  private async isSuperOrAdmin(subject: SessionSubject): Promise<boolean> {
+    const isSuper = await this.userRolesService.userHasRole(subject.userId, SUPER_ROLE_NAME);
+    if (isSuper) {
+      return true;
+    }
+    if (subject.organizationId != null) {
+      return this.userRolesService.userHasRoleInOrganization(
+        subject.userId,
+        subject.organizationId,
+        ADMINISTRATOR_ROLE_NAME,
+      );
+    }
+    return this.userRolesService.userHasRole(subject.userId, ADMINISTRATOR_ROLE_NAME);
   }
 
   private async resolveOrganizationScopedAccountIds(subject: SessionSubject): Promise<{
@@ -207,7 +250,33 @@ export class GroupsService {
     if (!subject) {
       return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID };
     }
-    const lecturerAccountId = await this.resolveLecturerAccountId(subject);
+    const isSuperOrAdmin = await this.isSuperOrAdmin(subject);
+    let lecturerAccountId = await this.resolveLecturerAccountId(subject);
+
+    if (isSuperOrAdmin && body.group.teacherAccountId) {
+      const teacherAccount = await this.accountRepository.findOne({
+        where: { id: body.group.teacherAccountId, role: LECTURER_ROLE_NAME },
+      });
+      if (teacherAccount) {
+        lecturerAccountId = teacherAccount.id;
+      }
+    } else if (lecturerAccountId === null && isSuperOrAdmin) {
+      const firstLecturer = await this.accountRepository.findOne({
+        where: {
+          ...(subject.organizationId != null ? { organizationId: subject.organizationId } : {}),
+          role: LECTURER_ROLE_NAME,
+        },
+      });
+      if (firstLecturer) {
+        lecturerAccountId = firstLecturer.id;
+      } else {
+        const anyAccount = await this.accountRepository.findOne({
+          where: { userId: subject.userId },
+        });
+        lecturerAccountId = anyAccount?.id ?? null;
+      }
+    }
+
     if (lecturerAccountId === null) {
       return { statusCode: GROUP_API_JSON_STATUS_OK, group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID };
     }
@@ -255,7 +324,35 @@ export class GroupsService {
       const saved = await this.groupRepository.manager.transaction(async (manager) => {
         const savedGroup = await manager.save(entity);
         await this.shopItemsService.ensureDefaultExtraLifeItem(savedGroup.id, manager);
+
+        if (Array.isArray(body.group.studentAccountIds) && body.group.studentAccountIds.length > 0) {
+          for (const sAccountId of body.group.studentAccountIds) {
+            const studentAccount = await manager.findOne(AccountEntity, {
+              where: { id: sAccountId, role: STUDENT_ROLE_NAME },
+            });
+            if (studentAccount) {
+              const enrollment = manager.create(EnrollmentEntity, {
+                groupId: savedGroup.id,
+                studentAccountId: studentAccount.id,
+              });
+              const savedEnrollment = await manager.save(EnrollmentEntity, enrollment);
+              const studentStats = manager.create(StudentStatsEntity, {
+                enrollmentId: savedEnrollment.id,
+                currency: 0,
+                totalEarned: 0,
+                lives: finalStartingLives,
+              });
+              await manager.save(StudentStatsEntity, studentStats);
+            }
+          }
+        }
+
         return savedGroup;
+      });
+      await this.organizationLogService?.recordForGroup({
+        groupId: saved.id,
+        kind: ORGANIZATION_LOG_KIND_GROUP_CREATED,
+        actorAccountId: lecturerAccountId,
       });
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
@@ -271,7 +368,7 @@ export class GroupsService {
   }
 
   /**
-   * Updates an existing group owned by the lecturer.
+   * Updates an existing group owned by the lecturer or managed by admin/superadmin.
    * Only fields present in the payload are written; unset fields are left untouched.
    */
   async updateGroup(
@@ -286,8 +383,10 @@ export class GroupsService {
         updated: false,
       };
     }
+    const isSuperOrAdmin = await this.isSuperOrAdmin(subject);
     const lecturerAccountId = await this.resolveLecturerAccountId(subject);
-    if (lecturerAccountId === null) {
+
+    if (lecturerAccountId === null && !isSuperOrAdmin) {
       return {
         statusCode: GROUP_API_JSON_STATUS_OK,
         group: GROUP_RESPONSE_GROUP_NOT_AUTHORIZED_ID,
@@ -307,7 +406,9 @@ export class GroupsService {
     }
 
     const existing = await this.groupRepository.findOne({
-      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+      where: isSuperOrAdmin
+        ? { id: internalGroupId }
+        : { id: internalGroupId, teacherAccountId: lecturerAccountId ?? -1 },
     });
     if (!existing) {
       return {
@@ -319,6 +420,10 @@ export class GroupsService {
 
     const payload = body.group ?? {};
     const updates: Partial<GroupEntity> = {};
+
+    if (isSuperOrAdmin && payload.teacherAccountId !== undefined) {
+      updates.teacherAccountId = payload.teacherAccountId;
+    }
 
     if (payload.name !== undefined) {
       const trimmed = String(payload.name ?? '').trim();
@@ -476,8 +581,9 @@ export class GroupsService {
     if (!subject) {
       throw new UnauthorizedException('Missing or invalid session');
     }
+    const isSuperOrAdmin = await this.isSuperOrAdmin(subject);
     const lecturerAccountId = await this.resolveLecturerAccountId(subject);
-    if (lecturerAccountId === null) {
+    if (!isSuperOrAdmin && lecturerAccountId === null) {
       throw new ForbiddenException('Requires lecturer privileges');
     }
 
@@ -489,7 +595,9 @@ export class GroupsService {
     }
 
     const existing = await this.groupRepository.findOne({
-      where: { id: internalGroupId, teacherAccountId: lecturerAccountId },
+      where: isSuperOrAdmin
+        ? { id: internalGroupId }
+        : { id: internalGroupId, teacherAccountId: lecturerAccountId ?? -1 },
     });
     if (!existing) {
       throw new ForbiddenException('Not authorized to manage this group');
@@ -603,8 +711,22 @@ export class GroupsService {
       throw new BadRequestException('Invalid group ID');
     }
 
-    const { organizationId, lecturerAccountId, studentAccountId } =
+    let { organizationId, lecturerAccountId, studentAccountId } =
       await this.resolveOrganizationScopedAccountIds(subject);
+    const isSuperOrAdmin = await this.isSuperOrAdmin(subject);
+    if (organizationId === null && isSuperOrAdmin) {
+      const groupRow = await this.groupRepository.findOne({
+        where: { id: internalGroupId },
+        select: ['teacherAccountId'],
+      });
+      if (groupRow) {
+        const teacherAccount = await this.accountRepository.findOne({
+          where: { id: groupRow.teacherAccountId },
+          select: ['organizationId'],
+        });
+        organizationId = teacherAccount?.organizationId ?? null;
+      }
+    }
     if (organizationId === null) {
       throw new BadRequestException('Group not found');
     }
@@ -619,9 +741,9 @@ export class GroupsService {
       throw new BadRequestException('Group not found');
     }
 
-    const isOwner = Boolean(row.is_owner);
+    const isOwner = Boolean(row.is_owner) || isSuperOrAdmin;
     const isEnrolled = Boolean(row.is_enrolled);
-    if (!isOwner && !isEnrolled) {
+    if (!isOwner && !isEnrolled && !isSuperOrAdmin) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -762,6 +884,7 @@ export class GroupsService {
     if (!subject) {
       return { statusCode: GROUP_API_JSON_STATUS_OK, myGroups: [], otherGroups: [] };
     }
+    const isSuperOrAdmin = await this.isSuperOrAdmin(subject);
     const { organizationId, lecturerAccountId, studentAccountId } =
       await this.resolveOrganizationScopedAccountIds(subject);
     if (organizationId === null) {
@@ -775,7 +898,7 @@ export class GroupsService {
     const otherGroups: UserGroupListItem[] = [];
     for (const row of allGroups) {
       const item = this.mapRawGroupRow(row);
-      if (row.is_owner || row.is_enrolled) {
+      if (isSuperOrAdmin || row.is_owner || row.is_enrolled) {
         myGroups.push(item);
       } else {
         otherGroups.push(item);
@@ -802,6 +925,7 @@ export class GroupsService {
     if (!subject) {
       return empty;
     }
+    const isSuperOrAdmin = await this.isSuperOrAdmin(subject);
     let internalGroupId: number;
     try {
       internalGroupId = toInternalGroupId(publicGroupId);
@@ -822,15 +946,307 @@ export class GroupsService {
     if (!row) {
       return empty;
     }
-    const isOwner = Boolean(row.is_owner);
+    const isOwner = Boolean(row.is_owner) || isSuperOrAdmin;
     const isEnrolled = Boolean(row.is_enrolled);
     return {
       statusCode: GROUP_API_JSON_STATUS_OK,
       group: this.mapRawGroupRow(row),
-      hasAccess: isOwner || isEnrolled,
+      hasAccess: isOwner || isEnrolled || isSuperOrAdmin,
       isOwner,
       isEnrolled,
     };
+  }
+
+  /**
+   * Deletes a group and cascades all associated resources transactionally.
+   */
+  async deleteGroup(
+    req: Request,
+    publicGroupId: number,
+  ): Promise<{ success: boolean; message?: string }> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      throw new UnauthorizedException('Missing or invalid session');
+    }
+    const isSuperOrAdmin = await this.isSuperOrAdmin(subject);
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+
+    const lecturerAccountId = await this.resolveLecturerAccountId(subject);
+    const existing = await this.groupRepository.findOne({
+      where: isSuperOrAdmin
+        ? { id: internalGroupId }
+        : { id: internalGroupId, teacherAccountId: lecturerAccountId ?? -1 },
+    });
+    if (!existing) {
+      throw new ForbiddenException('Not authorized to delete this group');
+    }
+
+    await this.groupRepository.manager.transaction(async (manager) => {
+      // 1. Templates referencing this group
+      await manager.query('UPDATE education.group_templates SET base_group_id = NULL WHERE base_group_id = $1', [internalGroupId]);
+      // 2. Activity backlog & backlog
+      await manager.query('DELETE FROM gamification.activity_backlog WHERE group_id = $1', [internalGroupId]);
+      await manager.query('DELETE FROM gamification.backlog WHERE group_id = $1', [internalGroupId]);
+      // 3. Posts
+      await manager.query('DELETE FROM education.posts WHERE group_id = $1', [internalGroupId]);
+      // 4. Enrollments & stats & earned
+      const enrollments = await manager.find(EnrollmentEntity, { where: { groupId: internalGroupId } });
+      if (enrollments.length > 0) {
+        const enrollmentIds = enrollments.map((e) => e.id);
+        await manager.query('DELETE FROM gamification.earned_items WHERE enrollment_id = ANY($1)', [enrollmentIds]);
+        await manager.query('DELETE FROM gamification.earned_badges WHERE enrollment_id = ANY($1)', [enrollmentIds]);
+        await manager.query('DELETE FROM gamification.student_stats WHERE enrollment_id = ANY($1)', [enrollmentIds]);
+        await manager.delete(EnrollmentEntity, { groupId: internalGroupId });
+      }
+      // 5. Enrollment codes
+      await manager.delete(EnrollmentCodeEntity, { groupId: internalGroupId });
+      // 6. Activities & stages
+      await manager.query('DELETE FROM education.activities WHERE stage_id IN (SELECT id FROM education.stages WHERE group_id = $1)', [internalGroupId]);
+      await manager.query('DELETE FROM education.stages WHERE group_id = $1', [internalGroupId]);
+      // 7. Shop promotions, listings & items
+      const items = await manager.find(ItemEntity, { where: { groupId: internalGroupId } });
+      if (items.length > 0) {
+        const itemIds = items.map((i) => i.id);
+        await manager.query('DELETE FROM gamification.shop_listing_badge_promotions WHERE shop_listing_id IN (SELECT id FROM gamification.shop_listings WHERE item_id = ANY($1))', [itemIds]);
+        await manager.query('DELETE FROM gamification.shop_listing_rank_promotions WHERE shop_listing_id IN (SELECT id FROM gamification.shop_listings WHERE item_id = ANY($1))', [itemIds]);
+        await manager.query('DELETE FROM gamification.shop_listings WHERE item_id = ANY($1)', [itemIds]);
+        await manager.delete(ItemEntity, { groupId: internalGroupId });
+      }
+      // 8. Categories, badges, ranks
+      await manager.delete(ItemCategoryEntity, { groupId: internalGroupId });
+      await manager.delete(BadgeEntity, { groupId: internalGroupId });
+      await manager.delete(RankEntity, { groupId: internalGroupId });
+      // 9. Group itself
+      await manager.delete(GroupEntity, { id: internalGroupId });
+    });
+
+    return { success: true, message: 'Grupa została pomyślnie usunięta.' };
+  }
+
+  /**
+   * Returns eligible lecturers and students in caller's organization.
+   */
+  async getOrganizationCandidates(req: Request, targetOrgId?: number): Promise<{
+    lecturers: Array<{ accountId: number; userId: number; name: string; surname: string; nickname: string; email: string }>;
+    students: Array<{ accountId: number; userId: number; name: string; surname: string; nickname: string; email: string }>;
+  }> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      return { lecturers: [], students: [] };
+    }
+    const orgId = targetOrgId ?? subject.organizationId;
+    if (orgId == null) {
+      return { lecturers: [], students: [] };
+    }
+    const rawUsers = await this.accountRepository
+      .createQueryBuilder('account')
+      .innerJoin(UserEntity, 'user', 'user.id = account.user_id')
+      .where('account.organization_id = :orgId', { orgId })
+      .andWhere('account.role IN (:...roles)', { roles: [LECTURER_ROLE_NAME, STUDENT_ROLE_NAME] })
+      .select([
+        'account.id AS account_id',
+        'account.role AS role',
+        'user.id AS user_id',
+        'user.name AS name',
+        'user.surname AS surname',
+        'user.nickname AS nickname',
+        'user.email AS email',
+      ])
+      .orderBy('user.surname', 'ASC')
+      .addOrderBy('user.name', 'ASC')
+      .getRawMany();
+
+    const lecturers: Array<{ accountId: number; userId: number; name: string; surname: string; nickname: string; email: string }> = [];
+    const students: Array<{ accountId: number; userId: number; name: string; surname: string; nickname: string; email: string }> = [];
+
+    for (const row of rawUsers) {
+      const item = {
+        accountId: Number(row.account_id),
+        userId: Number(row.user_id),
+        name: row.name ?? '',
+        surname: row.surname ?? '',
+        nickname: row.nickname ?? '',
+        email: row.email ?? '',
+      };
+      if (row.role === LECTURER_ROLE_NAME) {
+        lecturers.push(item);
+      } else if (row.role === STUDENT_ROLE_NAME) {
+        students.push(item);
+      }
+    }
+    return { lecturers, students };
+  }
+
+  /**
+   * Returns members management data for a group: current lecturer, enrolled students,
+   * plus available candidates to assign.
+   */
+  async getGroupMembersManage(req: Request, publicGroupId: number) {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      throw new UnauthorizedException('Missing or invalid session');
+    }
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+    const group = await this.groupRepository.findOne({ where: { id: internalGroupId } });
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    const isSuperOrAdmin = await this.isSuperOrAdmin(subject);
+    const lecturerAccountId = await this.resolveLecturerAccountId(subject);
+    if (!isSuperOrAdmin && group.teacherAccountId !== lecturerAccountId) {
+      throw new ForbiddenException('Not authorized');
+    }
+
+    // Resolve group's organization ID from its teacher account if caller is superadmin
+    let orgId = subject.organizationId;
+    if (orgId === null) {
+      const teacherAccount = await this.accountRepository.findOne({
+        where: { id: group.teacherAccountId },
+        select: ['organizationId'],
+      });
+      orgId = teacherAccount?.organizationId ?? null;
+    }
+
+    const candidates = await this.getOrganizationCandidates(req, orgId ?? undefined);
+
+    // Current lecturer
+    const currentLecturer =
+      candidates.lecturers.find((l) => l.accountId === group.teacherAccountId) ?? null;
+
+    // Current enrolled students
+    const enrollments = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .innerJoin(AccountEntity, 'account', 'account.id = enrollment.student_account_id')
+      .innerJoin(UserEntity, 'user', 'user.id = account.user_id')
+      .leftJoin(StudentStatsEntity, 'stats', 'stats.enrollment_id = enrollment.id')
+      .where('enrollment.group_id = :groupId', { groupId: internalGroupId })
+      .select([
+        'account.id AS account_id',
+        'user.id AS user_id',
+        'user.name AS name',
+        'user.surname AS surname',
+        'user.nickname AS nickname',
+        'user.email AS email',
+        'stats.currency AS currency',
+        'stats.lives AS lives',
+      ])
+      .orderBy('user.surname', 'ASC')
+      .getRawMany();
+
+    const enrolledStudents = enrollments.map((r) => ({
+      accountId: Number(r.account_id),
+      userId: Number(r.user_id),
+      name: r.name ?? '',
+      surname: r.surname ?? '',
+      nickname: r.nickname ?? '',
+      email: r.email ?? '',
+      currency: Number(r.currency ?? 0),
+      lives: r.lives !== null && r.lives !== undefined ? Number(r.lives) : null,
+    }));
+
+    const enrolledAccountIds = new Set(enrolledStudents.map((s) => s.accountId));
+    const availableStudents = candidates.students.filter((s) => !enrolledAccountIds.has(s.accountId));
+
+    return {
+      group: {
+        id: group.id + GROUP_RESPONSE_GROUP_ID_OFFSET,
+        name: group.name,
+        subjectName: group.subjectName ?? '',
+        description: group.description ?? '',
+        teacherAccountId: group.teacherAccountId,
+      },
+      lecturer: currentLecturer,
+      students: enrolledStudents,
+      availableLecturers: candidates.lecturers,
+      availableStudents,
+    };
+  }
+
+  /**
+   * Updates lecturer and/or student enrollments for a group.
+   */
+  async updateGroupMembersManage(
+    req: Request,
+    publicGroupId: number,
+    dto: UpdateGroupMembersDto,
+  ): Promise<{ success: boolean; message?: string }> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req);
+    if (!subject) {
+      throw new UnauthorizedException('Missing or invalid session');
+    }
+    const isSuperOrAdmin = await this.isSuperOrAdmin(subject);
+    let internalGroupId: number;
+    try {
+      internalGroupId = toInternalGroupId(publicGroupId);
+    } catch {
+      throw new BadRequestException('Invalid group ID');
+    }
+    const group = await this.groupRepository.findOne({ where: { id: internalGroupId } });
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+    const lecturerAccountId = await this.resolveLecturerAccountId(subject);
+    if (!isSuperOrAdmin && group.teacherAccountId !== lecturerAccountId) {
+      throw new ForbiddenException('Not authorized');
+    }
+
+    await this.groupRepository.manager.transaction(async (manager) => {
+      // 1. Change lecturer if requested
+      if (dto.teacherAccountId !== undefined && dto.teacherAccountId !== group.teacherAccountId) {
+        await manager.update(GroupEntity, { id: internalGroupId }, { teacherAccountId: dto.teacherAccountId });
+      }
+
+      // 2. Add students
+      if (Array.isArray(dto.addStudentAccountIds) && dto.addStudentAccountIds.length > 0) {
+        for (const studentAccountId of dto.addStudentAccountIds) {
+          const exists = await manager.findOne(EnrollmentEntity, {
+            where: { groupId: internalGroupId, studentAccountId },
+          });
+          if (!exists) {
+            const enrollment = manager.create(EnrollmentEntity, {
+              groupId: internalGroupId,
+              studentAccountId,
+            });
+            const savedEnrollment = await manager.save(EnrollmentEntity, enrollment);
+            const studentStats = manager.create(StudentStatsEntity, {
+              enrollmentId: savedEnrollment.id,
+              currency: 0,
+              totalEarned: 0,
+              lives: group.startingLives ?? group.lives ?? 3,
+            });
+            await manager.save(StudentStatsEntity, studentStats);
+          }
+        }
+      }
+
+      // 3. Remove students
+      if (Array.isArray(dto.removeStudentAccountIds) && dto.removeStudentAccountIds.length > 0) {
+        for (const studentAccountId of dto.removeStudentAccountIds) {
+          const enrollment = await manager.findOne(EnrollmentEntity, {
+            where: { groupId: internalGroupId, studentAccountId },
+          });
+          if (enrollment) {
+            await manager.query('DELETE FROM gamification.earned_items WHERE enrollment_id = $1', [enrollment.id]);
+            await manager.query('DELETE FROM gamification.earned_badges WHERE enrollment_id = $1', [enrollment.id]);
+            await manager.query('DELETE FROM gamification.student_stats WHERE enrollment_id = $1', [enrollment.id]);
+            await manager.delete(EnrollmentEntity, { id: enrollment.id });
+          }
+        }
+      }
+    });
+
+    return { success: true, message: 'Zaktualizowano członków grupy.' };
   }
 
   private mapRawGroupRow(row: {

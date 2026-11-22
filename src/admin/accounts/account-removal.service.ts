@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
@@ -14,6 +15,11 @@ import {
   ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE,
 } from '../../constants/account-deletion-constants';
 import { ADMINISTRATOR_ROLE_NAME } from '../../constants/role-name-constants';
+import {
+  ORGANIZATION_LOG_CATEGORY_ORGANIZATION,
+  ORGANIZATION_LOG_KIND_ROLE_REVOKED,
+} from '../../constants/organization-log-constants';
+import { OrganizationLogService } from '../../organization-log/organization-log.service';
 import { AccountEntity } from '../../database/entities/account.entity';
 import { OrganizationEntity } from '../../database/entities/organization.entity';
 import { SessionEntity } from '../../database/entities/session.entity';
@@ -41,7 +47,8 @@ export class AccountRemovalService {
     @InjectRepository(OrganizationEntity)
     private readonly organizationRepository: Repository<OrganizationEntity>,
     @InjectRepository(AccountEntity)
-    private readonly accountRepository: Repository<AccountEntity>) {}
+    private readonly accountRepository: Repository<AccountEntity>,
+    @Optional() private readonly organizationLogService?: OrganizationLogService) {}
 
   async deleteOrganizationAccount(
     req: Request,
@@ -82,6 +89,19 @@ export class AccountRemovalService {
     try {
       await this.purgeAccountData(queryRunner, accountId);
       await queryRunner.manager.delete(AccountEntity, { id: accountId });
+      const removedUser = await queryRunner.manager.findOne(UserEntity, {
+        where: { id: targetAccount.userId },
+        select: ['name', 'surname'],
+      });
+      await this.organizationLogService?.record({
+        organizationId,
+        category: ORGANIZATION_LOG_CATEGORY_ORGANIZATION,
+        kind: ORGANIZATION_LOG_KIND_ROLE_REVOKED,
+        actorUserId: actorUserId ?? null,
+        subjectAccountId: accountId,
+        subjectName: removedUser ? `${removedUser.name} ${removedUser.surname}`.trim() : '',
+        roleName: targetAccount.role,
+      }, queryRunner.manager);
       const userRemoved = await this.removeUserIfOrphaned(queryRunner, targetAccount.userId);
       await queryRunner.commitTransaction();
       this.logger.log(
@@ -110,17 +130,27 @@ export class AccountRemovalService {
     }
   }
 
+  private actingAsSuper(actor: AccountDeletionActor): boolean {
+    if (actor.activeRole === undefined) {
+      return actor.isSuperAdmin;
+    }
+    return actor.isSuperAdmin && actor.activeRole === ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE;
+  }
+
   private async assertDeletionAllowed(
     actor: AccountDeletionActor,
     targetAccount: AccountEntity): Promise<void> {
     if (targetAccount.role === ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE) {
       throw new ForbiddenException('Super administrator accounts cannot be deleted');
     }
-    const targetUserRoles = await this.userRolesService.listRolesForUser(targetAccount.userId);
-    if (targetUserRoles.includes(ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE)) {
-      throw new ForbiddenException('Users with a super administrator role cannot be deleted');
+    const isSelf = targetAccount.userId === actor.userId;
+    if (!isSelf) {
+      const targetUserRoles = await this.userRolesService.listRolesForUser(targetAccount.userId);
+      if (targetUserRoles.includes(ACCOUNT_DELETION_SUPER_FORBIDDEN_ACCOUNT_ROLE)) {
+        throw new ForbiddenException('Users with a super administrator role cannot be deleted');
+      }
     }
-    if (actor.isSuperAdmin) {
+    if (this.actingAsSuper(actor)) {
       return;
     }
     if (targetAccount.role === ADMINISTRATOR_ROLE_NAME) {

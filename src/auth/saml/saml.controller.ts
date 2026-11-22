@@ -421,10 +421,7 @@ export class SamlController {
 
   private async handleSloCallback(req: Request, res: Response): Promise<void> {
     const storedRedirect = req.cookies?.[MAQ_LOGOUT_RETURN_COOKIE_NAME];
-    const postLogoutRedirect =
-      typeof storedRedirect === 'string' && storedRedirect.startsWith('http')
-        ? storedRedirect
-        : this.samlConfig.getLogoutUrl();
+    const postLogoutRedirect = this.samlConfig.resolvePostLogoutRedirect(storedRedirect);
     const logoutReturnClearOptions = buildClearSamlCookieOptions(req, resolvePendingOrgCookieSameSite(req));
     res.clearCookie(MAQ_LOGOUT_RETURN_COOKIE_NAME, logoutReturnClearOptions);
     await this.clearBrowserAuthCookiesAndRevokeSession(req, res);
@@ -440,5 +437,6 @@ export class SamlController {
     res.clearCookie(LEGACY_MAQ_ACTIVE_ROLE_COOKIE_NAME, sessionClearOptions);
     res.clearCookie(MAQ_SESSION_COOKIE_NAME, sessionClearOptions);
     res.clearCookie(SAML_PENDING_ORG_COOKIE_NAME, pendingOrgClearOptions);
+    res.clearCookie('maq_remember_me', sessionClearOptions);
   }
 }

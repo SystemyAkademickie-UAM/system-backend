@@ -57,13 +57,52 @@ describe('MaintenanceModeGuard', () => {
     expect(result).toBe(true);
   });
 
-  it('allows system probe and auth requests even during active maintenance', async () => {
+  it('allows system probe, auth, login, logout, and public onboarding routes during active maintenance', async () => {
     (maintenanceService.isMaintenanceActive as jest.Mock).mockResolvedValue(true);
 
     expect(await guard.canActivate(createMockContext('/api/system/status'))).toBe(true);
     expect(await guard.canActivate(createMockContext('/api/auth/saml/login'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/auth/saml/acs'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/login/me'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/login/organizations?loginMethod=email'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/login/magic-link/request'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/login/magic-link/verify'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/login/registration-status'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/login/profile'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/login/accept-eula'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/login/context'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/login/active-role'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/logout'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/logout'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/profile/avatars'))).toBe(true);
     expect(await guard.canActivate(createMockContext('/api/docs'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/docs-json'))).toBe(true);
     expect(await guard.canActivate(createMockContext('/system/status'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/login/me'))).toBe(true);
+  });
+
+  it('allows authenticated non-superadmin users to reach login/session and logout endpoints during maintenance', async () => {
+    (maintenanceService.isMaintenanceActive as jest.Mock).mockResolvedValue(true);
+    (sessionService.resolveSubjectFromRequest as jest.Mock).mockResolvedValue({ userId: 42 });
+    (userRolesService.userHasRole as jest.Mock).mockResolvedValue(false);
+
+    expect(await guard.canActivate(createMockContext('/api/login/me'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/login/registration-status'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/login/context'))).toBe(true);
+    expect(await guard.canActivate(createMockContext('/api/logout'))).toBe(true);
+  });
+
+  it('rejects prefix-lookalike and path-traversal routes even during bypass checks', async () => {
+    (maintenanceService.isMaintenanceActive as jest.Mock).mockResolvedValue(true);
+    (sessionService.resolveSubjectFromRequest as jest.Mock).mockResolvedValue({ userId: 42 });
+    (userRolesService.userHasRole as jest.Mock).mockResolvedValue(false);
+
+    await expect(guard.canActivate(createMockContext('/api/profile'))).rejects.toThrow(ServiceUnavailableException);
+    await expect(guard.canActivate(createMockContext('/api/profile/settings'))).rejects.toThrow(ServiceUnavailableException);
+    await expect(guard.canActivate(createMockContext('/api/logs'))).rejects.toThrow(ServiceUnavailableException);
+    await expect(guard.canActivate(createMockContext('/api/login-fake'))).rejects.toThrow(ServiceUnavailableException);
+    await expect(guard.canActivate(createMockContext('/api/system-secret'))).rejects.toThrow(ServiceUnavailableException);
+    await expect(guard.canActivate(createMockContext('/api/login/../groups'))).rejects.toThrow(ServiceUnavailableException);
   });
 
   it('allows authenticated super-admins to bypass maintenance break', async () => {

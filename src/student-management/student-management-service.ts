@@ -1,11 +1,13 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, Optional, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
 import { SessionService } from '../auth/session/session.service';
 import { BacklogService } from '../backlog/backlog-service';
-import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { ORGANIZATION_LOG_KIND_REMOVED_FROM_GROUP } from '../constants/organization-log-constants';
+import { ADMINISTRATOR_ROLE_NAME, LECTURER_ROLE_NAME, STUDENT_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
+import { OrganizationLogService } from '../organization-log/organization-log.service';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { StudentStatsEntity } from '../database/entities/student-stats.entity';
@@ -70,7 +72,8 @@ export class StudentManagementService {
     @InjectRepository(GroupEntity)
     private readonly groupRepository: Repository<GroupEntity>,
     private readonly ranksService: RanksService,
-    private readonly groupAuthorizationService: GroupAuthorizationService) {}
+    private readonly groupAuthorizationService: GroupAuthorizationService,
+    @Optional() private readonly organizationLogService?: OrganizationLogService) {}
 
   /**
    * GET /groups/:groupId/students
@@ -120,16 +123,25 @@ export class StudentManagementService {
     }
     await this.assertGroupExists(groupId);
 
-    let authorized = false;
-    const lecturerAccountId =
-      subject.organizationId != null
-        ? await this.userRolesService.findAccountIdForRoleInOrganization(
-            subject.userId,
-            subject.organizationId,
-            LECTURER_ROLE_NAME)
-        : await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
-    if (lecturerAccountId !== null) {
-      authorized = await this.groupRepository.exist({ where: { id: groupId, teacherAccountId: lecturerAccountId } });
+    let authorized = await this.userRolesService.userHasRole(subject.userId, SUPER_ROLE_NAME);
+    if (!authorized && subject.organizationId != null) {
+      authorized = await this.userRolesService.userHasRoleInOrganization(
+        subject.userId,
+        subject.organizationId,
+        ADMINISTRATOR_ROLE_NAME,
+      );
+    }
+    if (!authorized) {
+      const lecturerAccountId =
+        subject.organizationId != null
+          ? await this.userRolesService.findAccountIdForRoleInOrganization(
+              subject.userId,
+              subject.organizationId,
+              LECTURER_ROLE_NAME)
+          : await this.userRolesService.findAccountIdForRole(subject.userId, LECTURER_ROLE_NAME);
+      if (lecturerAccountId !== null) {
+        authorized = await this.groupRepository.exist({ where: { id: groupId, teacherAccountId: lecturerAccountId } });
+      }
     }
     if (!authorized) {
       const studentAccountId =
@@ -315,6 +327,11 @@ export class StudentManagementService {
         [enrollment.id]);
 
       await queryRunner.commitTransaction();
+      await this.organizationLogService?.recordForGroup({
+        groupId,
+        kind: ORGANIZATION_LOG_KIND_REMOVED_FROM_GROUP,
+        actorAccountId: accountId,
+      });
       this.logger.log(`Student (account=${accountId}) removed from group ${groupId}`);
       return { removed: true };
     } catch (err: unknown) {

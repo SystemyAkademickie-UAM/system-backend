@@ -24,6 +24,8 @@ if ($error !== '') {
   <thead>
     <tr>
       <th>Username</th>
+      <th>Given name</th>
+      <th>Surname</th>
       <th>Display name</th>
       <th>Mail</th>
       <th>Role</th>
@@ -32,7 +34,7 @@ if ($error !== '') {
   </thead>
   <tbody>
     <?php if (count($users) === 0) { ?>
-      <tr><td colspan="5">No users yet.</td></tr>
+      <tr><td colspan="7">No users yet.</td></tr>
     <?php } ?>
     <?php foreach ($users as $user) {
         $username = (string) ($user['username'] ?? '');
@@ -40,6 +42,8 @@ if ($error !== '') {
         ?>
       <tr>
         <td><?= maq_idp_h($username) ?></td>
+        <td><?= maq_idp_h((string) ($user['givenName'] ?? '')) ?></td>
+        <td><?= maq_idp_h((string) ($user['sn'] ?? '')) ?></td>
         <td><?= maq_idp_h((string) ($user['displayName'] ?? '')) ?></td>
         <td><?= maq_idp_h((string) ($user['mail'] ?? '')) ?></td>
         <td><?= maq_idp_h($role) ?></td>

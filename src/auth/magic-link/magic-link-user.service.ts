@@ -122,8 +122,14 @@ export class MagicLinkUserService {
         loginMethods: [ORGANIZATION_LOGIN_METHOD_EMAIL, ORGANIZATION_LOGIN_METHOD_SAML],
       })
       .orderBy('account.organization_id', 'ASC')
-      .getRawMany<{ organizationId: number }>();
-    const organizationIds = rows.map((row) => row.organizationId);
+      .getRawMany<{ organizationId?: number | string; organizationid?: number | string }>();
+    const organizationIds: number[] = [];
+    for (const row of rows) {
+      const parsed = Number(row.organizationId ?? row.organizationid);
+      if (Number.isInteger(parsed) && parsed > 0) {
+        organizationIds.push(parsed);
+      }
+    }
     return [...new Set(organizationIds)];
   }
 

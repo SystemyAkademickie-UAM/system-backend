@@ -17,4 +17,8 @@ export class ExportProductionLogsDto {
   @IsOptional()
   @IsString()
   auth?: string;
+
+  @IsOptional()
+  @IsString()
+  organizationId?: string;
 }

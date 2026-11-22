@@ -35,7 +35,8 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/login/organizations?loginMethod=saml|email` — institution picker from `auth.organizations` (one row per tenant)
 - `POST /api/login/magic-link/request` — body `{ "email" }`; organization resolved from provisioned account (SMTP required; 404 if not registered)
 - `POST /api/login/magic-link/verify` — consume magic link token → `{ "session": "<plaintext>" }` + `maq_session` cookie
-- `GET /api/login/me` — session check from `maq_session` cookie (returns user profile and active role)
+- `GET /api/login/me` — session check from `maq_session` cookie (profile, organization, role, `selectionRequired`, `memberships`)
+- `POST /api/login/context` — body `{ "organizationId", "role" }`; confirms the pair, stores it as the last choice, returns the same shape as `GET /api/login/me`
 - `GET /api/login/registration-status` — registration progress during `/login` wizard (includes `profileSubmitted`)
 - `POST /api/login/profile` — save nickname + avatar during `/login` wizard (sets `profileSubmitted`)
 - `POST /api/login/accept-eula` — accept EULA and complete registration
@@ -78,10 +79,37 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `GET /api/admin/logs` — super only: list calendar dates that have production logs
 - `POST /api/admin/logs/export` — super only: one day of logs as ECDH+AES-GCM ciphertext (not plaintext)
 - `POST /api/client-logs` — authenticated browser error/warn line into the same daily file
-- `GET /api/admin/organizations/:organizationId/accounts` — list accounts in an organization (super or org administrator)
-- `DELETE /api/admin/organizations/:organizationId/accounts/:accountId` — org administrator or super: remove organization account (see [docs/api.md](./docs/api.md))
-- `POST /api/admin/broadcasts`, `GET /api/admin/broadcasts`, `DELETE /api/admin/broadcasts/:id` — super only: manage platform-wide announcements
+- `GET /api/admin/organizations` — super only: `id`, `name`, `isActive`, `domain`, `loginMethod`, `accountLimit`
+- `POST /api/admin/organizations` — super only: create requires `name`, `loginMethod` (`saml` or `email`), `accountLimit` (1–100000), `domain`, `representative` (`fullName`, `email`, optional `phone`), `address` (`town`, `street`), and for `saml` either `metadataUrl` or `entityId` + `ssoLoginUrl` + `certificatePem`. Those fields are written to `auth.organizations`. `PUT` can change `accountLimit`
+- `POST /api/admin/organizations/bulk` — super only: body `{ "ids": [11, 12] }` (1–50). Each item is the full stored organization, not a name/domain sample
+- `GET /api/admin/organizations/administrators` — super only: every administrator of an active organization (`accountId`, `userId`, `organizationId`, `organizationName`, `email`, `nickname`, `name`, `surname`)
+- `GET /api/admin/organizations/:organizationId/administrators` — super only: administrators of one organization
+- `GET /api/admin/organizations/:organizationId/administrators/candidates` — super only: people in that organization who are not administrators yet
+- `POST /api/admin/organizations/:organizationId/administrators` — super only: body `{ "userId" }`; grants `administrator` to a person already in the organization. The caller cannot grant it to themselves
+- `POST /api/admin/organizations/:organizationId/administrators/email` — super only, email organizations: body `{ "email", "name", "surname" }` creates or reuses the person and grants `administrator`, including when the organization already has other accounts. Magic-link login can find them. SAML organizations grant from an existing account instead
+- `DELETE /api/admin/organizations/:organizationId/administrators/:accountId` — super only: revoke that administrator account. The caller cannot revoke their own role
+- `GET /api/admin/organizations/:organizationId/accounts` — every account in that organization (super, or the organization administrator whose session is that organization)
+- `GET /api/admin/organizations/:organizationId/accounts/page?afterAccountId=&limit=` — next page by account id (default and maximum 100)
+- `GET /api/admin/organizations/:organizationId/accounts/:accountId` — one account in that organization
+- `POST /api/admin/organizations/:organizationId/accounts` — add one account (`email`, `name`, `surname`, `role`, optional `nickname`). An existing person is reused and their stored name is left unchanged
+- `PATCH /api/admin/organizations/:organizationId/accounts/:accountId` — change email, name, surname, nickname, or role
+- `POST /api/admin/organizations/:organizationId/accounts/import` — body `{ "users": [ ...same fields... ] }`, up to 500 rows
+- `GET /api/admin/organizations/:organizationId/accounts/export` — CSV of that organization's accounts
+- `GET /api/admin/organization-log` — organization administrator log for the session organization (`category=all|organization|group`)
+- `POST /api/admin/organizations/:organizationId/accounts/:accountId/magic-link` — email a magic login link when the organization login method is `email`
+- `DELETE /api/admin/organizations/:organizationId/accounts/:accountId` — remove that organization's account (see [docs/api.md](./docs/api.md))
+- `POST /api/admin/broadcasts`, `GET /api/admin/broadcasts`, `GET /api/admin/broadcasts/:id`, `PUT /api/admin/broadcasts/:id`, `PATCH /api/admin/broadcasts/:id`, `DELETE /api/admin/broadcasts/:id` — super only: manage platform-wide announcements
 - `GET /api/admin/maintenance`, `PUT /api/admin/maintenance` — super only: manage global technical break / maintenance mode
+- `POST /api/admin/patch-notes`, `GET /api/admin/patch-notes`, `DELETE /api/admin/patch-notes/:id` — super only: upload, list, and delete patch note PDF documents
+- `GET /api/patch-notes`, `GET /api/patch-notes/latest`, `GET /api/patch-notes/latest/file`, `GET /api/patch-notes/:id/file` — public/user access to patch note PDF history and files
+- `GET /api/admin/documents`, `GET /api/admin/documents/:key`, `GET /api/admin/documents/:key/file`, `PUT /api/admin/documents/:key`, `POST /api/admin/documents/:key`, `DELETE /api/admin/documents/:key` — super only: inspect, upload/replace, and delete application PDF documents (`termsOfUse`, `privacyPolicy`, `documentation`)
+- `GET /api/documents`, `GET /api/documents/:key`, `GET /api/documents/:key/file` — public/user access to application PDF documents
+- `POST /api/admin/faq`, `GET /api/admin/faq`, `GET /api/admin/faq/:id`, `PUT /api/admin/faq`, `PUT /api/admin/faq/:id`, `PATCH /api/admin/faq/reorder`, `DELETE /api/admin/faq/:id` — super only: manage FAQ knowledge base entries (including whole-page edit/save)
+- `GET /api/admin/backup/schedule`, `PUT /api/admin/backup/schedule` — super only: read and update the automatic backup schedule
+- `GET /api/admin/backup/export` — super only: download a server-key backup
+- `POST /api/admin/backup/export` — super only: download a backup encrypted with the password in the JSON body
+- `POST /api/admin/backup/import` — super only: restore a `.enc` backup (`password` form field for a password file)
+- `GET /api/faq`, `GET /api/faq/:id` — public/user access to published FAQ entries (supports `?category=` and `?grouped=1`)
 - `GET /api/broadcasts/me`, `POST /api/broadcasts/:id/read` — authenticated: retrieve active announcements and acknowledge receipts
 - `GET /api/system/status`, `GET /api/system/maintenance` — public probe: operational status and maintenance mode check
 - Local IdP: [docs/saml-local-idp.md](./docs/saml-local-idp.md) (`npm run provision:dev-university` or `npm run idp:up`, 7 test users)

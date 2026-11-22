@@ -69,11 +69,31 @@ export class SessionService {
    * the old resolveSubjectStrong/Soft/StrongOrSoft split.
    */
   async resolveSubjectFromRequest(req: Request, bodyAuth?: string): Promise<SessionSubject | null> {
+    const cached = (req as unknown as { _maqCachedSessionSubject?: SessionSubject | null })._maqCachedSessionSubject;
+    if (cached !== undefined && !bodyAuth) {
+      return cached;
+    }
     const token = this.extractSessionToken(req, bodyAuth);
     if (token === '') {
+      if (!bodyAuth) {
+        (req as unknown as { _maqCachedSessionSubject?: SessionSubject | null })._maqCachedSessionSubject = null;
+      }
       return null;
     }
-    return this.resolveSubject(token);
+    const subject = await this.resolveSubject(token);
+    if (!bodyAuth) {
+      (req as unknown as { _maqCachedSessionSubject?: SessionSubject | null })._maqCachedSessionSubject = subject;
+    }
+    return subject;
+  }
+
+  /**
+   * Drops the subject cached on this request.
+   * Login context and role changes write a new session row and then read it again
+   * in the same request. Without this, that second read would still see the old organization and role.
+   */
+  forgetRequestSubject(req: Request): void {
+    delete (req as unknown as { _maqCachedSessionSubject?: SessionSubject | null })._maqCachedSessionSubject;
   }
 
   /**

@@ -10,7 +10,7 @@ import type { Request } from 'express';
 import { QueryFailedError, Repository } from 'typeorm';
 
 import { SessionService, type SessionSubject } from '../auth/session/session.service';
-import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { ADMINISTRATOR_ROLE_NAME, LECTURER_ROLE_NAME, STUDENT_ROLE_NAME, SUPER_ROLE_NAME } from '../constants/role-name-constants';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
 import { GroupEntity } from '../database/entities/group.entity';
 import { ItemCategoryEntity } from '../database/entities/item-category.entity';
@@ -134,8 +134,26 @@ export class ItemCategoriesService {
     }
   }
 
+  private async isSuperOrAdmin(subject: { userId: number; organizationId: number | null }): Promise<boolean> {
+    const isSuper = await this.userRolesService.userHasRole(subject.userId, SUPER_ROLE_NAME);
+    if (isSuper) {
+      return true;
+    }
+    if (subject.organizationId != null) {
+      return this.userRolesService.userHasRoleInOrganization(
+        subject.userId,
+        subject.organizationId,
+        ADMINISTRATOR_ROLE_NAME,
+      );
+    }
+    return this.userRolesService.userHasRole(subject.userId, ADMINISTRATOR_ROLE_NAME);
+  }
+
   private async assertLecturerOwnsGroup(req: Request, groupId: number, queryAuth?: string): Promise<void> {
     const subject = await this.resolveSubject(req, queryAuth);
+    if (await this.isSuperOrAdmin(subject)) {
+      return;
+    }
     const isLecturer = await this.userRolesService.userHasRole(subject.userId, LECTURER_ROLE_NAME);
     if (!isLecturer) {
       throw new ForbiddenException('Not authorized');
@@ -157,6 +175,9 @@ export class ItemCategoriesService {
 
   private async assertCanReadGroupShop(req: Request, groupId: number, queryAuth?: string): Promise<void> {
     const subject = await this.resolveSubject(req, queryAuth);
+    if (await this.isSuperOrAdmin(subject)) {
+      return;
+    }
     await this.assertGroupExists(groupId);
     const group = await this.groupRepository.findOne({
       where: { id: groupId },

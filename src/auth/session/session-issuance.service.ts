@@ -87,4 +87,20 @@ export class SessionIssuanceService {
     const sessionHmac = this.sessionHmacService.digestPlainSessionHex(normalized);
     await this.sessionRepository.update({ sessionHmac }, { activeRole });
   }
+
+  /**
+   * Sets both the organization and the role for an existing session.
+   */
+  async setLoginContext(
+    plaintextSession: string,
+    organizationId: number | null,
+    activeRole: string | null,
+  ): Promise<void> {
+    const normalized = plaintextSession.trim();
+    if (normalized === '') {
+      return;
+    }
+    const sessionHmac = this.sessionHmacService.digestPlainSessionHex(normalized);
+    await this.sessionRepository.update({ sessionHmac }, { organizationId, activeRole });
+  }
 }

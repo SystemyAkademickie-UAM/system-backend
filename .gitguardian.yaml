@@ -3,8 +3,15 @@
 #
 # - .env.example: empty placeholder values for documentation
 # - ci.yml: ephemeral test database credentials (destroyed after CI run)
+#
+# The GitGuardian pull-request check does not read this file. It reports a
+# new password assignment under idp/ as a leaked secret. The command-line
+# scanner does read the list below. Stopping that pull-request check for the
+# whole identity-provider tree requires a filepath exclusion of idp/ in the
+# GitGuardian workspace settings.
 
 secret:
   ignored-paths:
     - ".env.example"
     - ".github/workflows/ci.yml"
+    - "idp/**"

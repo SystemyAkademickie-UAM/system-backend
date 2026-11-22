@@ -24,3 +24,60 @@ export const BACKUP_MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 /** pg_restore exit 1 is warnings-only; treat as success. */
 export const BACKUP_PG_RESTORE_WARNING_EXIT_CODE = 1;
+
+/** Environment variable for automated backup directory. */
+export const BACKUP_STORAGE_DIR_ENV = 'BACKUP_STORAGE_DIR';
+
+/** Default directory for automated backups on the host/container. */
+export const BACKUP_DEFAULT_STORAGE_DIR = './storage/backups';
+
+/** Environment variable for automated backup retention in days. */
+export const BACKUP_RETENTION_DAYS_ENV = 'BACKUP_RETENTION_DAYS';
+
+/** Default retention period for automated backups (14 days). */
+export const BACKUP_DEFAULT_RETENTION_DAYS = 14;
+
+/** Environment variable for threshold days without manual backup before warning. */
+export const BACKUP_MANUAL_WARNING_DAYS_ENV = 'BACKUP_MANUAL_WARNING_DAYS';
+
+/** Default days threshold without manual backup before warning (7 days). */
+export const BACKUP_DEFAULT_MANUAL_WARNING_DAYS = 7;
+
+/** Prefix for automated backup files. */
+export const BACKUP_AUTO_FILE_PREFIX = 'backup-auto-';
+
+/** Metadata filename stored in the backup directory. */
+export const BACKUP_METADATA_FILENAME = 'backup-metadata.json';
+
+/** Regular expression matching automated backup filenames. */
+export const BACKUP_AUTO_FILENAME_REGEX =
+  /^backup-auto-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.enc$/;
+
+/** Magic header for V2 password-encrypted backup files (8 bytes). */
+export const BACKUP_V2_MAGIC_HEADER = Buffer.from('MAQBKPV2', 'utf8');
+
+/** Minimum character length for user-provided backup password. */
+export const BACKUP_PASSWORD_MIN_LENGTH = 8;
+
+/** Salt length in bytes for PBKDF2 key derivation. */
+export const BACKUP_PBKDF2_SALT_LENGTH = 16;
+
+/** Iteration count for PBKDF2 key derivation. */
+export const BACKUP_PBKDF2_ITERATIONS = 100_000;
+
+/** Key length in bytes for AES-256 derived key. */
+export const BACKUP_PBKDF2_KEY_LENGTH = 32;
+
+/** Hash algorithm for PBKDF2 key derivation. */
+export const BACKUP_PBKDF2_DIGEST = 'sha256';
+
+/** Default automated backup schedule enabled status. */
+export const BACKUP_DEFAULT_SCHEDULE_ENABLED = true;
+
+/** Default automated backup schedule interval. */
+export const BACKUP_DEFAULT_SCHEDULE_INTERVAL = 'daily';
+
+/** Default automated backup schedule time of day (24h). */
+export const BACKUP_DEFAULT_SCHEDULE_TIME = '02:00';
+
+

@@ -1,8 +1,20 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpStatus,
+  Injectable,
+  Optional,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request, Response } from 'express';
 import { Repository } from 'typeorm';
 
+import {
+  MAINTENANCE_ROLE_SWITCH_BLOCKED_ERROR,
+  MAINTENANCE_ROLE_SWITCH_BLOCKED_MESSAGE,
+} from '../../constants/maintenance-constants';
+import { SUPER_ROLE_NAME } from '../../constants/role-name-constants';
 import {
   LEGACY_MAQ_ACTIVE_ROLE_COOKIE_NAME,
   LEGACY_MAQ_AUTH_COOKIE_NAME,
@@ -12,9 +24,11 @@ import {
 import { SAML_PENDING_ORG_COOKIE_NAME, SAML_SESSION_COOKIE_NAME } from '../../constants/saml-constants';
 import { buildSamlSessionCookieOptions, buildClearSamlCookieOptions, resolvePendingOrgCookieSameSite } from '../saml/saml-cookie-options.util';
 import { UserEntity } from '../../database/entities/user.entity';
+import { MaintenanceModeService } from '../../maintenance/maintenance-mode-service';
 import { UserRolesService } from '../../user-roles/user-roles-service';
 import { SessionService } from '../session/session.service';
 import { SessionIssuanceService, CreateSessionOptions } from '../session/session-issuance.service';
+import { LoginContextService, LoginMembership } from './login-context.service';
 
 export type LoginMeResponse = {
   authenticated: boolean;
@@ -24,10 +38,16 @@ export type LoginMeResponse = {
     givenName?: string;
     surname?: string;
     displayName?: string;
-    /** Active role: the selected role if valid, otherwise the highest-privilege role. */
+    /** Active role for this session. Omitted until the user confirms a choice. */
     role?: string;
     /** All roles the user holds (highest to lowest privilege). */
     availableRoles?: string[];
+    /** Organization bound to this session. */
+    organizationId?: number | null;
+    /** True when the user must confirm an organization and role before continuing. */
+    selectionRequired?: boolean;
+    /** Active organizations and the roles held in each. */
+    memberships?: LoginMembership[];
   };
 };
 
@@ -51,8 +71,11 @@ export class LoginApiService {
     private readonly sessionService: SessionService,
     private readonly sessionIssuanceService: SessionIssuanceService,
     private readonly userRolesService: UserRolesService,
+    private readonly loginContextService: LoginContextService,
     @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>) {}
+    private readonly userRepository: Repository<UserEntity>,
+    @Optional()
+    private readonly maintenanceModeService?: MaintenanceModeService) {}
 
   /**
    * Creates a new session for the user and sets the HttpOnly cookie.
@@ -72,6 +95,11 @@ export class LoginApiService {
       samlSessionIndex: options.samlSessionIndex ?? null,
     };
     const plaintext = await this.sessionIssuanceService.mintSession(sessionOptions);
+    await this.loginContextService.applyOnLogin(
+      plaintext,
+      options.userId,
+      options.organizationId ?? null,
+    );
     const rawRemember = req.cookies?.['maq_remember_me'];
     const isRememberMe = options.rememberMe ?? (rawRemember === '1' || rawRemember === 'true');
     const maxAgeMs = isRememberMe ? SESSION_ABSOLUTE_MAX_DEFAULT_SECONDS * 1000 : undefined;
@@ -90,6 +118,7 @@ export class LoginApiService {
     res.clearCookie(LEGACY_MAQ_ACTIVE_ROLE_COOKIE_NAME, sessionClearOptions);
     res.clearCookie(SAML_SESSION_COOKIE_NAME, sessionClearOptions);
     res.clearCookie(SAML_PENDING_ORG_COOKIE_NAME, pendingOrgClearOptions);
+    res.clearCookie('maq_remember_me', sessionClearOptions);
     return { success: true };
   }
 
@@ -117,7 +146,23 @@ export class LoginApiService {
       return { authenticated: false };
     }
     const availableRoles = await this.userRolesService.listRolesForUser(subject.userId);
-    const activeRole = this.resolveActiveRole(subject.activeRole, availableRoles, overrideRole);
+    const described = await this.loginContextService.describe(
+      subject.userId,
+      subject.organizationId,
+      subject.activeRole,
+    );
+    const organizationRoles = described.memberships.find(
+      (membership) => membership.organizationId === subject.organizationId,
+    )?.roles ?? [];
+    const sessionRole = subject.activeRole !== null && organizationRoles.includes(subject.activeRole)
+      ? subject.activeRole
+      : null;
+    let activeRole = sessionRole;
+    if (overrideRole !== undefined && organizationRoles.includes(overrideRole)) {
+      activeRole = overrideRole;
+    } else if (activeRole === null && !described.selectionRequired) {
+      activeRole = availableRoles[0] ?? null;
+    }
     const displayName =
       user.nickname.trim().length > 0
         ? user.nickname.trim()
@@ -132,13 +177,45 @@ export class LoginApiService {
         displayName,
         role: activeRole ?? undefined,
         availableRoles,
+        organizationId: subject.organizationId,
+        selectionRequired: described.selectionRequired,
+        memberships: described.memberships,
       },
     };
   }
 
   /**
-   * Selects the active role for the current user; the role must be one they hold.
-   * Persists the choice in the session row (not a cookie).
+   * Confirms the organization and role for this session and remembers them for the next login.
+   */
+  async selectLoginContext(
+    req: Request,
+    organizationId: number,
+    role: string,
+  ): Promise<LoginMeResponse> {
+    const subject = await this.sessionService.resolveSubjectFromRequest(req, undefined);
+    if (!subject) {
+      throw new UnauthorizedException('Not authenticated');
+    }
+    const token = this.sessionService.extractSessionToken(req);
+    const normalizedRole = role.trim();
+    await this.assertRoleChangeAllowedDuringMaintenance(
+      subject.userId,
+      subject.activeRole,
+      normalizedRole,
+    );
+    await this.loginContextService.select(
+      token,
+      subject.userId,
+      organizationId,
+      normalizedRole,
+    );
+    this.sessionService.forgetRequestSubject(req);
+    return this.resolveAuthenticatedUser(req, normalizedRole);
+  }
+
+  /**
+   * Selects the active role inside the session organization.
+   * A role held only in another organization is rejected.
    */
   async setActiveRole(
     req: Request,
@@ -148,28 +225,55 @@ export class LoginApiService {
       throw new UnauthorizedException('Not authenticated');
     }
     const normalizedRole = requestedRole.trim();
-    const availableRoles = await this.userRolesService.listRolesForUser(subject.userId);
-    if (!availableRoles.includes(normalizedRole)) {
-      throw new BadRequestException(`Role "${normalizedRole}" is not assigned to this user`);
+    const memberships = await this.loginContextService.listMemberships(subject.userId);
+    const membership = memberships.find(
+      (item) => item.organizationId === subject.organizationId,
+    );
+    if (!membership || !membership.roles.includes(normalizedRole)) {
+      throw new BadRequestException(
+        `Role "${normalizedRole}" is not assigned in this organization`,
+      );
     }
+    await this.assertRoleChangeAllowedDuringMaintenance(
+      subject.userId,
+      subject.activeRole,
+      normalizedRole,
+    );
     const token = this.sessionService.extractSessionToken(req);
     await this.sessionIssuanceService.setActiveRole(token, normalizedRole);
+    this.sessionService.forgetRequestSubject(req);
     return this.resolveAuthenticatedUser(req, normalizedRole);
   }
 
-  /**
-   * Active role priority: override > session row > first available (highest privilege).
-   */
-  private resolveActiveRole(
-    sessionRole: string | null,
-    availableRoles: string[],
-    overrideRole?: string): string | null {
-    if (overrideRole !== undefined && availableRoles.includes(overrideRole)) {
-      return overrideRole;
+  private async assertRoleChangeAllowedDuringMaintenance(
+    userId: number,
+    currentActiveRole: string | null,
+    requestedRole: string,
+  ): Promise<void> {
+    if (!this.maintenanceModeService) {
+      return;
     }
-    if (sessionRole !== null && availableRoles.includes(sessionRole)) {
-      return sessionRole;
+    const isMaintenance = await this.maintenanceModeService.isMaintenanceActive();
+    if (!isMaintenance) {
+      return;
     }
-    return availableRoles[0] ?? null;
+    if (currentActiveRole !== null) {
+      if (requestedRole !== currentActiveRole) {
+        this.throwMaintenanceRoleSwitchBlocked();
+      }
+      return;
+    }
+    const holdsSuperRole = await this.userRolesService.userHasRole(userId, SUPER_ROLE_NAME);
+    if (holdsSuperRole && requestedRole !== SUPER_ROLE_NAME) {
+      this.throwMaintenanceRoleSwitchBlocked();
+    }
+  }
+
+  private throwMaintenanceRoleSwitchBlocked(): never {
+    throw new ConflictException({
+      statusCode: HttpStatus.CONFLICT,
+      error: MAINTENANCE_ROLE_SWITCH_BLOCKED_ERROR,
+      message: MAINTENANCE_ROLE_SWITCH_BLOCKED_MESSAGE,
+    });
   }
 }
