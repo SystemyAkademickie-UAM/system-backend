@@ -103,6 +103,7 @@ export class SamlConfigService {
       disableRequestedAuthnContext: true,
       acceptedClockSkewMs: 5000,
       validateInResponseTo: ValidateInResponseTo.never,
+      forceAuthn: true,
       logoutUrl: orgConfig.logoutUrl,
       logoutCallbackUrl: this.getSloCallbackUrl(),
     };
