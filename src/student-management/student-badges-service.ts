@@ -1,10 +1,10 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, Optional, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { DataSource, Repository } from 'typeorm';
 
-import { SessionService } from '../auth/session/session.service';
-import { LECTURER_ROLE_NAME, STUDENT_ROLE_NAME } from '../constants/role-name-constants';
+import { SessionService, type SessionSubject } from '../auth/session/session.service';
+import { STUDENT_ROLE_NAME } from '../constants/role-name-constants';
 import { BadgeEntity } from '../database/entities/badge.entity';
 import { EarnedBadgeEntity } from '../database/entities/earned-badge.entity';
 import { EnrollmentEntity } from '../database/entities/enrollment.entity';
@@ -12,21 +12,36 @@ import { RankEntity } from '../database/entities/rank.entity';
 import { RanksService } from '../gamification/ranks-service';
 import { ORGANIZATION_LOG_KIND_BADGE_REVOKED } from '../constants/organization-log-constants';
 import { OrganizationLogService } from '../organization-log/organization-log.service';
+import type { BacklogPayload } from '../backlog/backlog-payload';
 import { BacklogService } from '../backlog/backlog-service';
 import { GroupAuthorizationService } from '../groups/group-authorization.service';
 import { UserRolesService } from '../user-roles/user-roles-service';
 import { applyBadgeGrantDelta, applyBadgeRevokeDelta } from './student-stats-reward.helper';
+import { toVisibleBadge } from '../gamification/to-visible-badge';
 
-/** Badge item returned to the frontend with an `isEarned` flag. */
+/**
+ * Badge item returned to the frontend with an `isEarned` flag.
+ * For an unrevealed secret badge (`isSecret && !isRevealed`) the detail fields are `null`
+ * while `rarity` stays visible so the client can show the badge colour.
+ */
 export interface StudentBadgeItem {
   id: number;
-  name: string;
+  name: string | null;
   icon: string | null;
+  rarity: string;
   educationalDescription: string | null;
   storyDescription: string | null;
   rewardAmount: number | null;
+  isSecret: boolean;
+  isRevealed: boolean;
   isEarned: boolean;
 }
+
+/** Who reads the badge list: the group owner or an enrolled student (with their enrollment). */
+type StudentBadgesViewer = {
+  isOwner: boolean;
+  viewerEnrollmentId: number | null;
+};
 
 /**
  * Part 2 – Badge listing & toggle for a specific student in a group.
@@ -50,23 +65,29 @@ export class StudentBadgesService {
     private readonly groupAuthorizationService: GroupAuthorizationService,
     @Optional() private readonly organizationLogService?: OrganizationLogService) {}
 
-  /** GET /groups/:groupId/students/:accountId/badges */
+  /**
+   * GET /groups/:groupId/students/:accountId/badges
+   *
+   * Secret badges are revealed to the group owner and to a viewer who earned them;
+   * other viewers only learn that the badge exists (and whether the target student earned it).
+   */
   async getStudentBadges(req: Request, groupId: number, accountId: number): Promise<{ badges: StudentBadgeItem[] }> {
-    await this.assertCanReadStudentBadges(req, groupId);
+    const viewer = await this.resolveStudentBadgesViewer(req, groupId);
     const enrollment = await this.findEnrollmentOrFail(groupId, accountId);
-    const badges = await this.badgeRepository.find({ where: { groupId } });
-    const earnedBadges = await this.earnedBadgeRepository.find({
-      where: { enrollmentId: enrollment.id },
+    const badges = await this.badgeRepository.find({
+      where: viewer.isOwner ? { groupId } : { groupId, isPublished: true },
+      order: { id: 'ASC' },
     });
-    const earnedBadgeIds = new Set(earnedBadges.map((eb) => eb.badgeId));
-    const result: StudentBadgeItem[] = badges.map((badge) => ({
-      id: badge.id,
-      name: badge.name,
-      icon: badge.icon,
-      educationalDescription: badge.educationalDescription,
-      storyDescription: badge.storyDescription,
-      rewardAmount: badge.rewardAmount,
+    const earnedBadgeIds = await this.findEarnedBadgeIds(enrollment.id);
+    const viewerEarnedBadgeIds = await this.findViewerEarnedBadgeIds({
+      viewer,
+      targetEnrollmentId: enrollment.id,
+      targetEarnedBadgeIds: earnedBadgeIds,
+    });
+    const result: StudentBadgeItem[] = badges.map((badge) => this.toStudentBadgeItem({
+      badge,
       isEarned: earnedBadgeIds.has(badge.id),
+      canSeeSecret: viewer.isOwner || viewerEarnedBadgeIds.has(badge.id),
     }));
     return { badges: result };
   }
@@ -121,12 +142,12 @@ export class StudentBadgesService {
           enrollment.id,
           groupId,
           rewardAmount);
-        await this.backlogService.logEvent(groupId, accountId, 'BADGE_EARNED', {
-          message: `Otrzymano odznakę: ${badge.name}.`,
-          badgeId: badge.id,
-          badgeName: badge.name,
-          rewardAmount,
-        }, queryRunner.manager);
+        await this.backlogService.logEvent(
+          groupId,
+          accountId,
+          'BADGE_EARNED',
+          this.buildBadgeEarnedPayload(badge, rewardAmount),
+          queryRunner.manager);
         if (
           rankChange.previousRankId !== rankChange.newRankId
           && rankChange.newRankId != null
@@ -153,6 +174,24 @@ export class StudentBadgesService {
     }
   }
 
+  private buildBadgeEarnedPayload(badge: BadgeEntity, rewardAmount: number): BacklogPayload {
+    if (badge.isSecret) {
+      return {
+        message: `Otrzymano sekretną odznakę: ${badge.name}.`,
+        badgeId: badge.id,
+        badgeName: badge.name,
+        rewardAmount,
+        isSecret: true,
+      };
+    }
+    return {
+      message: `Otrzymano odznakę: ${badge.name}.`,
+      badgeId: badge.id,
+      badgeName: badge.name,
+      rewardAmount,
+    };
+  }
+
   private async findEnrollmentOrFail(groupId: number, accountId: number): Promise<EnrollmentEntity> {
     const enrollment = await this.enrollmentRepository.findOne({
       where: { groupId, studentAccountId: accountId },
@@ -164,38 +203,79 @@ export class StudentBadgesService {
     return enrollment;
   }
 
-  private async assertCanReadStudentBadges(req: Request, groupId: number): Promise<void> {
+  private async findEarnedBadgeIds(enrollmentId: number): Promise<ReadonlySet<number>> {
+    const earnedRows = await this.earnedBadgeRepository.find({ where: { enrollmentId } });
+    return new Set(earnedRows.map((row) => row.badgeId).filter((badgeId): badgeId is number => badgeId !== null));
+  }
+
+  /** Earned badge ids of the viewer; reuses the target set when a student views their own list. */
+  private async findViewerEarnedBadgeIds(input: {
+    viewer: StudentBadgesViewer;
+    targetEnrollmentId: number;
+    targetEarnedBadgeIds: ReadonlySet<number>;
+  }): Promise<ReadonlySet<number>> {
+    const { viewer, targetEnrollmentId, targetEarnedBadgeIds } = input;
+    if (viewer.viewerEnrollmentId === null) {
+      return new Set<number>();
+    }
+    if (viewer.viewerEnrollmentId === targetEnrollmentId) {
+      return targetEarnedBadgeIds;
+    }
+    return this.findEarnedBadgeIds(viewer.viewerEnrollmentId);
+  }
+
+  private toStudentBadgeItem(input: {
+    badge: BadgeEntity;
+    isEarned: boolean;
+    canSeeSecret: boolean;
+  }): StudentBadgeItem {
+    const visible = toVisibleBadge({ badge: input.badge, canSeeSecret: input.canSeeSecret });
+    return {
+      id: visible.id,
+      name: visible.name,
+      icon: visible.icon,
+      rarity: visible.rarity,
+      educationalDescription: visible.educationalDescription,
+      storyDescription: visible.storyDescription,
+      rewardAmount: visible.rewardAmount,
+      isSecret: visible.isSecret,
+      isRevealed: visible.isRevealed,
+      isEarned: input.isEarned,
+    };
+  }
+
+  /**
+   * Allows the group owner or a student enrolled in the group; returns the viewer context.
+   */
+  private async resolveStudentBadgesViewer(req: Request, groupId: number): Promise<StudentBadgesViewer> {
     const subject = await this.sessionService.resolveSubjectFromRequest(req);
     if (!subject) {
-      throw new ForbiddenException('Not authorized');
+      throw new UnauthorizedException('Not authorized');
     }
     const isOwner = await this.groupAuthorizationService.isLecturerOwner(
       subject.userId,
       groupId,
-      subject.organizationId
-    );
+      subject.organizationId);
     if (isOwner) {
-      return;
+      return { isOwner: true, viewerEnrollmentId: null };
     }
-
-    const studentAccountId =
-      subject.organizationId != null
-        ? await this.userRolesService.findAccountIdForRoleInOrganization(
-            subject.userId,
-            subject.organizationId,
-            STUDENT_ROLE_NAME
-          )
-        : await this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
-
+    const studentAccountId = await this.findStudentAccountId(subject);
     if (studentAccountId !== null) {
-      const isEnrolled = await this.enrollmentRepository.exist({
-        where: { groupId, studentAccountId },
-      });
-      if (isEnrolled) {
-        return;
+      const viewerEnrollment = await this.enrollmentRepository.findOne({ where: { groupId, studentAccountId } });
+      if (viewerEnrollment) {
+        return { isOwner: false, viewerEnrollmentId: viewerEnrollment.id };
       }
     }
-
     throw new ForbiddenException('Not authorized to access badges in this group');
+  }
+
+  private findStudentAccountId(subject: SessionSubject): Promise<number | null> {
+    if (subject.organizationId != null) {
+      return this.userRolesService.findAccountIdForRoleInOrganization(
+        subject.userId,
+        subject.organizationId,
+        STUDENT_ROLE_NAME);
+    }
+    return this.userRolesService.findAccountIdForRole(subject.userId, STUDENT_ROLE_NAME);
   }
 }

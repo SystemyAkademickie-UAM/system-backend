@@ -1,4 +1,4 @@
-import { IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
 import { SHOP_PROMOTION_PERCENT_MAX } from '../../constants/shop-promotion-constants';
 import { BadgeRarity, PromotionType } from '../../database/entities/badge.entity';
 
@@ -36,6 +36,16 @@ export class CreateBadgeDto {
   @IsOptional()
   @IsEnum(BadgeRarity)
   rarity?: BadgeRarity;
+
+  /** Secret badge: details hidden from students until earned (default `false`). */
+  @IsOptional()
+  @IsBoolean()
+  isSecret?: boolean;
+
+  /** Visibility toggle. When `true`, `publishedAt` is auto-set and students are notified (default `false`). */
+  @IsOptional()
+  @IsBoolean()
+  isPublished?: boolean;
 
   @IsOptional()
   @IsIn([PromotionType.PERCENT, PromotionType.FIXED])

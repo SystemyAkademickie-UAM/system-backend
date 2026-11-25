@@ -16,6 +16,8 @@ export type StudentProfileBadgeItem = {
   storyDescription: string | null;
   educationalDescription: string | null;
   rewardAmount: number | null;
+  /** Secret badge flag (details are always shown here: the list contains earned badges only). */
+  isSecret: boolean;
 };
 
 export type StudentProfileActivityItem = {
@@ -83,6 +85,7 @@ type EarnedBadgeRow = {
   storyDescription: string | null;
   educationalDescription: string | null;
   rewardAmount: number | null;
+  isSecret: boolean | null;
 };
 
 type CompletedActivityRow = {
@@ -219,7 +222,8 @@ export class StudentProfileService {
          b.rarity                     AS "rarity",
          b.story_description          AS "storyDescription",
          b.educational_description    AS "educationalDescription",
-         b.reward_amount              AS "rewardAmount"
+         b.reward_amount              AS "rewardAmount",
+         b.is_secret                  AS "isSecret"
        FROM gamification.earned_badges eb
        JOIN gamification.badges b ON b.id = eb.badge_id
        WHERE eb.enrollment_id = $1
@@ -234,6 +238,7 @@ export class StudentProfileService {
       storyDescription: badge.storyDescription,
       educationalDescription: badge.educationalDescription,
       rewardAmount: badge.rewardAmount,
+      isSecret: badge.isSecret === true,
     }));
 
     const completedActivityRows = await this.dataSource.query<CompletedActivityRow[]>(

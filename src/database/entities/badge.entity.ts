@@ -44,6 +44,13 @@ export class BadgeEntity {
   @Column({ name: 'published_at', type: 'timestamp', nullable: true })
   publishedAt: Date | null;
 
+  /**
+   * Secret badge: students see that it exists, but its details stay hidden
+   * until they earn it (lecturers always see full details).
+   */
+  @Column({ name: 'is_secret', type: 'boolean', default: false })
+  isSecret: boolean;
+
   @Column({ name: 'global_discount_type', type: 'varchar', length: 20, nullable: true })
   globalDiscountType: string | null;
 

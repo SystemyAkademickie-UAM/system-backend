@@ -78,6 +78,7 @@ export class GroupTemplatesImportService {
           rarity: oldBadge.rarity,
           globalDiscountType: badgeDiscount.globalDiscountType,
           globalDiscountValue: badgeDiscount.globalDiscountValue,
+          isSecret: oldBadge.isSecret ?? false,
         });
         const savedBadge = await manager.save(BadgeEntity, badgeEntity);
         badgeIdMap.set(oldBadge.id, savedBadge.id);

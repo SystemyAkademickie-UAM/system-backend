@@ -871,6 +871,7 @@ Retrieves student statistics (lives, currency, icons) scoped to a specific group
 | `currencyIcon` | string | Group's currency icon (`education.groups`). |
 | `livesIcon` | string | Group's life icon (`education.groups`). |
 | `shopOpen` | boolean | Indicates whether the group's shop is currently open. |
+| `earnedBadges` | array | Earned badges for the profile; each item includes `id`, `name`, `icon`, `rarity`, `storyDescription`, `educationalDescription`, `rewardAmount`, and `isSecret` (boolean; details are shown because the student earned them). |
 
 **Example**
 
@@ -890,6 +891,18 @@ Cookie: maq_auth=<token>
   "currencyIcon": "coin",
   "livesIcon": "heart",
   "shopOpen": true,
+  "earnedBadges": [
+    {
+      "id": 2,
+      "name": "Ukryty mistrz",
+      "icon": "🦉",
+      "rarity": "epic",
+      "storyDescription": "Tajemnica odkryta.",
+      "educationalDescription": "Za wykonanie zadania bonusowego.",
+      "rewardAmount": 50,
+      "isSecret": true
+    }
+  ],
   "completedActivities": [
     {
       "id": 10,
@@ -953,11 +966,11 @@ Each item has the following fields:
 | `LIVES_CHANGED` | Student | `message`, `delta`, `lives` |
 | `CURRENCY_ADDED` | Lecturer | `message`, `amount` |
 | `RANK_UP` | Student | `message`, `rankId`, `rankName` |
-| `BADGE_EARNED` | Student | `message`, `badgeId`, `badgeName` |
+| `BADGE_EARNED` | Student | `message`, `badgeId`, `badgeName`, `rewardAmount`, optional `isSecret` (`true` for secret badges) |
 | `ACTIVITY_COMPLETED` | Student | `message`, `activityId`, `activityName`, `currency` |
 | `STUDENT_JOINED` | Lecturer | `message` |
 | `STAGE_ADDED` | Student | `message`, `stageName` |
-| `BADGE_ADDED` | Student | `message`, `badgeId`, `badgeName` |
+| `BADGE_ADDED` | Student | `message`, `badgeId`, `badgeName` (omitted when `isSecret: true`, which sets `isSecret: true` instead) |
 | `RANK_ADDED` | Student | `message`, `rankId`, `rankName` |
 | `LIVES_SYSTEM_CHANGED` | Student | `message` |
 | `SHOP_STATUS_CHANGED` | Student | `message` |
@@ -1222,9 +1235,10 @@ Creates a badge definition in `gamification.badges` for a course group.
 | `rewardAmount` | integer (optional) | ≥ 0 | Reward points (default `0`). |
 | `globalDiscountType` | string (optional) | `percent` \| `fixed` | Default shop discount type for this badge. |
 | `globalDiscountValue` | integer (optional) | ≥ 0; ≤ 100 when type is `percent` | Default shop discount amount. |
-| `isPublished` | boolean (optional) | — | Visibility toggle. When false, students cannot see it. Auto-sets `publishedAt` on true. (default `false`). |
+| `isSecret` | boolean (optional) | — | Secret badge flag (default `false`). Students see that the badge exists and its `rarity` (colour), while `name`, `icon`, `educationalDescription`, `storyDescription`, `rewardAmount`, `globalDiscountType`, and `globalDiscountValue` stay `null` (`isRevealed: false`) until they earn it. Student `BADGE_ADDED` notifications omit `badgeName` when `true`. |
+| `isPublished` | boolean (optional) | — | Visibility toggle (default `false`). When `false`, students cannot see the badge and no `BADGE_ADDED` notification is sent until published. Setting `true` auto-sets `publishedAt` and notifies enrolled students. |
 
-**Response:** `201 Created` — persisted badge entity (camelCase fields, including `isPublished` and `publishedAt`).
+**Response:** `201 Created` — persisted badge entity (camelCase fields, including `isPublished`, `publishedAt`, and `isSecret`).
 
 **Errors:** `403 Forbidden` when token is missing/invalid or caller is not a lecturer; `404 Not Found` when the group does not exist.
 
@@ -1241,17 +1255,37 @@ Cookie: maq_auth=…
   "icon": "🏅",
   "educationalDescription": "Przyznawana za ukończenie pierwszego etapu kursu.",
   "storyDescription": "Bohater stawia pierwsze kroki w Akademii Magii...",
-  "rewardAmount": 50
+  "rewardAmount": 50,
+  "isSecret": false,
+  "isPublished": true
 }
 ```
+
+**Endpoint:** `GET /api/groups/:groupId/badges`
+
+Lists badges for a course group (includes `isSecret` and `isRevealed` on every item).
+- **Group owner / admin / superadmin:** sees all badges (published and unpublished) with full details and `isRevealed: true`.
+- **Enrolled students:** see published badges only (`isPublished: true`). For a secret badge (`isSecret: true`) that the caller has **not** earned in this group, `isRevealed` is `false`, `rarity` stays visible (to indicate the badge colour/quality), and `name`, `icon`, `educationalDescription`, `storyDescription`, `rewardAmount`, `globalDiscountType`, and `globalDiscountValue` are returned as `null`. Once the caller earns the badge, `isRevealed` becomes `true` and full details are returned.
+- **Errors:** `401 Unauthorized` when session is missing/invalid; `403 Forbidden` when caller is neither group owner nor enrolled in the group; `404 Not Found` when the group does not exist.
+
+**Endpoint:** `PATCH /api/groups/:groupId/badges/:badgeId`
+
+Updates a badge definition (`name`, `icon`, `educationalDescription`, `storyDescription`, `rewardAmount`, `rarity`, `isPublished`, `isSecret`, `globalDiscountType`, `globalDiscountValue`). Lecturer/owner only. Transitioning `isPublished` from `false` to `true` auto-sets `publishedAt` and emits `BADGE_ADDED` to enrolled students (omitting `badgeName` when `isSecret: true`).
 
 **Endpoint:** `DELETE /api/groups/:groupId/badges/:badgeId`
 
 Removes the badge, revokes it from all students (currency only — `totalEarned` unchanged), and returns `{ "deleted": true, "revokedFromStudents": N }`.
 
+**Endpoint:** `GET /api/groups/:groupId/students/:accountId/badges`
+
+Returns `{ "badges": [...] }` ordered by `id ASC`. Each item contains `id`, `name`, `icon`, `rarity`, `educationalDescription`, `storyDescription`, `rewardAmount`, `isSecret`, `isRevealed`, and `isEarned`.
+- **Group owner / admin / superadmin:** sees all badges (published and unpublished) with full details (`isRevealed: true`).
+- **Enrolled students:** see published badges only (`isPublished: true`). Secret badge masking is evaluated against the **viewer**: details are returned only if **the viewer** earned that badge (when inspecting a teammate who earned a secret badge the viewer lacks, `isEarned` is `true`, `isSecret` is `true`, `isRevealed` is `false`, `rarity` stays visible, and `name`, `icon`, `educationalDescription`, `storyDescription`, `rewardAmount` are `null`).
+- **Errors:** `401 Unauthorized` when session is missing/invalid; `403 Forbidden` when caller is neither group owner nor enrolled in the group; `404 Not Found` when the target student is not enrolled.
+
 **Endpoint:** `POST /api/groups/:groupId/students/:accountId/badges/:badgeId/toggle`
 
-Grant: `currency` and `totalEarned` increase by `rewardAmount`. Revoke: `currency` decreases (min 0); **`totalEarned` unchanged**. Response: `{ "isEarned": boolean }`.
+Grant: `currency` and `totalEarned` increase by `rewardAmount`, and a `BADGE_EARNED` notification is logged for that student (revealing the badge name and setting `isSecret: true` for secret badges). Revoke: `currency` decreases (min 0); **`totalEarned` unchanged**. Response: `{ "isEarned": boolean }`.
 
 ---
 

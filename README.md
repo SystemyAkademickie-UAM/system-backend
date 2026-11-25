@@ -59,6 +59,9 @@ The SPA is a **separate** Git repository (**system-frontend**). Clone it alongsi
 - `PATCH /api/groups/:groupId/activities/:activityId/completions` — lecturer: bulk set activity completions (transactional currency adjust)
 - `GET /api/groups/:groupId/students/:accountId/progress` — lecturer: progress tree with `isCompleted` flags
 - `POST /api/groups/:groupId/students/:accountId/activities/:activityId/toggle` — lecturer: toggle single activity completion
+- `GET /api/groups/:groupId/badges` — list group badges (`isSecret`, `isRevealed`; unearned secret badge details are masked to `null` for non-owners while keeping `rarity` visible)
+- `POST /api/groups/:groupId/badges` / `PATCH /api/groups/:groupId/badges/:badgeId` — lecturer: create/update badge definition (supports `isSecret` secret-badge flag)
+- `GET /api/groups/:groupId/students/:accountId/badges` — list group badges with `isEarned`, `isSecret`, `isRevealed` (secret badges masked per viewer)
 - `POST /api/groups/:groupId/students/:accountId/badges/:badgeId/toggle` — lecturer: grant/revoke badge (revoke does not reduce `totalEarned`)
 - `DELETE /api/groups/:groupId/badges/:badgeId` — lecturer: delete badge + revoke from students (`revokedFromStudents`)
 - `GET /api/groups/:groupId/item-categories` — list shop item categories for a group
