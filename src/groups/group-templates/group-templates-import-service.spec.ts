@@ -198,4 +198,25 @@ describe('GroupTemplatesImportService', () => {
     expect(rankSaveCall[1].globalDiscountType).toBe('percent');
     expect(rankSaveCall[1].globalDiscountValue).toBe(12);
   });
+
+  it('should preserve badge isSecret flag and default missing values to false on import', async () => {
+    mockManager.findOne.mockResolvedValue({
+      id: 1,
+      isPublic: true,
+      creatorAccountId: 1,
+      data: {
+        group: { name: 'Base', subjectName: 'Subj' },
+        badges: [
+          { id: 100, name: 'Regular Legacy Badge' },
+          { id: 101, name: 'Secret Badge', isSecret: true },
+        ],
+      },
+    });
+    await service.createGroupFromTemplate(1, 1, 'My Group');
+    const badgeSaveCalls = (mockManager.save.mock.calls as Array<[Function, Record<string, unknown>]>).filter(
+      (call) => call[0].name === 'BadgeEntity');
+    expect(badgeSaveCalls).toHaveLength(2);
+    expect(badgeSaveCalls[0][1]).toMatchObject({ name: 'Regular Legacy Badge', isSecret: false });
+    expect(badgeSaveCalls[1][1]).toMatchObject({ name: 'Secret Badge', isSecret: true });
+  });
 });

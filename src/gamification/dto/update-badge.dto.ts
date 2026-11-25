@@ -42,6 +42,11 @@ export class UpdateBadgeDto {
   @IsBoolean()
   isPublished?: boolean;
 
+  /** Secret badge: details hidden from students until earned. */
+  @IsOptional()
+  @IsBoolean()
+  isSecret?: boolean;
+
   @IsOptional()
   @IsIn([PromotionType.PERCENT, PromotionType.FIXED])
   globalDiscountType?: string;

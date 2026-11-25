@@ -44,6 +44,8 @@ export interface GroupTemplateBadge {
   rarity: string;
   globalDiscountType: string | null;
   globalDiscountValue: number | null;
+  /** Secret badge flag; optional because templates saved before migration 038 lack it. */
+  isSecret?: boolean;
 }
 
 export interface GroupTemplateRank {
