@@ -30,7 +30,16 @@ export interface BacklogItemResponse {
   value: string | null;
   accountId: number;
   isRead: boolean;
+  studentNickname?: string | null;
+  studentName?: string | null;
+  studentSurname?: string | null;
 }
+
+type StudentBacklogIdentity = {
+  studentNickname?: string;
+  studentName?: string;
+  studentSurname?: string;
+};
 
 export type { BacklogEventType };
 
@@ -78,41 +87,12 @@ export class BacklogService {
     value: BacklogPayload | string | null = null,
     manager?: EntityManager,
   ): Promise<BacklogEntity> {
-    let studentNickname: string | undefined;
-
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      if (typeof value.studentNickname === 'string' && value.studentNickname.trim().length > 0) {
-        studentNickname = value.studentNickname.trim();
-      } else if (typeof value.nickname === 'string' && value.nickname.trim().length > 0) {
-        studentNickname = value.nickname.trim();
-      }
-    }
-
-    if (!studentNickname) {
-      try {
-        const accountRepo = manager ? manager.getRepository(AccountEntity) : this.accountRepository;
-        const userRepo = manager ? manager.getRepository(UserEntity) : this.userRepository;
-        const account = await accountRepo.findOne({ where: { id: accountId }, select: ['userId'] });
-        if (account?.userId != null) {
-          const user = await userRepo.findOne({ where: { id: account.userId }, select: ['nickname'] });
-          if (user?.nickname) {
-            studentNickname = user.nickname;
-          }
-        }
-      } catch (err) {
-        // ignore
-      }
-    }
-
-    let payloadToLog = value;
-    if (studentNickname) {
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        payloadToLog = { ...value, studentNickname };
-      } else if (value === null || value === undefined) {
-        payloadToLog = { studentNickname };
-      }
-    }
-
+    const payloadObject = this.readPlainPayloadObject(value);
+    const existingIdentity = payloadObject ? this.extractStudentIdentity(payloadObject) : {};
+    const identity = typeof value === 'string'
+      ? existingIdentity
+      : await this.completeStudentIdentity(accountId, existingIdentity, manager);
+    const payloadToLog = this.mergeIdentityIntoPayload(value, identity);
     const repo = manager ? manager.getRepository(BacklogEntity) : this.backlogRepository;
     const entry = repo.create({
       groupId: internalGroupId,
@@ -198,8 +178,8 @@ export class BacklogService {
     if ('error' in access) {
       return access;
     }
-
-    return this.fetchGroupEntries(access.internalGroupId, take, skip, LECTURER_ACTIVITY_TYPES);
+    const items = await this.fetchGroupEntries(access.internalGroupId, take, skip, LECTURER_ACTIVITY_TYPES);
+    return this.enrichLecturerBacklogItems(items);
   }
 
   async getUnreadCount(
@@ -489,6 +469,186 @@ export class BacklogService {
     }
 
     return { error: 'Forbidden: Role not authorized' };
+  }
+
+  private readPlainPayloadObject(value: unknown): BacklogPayload | null {
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      return value as BacklogPayload;
+    }
+    return null;
+  }
+
+  private readNonEmptyString(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private extractStudentIdentity(payload: BacklogPayload): StudentBacklogIdentity {
+    const studentNickname = this.readNonEmptyString(payload.studentNickname) ?? this.readNonEmptyString(payload.nickname);
+    const studentName = this.readNonEmptyString(payload.studentName) ?? this.readNonEmptyString(payload.firstName);
+    const studentSurname = this.readNonEmptyString(payload.studentSurname) ?? this.readNonEmptyString(payload.lastName);
+    return {
+      ...(studentNickname ? { studentNickname } : {}),
+      ...(studentName ? { studentName } : {}),
+      ...(studentSurname ? { studentSurname } : {}),
+    };
+  }
+
+  private async completeStudentIdentity(
+    accountId: number,
+    existing: StudentBacklogIdentity,
+    manager?: EntityManager,
+  ): Promise<StudentBacklogIdentity> {
+    if (existing.studentNickname && existing.studentName && existing.studentSurname) {
+      return existing;
+    }
+    try {
+      const accountRepo = manager ? manager.getRepository(AccountEntity) : this.accountRepository;
+      const userRepo = manager ? manager.getRepository(UserEntity) : this.userRepository;
+      const account = await accountRepo.findOne({ where: { id: accountId }, select: ['userId'] });
+      if (account?.userId == null) {
+        return existing;
+      }
+      const user = await userRepo.findOne({ where: { id: account.userId }, select: ['nickname', 'name', 'surname'] });
+      if (!user) {
+        return existing;
+      }
+      return this.mergeStudentIdentities(existing, this.mapUserToIdentity(user));
+    } catch {
+      return existing;
+    }
+  }
+
+  private mapUserToIdentity(user: Pick<UserEntity, 'nickname' | 'name' | 'surname'>): StudentBacklogIdentity {
+    const studentNickname = this.readNonEmptyString(user.nickname);
+    const studentName = this.readNonEmptyString(user.name);
+    const studentSurname = this.readNonEmptyString(user.surname);
+    return {
+      ...(studentNickname ? { studentNickname } : {}),
+      ...(studentName ? { studentName } : {}),
+      ...(studentSurname ? { studentSurname } : {}),
+    };
+  }
+
+  private mergeStudentIdentities(
+    primary: StudentBacklogIdentity,
+    fallback: StudentBacklogIdentity,
+  ): StudentBacklogIdentity {
+    const studentNickname = primary.studentNickname ?? fallback.studentNickname;
+    const studentName = primary.studentName ?? fallback.studentName;
+    const studentSurname = primary.studentSurname ?? fallback.studentSurname;
+    return {
+      ...(studentNickname ? { studentNickname } : {}),
+      ...(studentName ? { studentName } : {}),
+      ...(studentSurname ? { studentSurname } : {}),
+    };
+  }
+
+  private mergeIdentityIntoPayload(
+    value: BacklogPayload | string | null | undefined,
+    identity: StudentBacklogIdentity,
+  ): BacklogPayload | string | null {
+    if (!identity.studentNickname && !identity.studentName && !identity.studentSurname) {
+      return value ?? null;
+    }
+    const payloadObject = this.readPlainPayloadObject(value);
+    if (payloadObject) {
+      return { ...payloadObject, ...identity };
+    }
+    if (value === null || value === undefined) {
+      return { ...identity };
+    }
+    return value;
+  }
+
+  private parseJsonObjectValue(value: string | null): BacklogPayload | null {
+    if (!value || !value.trim().startsWith('{')) {
+      return null;
+    }
+    try {
+      return this.readPlainPayloadObject(JSON.parse(value) as unknown);
+    } catch {
+      return null;
+    }
+  }
+
+  private resolveTargetAccountId(item: BacklogItemResponse, parsedPayload: BacklogPayload | null): number | null {
+    if (item.accountId > 0) {
+      return item.accountId;
+    }
+    const candidate = parsedPayload?.studentAccountId ?? parsedPayload?.accountId;
+    return typeof candidate === 'number' && Number.isInteger(candidate) && candidate > 0 ? candidate : null;
+  }
+
+  private async loadStudentIdentitiesByAccountId(
+    accountIds: number[],
+  ): Promise<ReadonlyMap<number, StudentBacklogIdentity>> {
+    if (accountIds.length === 0) {
+      return new Map<number, StudentBacklogIdentity>();
+    }
+    const accounts = await this.accountRepository.find({ where: { id: In(accountIds) }, select: ['id', 'userId'] });
+    const userIds = Array.from(new Set(accounts.map((account) => account.userId).filter((id): id is number => id != null)));
+    if (userIds.length === 0) {
+      return new Map<number, StudentBacklogIdentity>();
+    }
+    const users = await this.userRepository.find({
+      where: { id: In(userIds) },
+      select: ['id', 'nickname', 'name', 'surname'],
+    });
+    const userIdentityById = new Map(users.map((user) => [user.id, this.mapUserToIdentity(user)]));
+    const identityByAccountId = new Map<number, StudentBacklogIdentity>();
+    for (const account of accounts) {
+      const identity = account.userId != null ? userIdentityById.get(account.userId) : undefined;
+      if (identity) {
+        identityByAccountId.set(account.id, identity);
+      }
+    }
+    return identityByAccountId;
+  }
+
+  private enrichLecturerBacklogItem(
+    item: BacklogItemResponse,
+    parsedPayload: BacklogPayload | null,
+    identityByAccountId: ReadonlyMap<number, StudentBacklogIdentity>,
+  ): BacklogItemResponse {
+    const payloadIdentity = parsedPayload ? this.extractStudentIdentity(parsedPayload) : {};
+    const targetAccountId = this.resolveTargetAccountId(item, parsedPayload);
+    const dbIdentity = targetAccountId !== null ? (identityByAccountId.get(targetAccountId) ?? {}) : {};
+    const merged = this.mergeStudentIdentities(dbIdentity, payloadIdentity);
+    if (!merged.studentNickname && !merged.studentName && !merged.studentSurname) {
+      return item;
+    }
+    const enrichedValue = parsedPayload ? serializeBacklogPayload({ ...parsedPayload, ...merged }) : item.value;
+    return {
+      ...item,
+      value: enrichedValue,
+      ...(merged.studentNickname ? { studentNickname: merged.studentNickname } : {}),
+      ...(merged.studentName ? { studentName: merged.studentName } : {}),
+      ...(merged.studentSurname ? { studentSurname: merged.studentSurname } : {}),
+    };
+  }
+
+  /**
+   * Batch-enriches lecturer backlog items with student nickname, first name, and surname
+   * so both new and historical notifications include legal name alongside nickname.
+   */
+  private async enrichLecturerBacklogItems(items: BacklogItemResponse[]): Promise<BacklogItemResponse[]> {
+    if (items.length === 0) {
+      return items;
+    }
+    const parsedByIndex = items.map((item) => this.parseJsonObjectValue(item.value));
+    const targetAccountIds = Array.from(
+      new Set(
+        items
+          .map((item, index) => this.resolveTargetAccountId(item, parsedByIndex[index]))
+          .filter((id): id is number => id !== null),
+      ),
+    );
+    const identityByAccountId = await this.loadStudentIdentitiesByAccountId(targetAccountIds);
+    return items.map((item, index) => this.enrichLecturerBacklogItem(item, parsedByIndex[index], identityByAccountId));
   }
 
   private buildListFilter(
