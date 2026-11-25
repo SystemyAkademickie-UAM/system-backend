@@ -897,15 +897,15 @@ Each item has the following fields:
 
 | `type` | Visible to | Payload fields |
 | ------ | ---------- | -------------- |
-| `SHOP_PURCHASE` | Lecturer | `message`, `itemId`, `itemName`, `price`, `isExtraLife`, `storyDescription`, `educationalDescription` |
-| `ITEM_USED` | Lecturer | `message`, `itemId`, `itemName`, `basePrice`, `price`, `storyDescription`, `educationalDescription` |
+| `SHOP_PURCHASE` | Lecturer | `message`, `itemId`, `itemName`, `price`, `isExtraLife`, `storyDescription`, `educationalDescription`, `studentNickname`, `studentName`, `studentSurname` |
+| `ITEM_USED` | Lecturer | `message`, `itemId`, `itemName`, `basePrice`, `price`, `storyDescription`, `educationalDescription`, `studentNickname`, `studentName`, `studentSurname` |
 | `SHOP_ITEM_ADDED` | Student | `message`, `itemId`, `itemName`, `basePrice`, `price`, `storyDescription`, `educationalDescription` |
-| `LIVES_CHANGED` | Student | `message`, `delta`, `lives` |
-| `CURRENCY_ADDED` | Lecturer | `message`, `amount` |
-| `RANK_UP` | Student | `message`, `rankId`, `rankName` |
-| `BADGE_EARNED` | Student | `message`, `badgeId`, `badgeName` |
-| `ACTIVITY_COMPLETED` | Student | `message`, `activityId`, `activityName`, `currency` |
-| `STUDENT_JOINED` | Lecturer | `message` |
+| `LIVES_CHANGED` | Student | `message`, `delta`, `lives`, `studentNickname`, `studentName`, `studentSurname` |
+| `CURRENCY_ADDED` | Student | `message`, `amount`, `studentNickname`, `studentName`, `studentSurname` |
+| `RANK_UP` | Student | `message`, `rankId`, `rankName`, `studentNickname`, `studentName`, `studentSurname` |
+| `BADGE_EARNED` | Student | `message`, `badgeId`, `badgeName`, `studentNickname`, `studentName`, `studentSurname` |
+| `ACTIVITY_COMPLETED` | Student | `message`, `activityId`, `activityName`, `currency`, `studentNickname`, `studentName`, `studentSurname` |
+| `STUDENT_JOINED` | Lecturer | `message`, `studentNickname`, `studentName`, `studentSurname` |
 | `STAGE_ADDED` | Student | `message`, `stageName` |
 | `BADGE_ADDED` | Student | `message`, `badgeId`, `badgeName` |
 | `RANK_ADDED` | Student | `message`, `rankId`, `rankName` |
@@ -925,8 +925,12 @@ Each item has the following fields:
     "id": 12,
     "type": "SHOP_PURCHASE",
     "date": "2026-06-08T10:00:00.000Z",
-    "value": "{\"message\":\"Kupiono przedmiot ze sklepu: Mikstura zdrowia za kwotę 50.\",\"itemId\":7,\"itemName\":\"Mikstura zdrowia\",\"price\":50,\"isExtraLife\":false,\"storyDescription\":\"Magiczny eliksir przywracający siły.\",\"educationalDescription\":\"Nagradza aktywnego uczestnika.\"}",
-    "accountId": 42
+    "value": "{\"message\":\"Kupiono przedmiot ze sklepu: Mikstura zdrowia za kwotę 50.\",\"itemId\":7,\"itemName\":\"Mikstura zdrowia\",\"price\":50,\"isExtraLife\":false,\"storyDescription\":\"Magiczny eliksir przywracający siły.\",\"educationalDescription\":\"Nagradza aktywnego uczestnika.\",\"studentNickname\":\"Ania\",\"studentName\":\"Anna\",\"studentSurname\":\"Nowak\"}",
+    "accountId": 42,
+    "isRead": false,
+    "studentNickname": "Ania",
+    "studentName": "Anna",
+    "studentSurname": "Nowak"
   }
 ]
 ```
@@ -950,7 +954,7 @@ Requires `SUPER` role or ownership of the group (`teacherAccountId`).
 | ------ | ----------- |
 | `X-Browser-ID` | Browser binding ID for the strong session. |
 
-**Response:** `200 OK` with JSON array of backlog items (same structure as student backlog above).
+**Response:** `200 OK` with JSON array of backlog items (same structure as student backlog above, enriched for lecturers/admins with optional `studentNickname`, `studentName`, and `studentSurname` both as top-level fields and merged into JSON `value` payloads for both new and historical entries).
 
 ---
 

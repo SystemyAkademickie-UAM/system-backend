@@ -41,9 +41,11 @@ describe('BacklogService', () => {
     };
     accountRepository = {
       findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
     userRepository = {
       findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
     sessionService = {
       resolveSubjectFromRequest: jest.fn(),
@@ -181,14 +183,20 @@ describe('BacklogService', () => {
       expect(backlogRepository.save).not.toHaveBeenCalled();
     });
 
-    it('should skip account and user queries when studentNickname is already present in payload', async () => {
+    it('should skip account and user queries when full student identity is already present in payload', async () => {
       // Arrange
-      const mockEntry = { groupId: 5, accountId: 10, type: 'BADGE_EARNED', value: JSON.stringify({ studentNickname: 'Kasia' }) };
+      const payload = {
+        badgeId: 1,
+        studentNickname: 'Kasia',
+        studentName: 'Katarzyna',
+        studentSurname: 'Kowalska',
+      };
+      const mockEntry = { groupId: 5, accountId: 10, type: 'BADGE_EARNED', value: JSON.stringify(payload) };
       backlogRepository.create.mockReturnValue(mockEntry);
       backlogRepository.save.mockResolvedValue(mockEntry);
 
       // Act
-      await service.logEvent(5, 10, 'BADGE_EARNED', { badgeId: 1, studentNickname: 'Kasia' });
+      await service.logEvent(5, 10, 'BADGE_EARNED', payload);
 
       // Assert
       expect(accountRepository.findOne).not.toHaveBeenCalled();
@@ -201,12 +209,18 @@ describe('BacklogService', () => {
           value: expect.stringContaining('"studentNickname":"Kasia"'),
         }),
       );
+      const createdPayload = JSON.parse(backlogRepository.create.mock.calls[0][0].value);
+      expect(createdPayload).toMatchObject({
+        studentNickname: 'Kasia',
+        studentName: 'Katarzyna',
+        studentSurname: 'Kowalska',
+      });
     });
 
-    it('should query account and user when studentNickname is not present in payload', async () => {
+    it('should query account and user when studentNickname, studentName, or studentSurname is missing in payload', async () => {
       // Arrange
       accountRepository.findOne.mockResolvedValue({ userId: 42 });
-      userRepository.findOne.mockResolvedValue({ nickname: 'Adam' });
+      userRepository.findOne.mockResolvedValue({ nickname: 'Adam', name: 'Adam', surname: 'Nowak' });
       const mockEntry = { groupId: 5, accountId: 10, type: 'BADGE_EARNED', value: null };
       backlogRepository.create.mockReturnValue(mockEntry);
       backlogRepository.save.mockResolvedValue(mockEntry);
@@ -216,12 +230,102 @@ describe('BacklogService', () => {
 
       // Assert
       expect(accountRepository.findOne).toHaveBeenCalledWith({ where: { id: 10 }, select: ['userId'] });
-      expect(userRepository.findOne).toHaveBeenCalledWith({ where: { id: 42 }, select: ['nickname'] });
-      expect(backlogRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          value: expect.stringContaining('"studentNickname":"Adam"'),
+      expect(userRepository.findOne).toHaveBeenCalledWith({ where: { id: 42 }, select: ['nickname', 'name', 'surname'] });
+      const createdPayload = JSON.parse(backlogRepository.create.mock.calls[0][0].value);
+      expect(createdPayload).toMatchObject({
+        badgeId: 1,
+        studentNickname: 'Adam',
+        studentName: 'Adam',
+        studentSurname: 'Nowak',
+      });
+    });
+
+    it('should preserve existing payload studentNickname while completing missing studentName and studentSurname', async () => {
+      // Arrange
+      accountRepository.findOne.mockResolvedValue({ userId: 42 });
+      userRepository.findOne.mockResolvedValue({ nickname: 'StaryNick', name: 'Anna', surname: 'Zielińska' });
+      backlogRepository.create.mockImplementation((entry: any) => entry);
+      backlogRepository.save.mockImplementation(async (entry: any) => entry);
+
+      // Act
+      await service.logEvent(5, 10, 'SHOP_PURCHASE', { itemName: 'Mikstura', studentNickname: 'Ania' });
+
+      // Assert
+      const createdPayload = JSON.parse(backlogRepository.create.mock.calls[0][0].value);
+      expect(createdPayload).toEqual({
+        itemName: 'Mikstura',
+        studentNickname: 'Ania',
+        studentName: 'Anna',
+        studentSurname: 'Zielińska',
+      });
+    });
+
+    it('should look up student identity via provided EntityManager when logging an object payload', async () => {
+      // Arrange
+      const managerBacklogRepo = {
+        create: jest.fn((entry: any) => entry),
+        save: jest.fn(async (entry: any) => entry),
+      };
+      const managerAccountRepo = {
+        findOne: jest.fn().mockResolvedValue({ userId: 77 }),
+      };
+      const managerUserRepo = {
+        findOne: jest.fn().mockResolvedValue({ nickname: 'Tomek', name: 'Tomasz', surname: 'Lis' }),
+      };
+      const mockManager = {
+        getRepository: jest.fn((entity) => {
+          if (entity === BacklogEntity) return managerBacklogRepo;
+          if (entity === AccountEntity) return managerAccountRepo;
+          if (entity === UserEntity) return managerUserRepo;
+          return null;
         }),
-      );
+      } as unknown as import('typeorm').EntityManager;
+
+      // Act
+      await service.logEvent(5, 15, 'SHOP_PURCHASE', { itemName: 'Zbroja' }, mockManager);
+
+      // Assert
+      expect(managerAccountRepo.findOne).toHaveBeenCalledWith({ where: { id: 15 }, select: ['userId'] });
+      expect(managerUserRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 77 },
+        select: ['nickname', 'name', 'surname'],
+      });
+      const savedPayload = JSON.parse(managerBacklogRepo.create.mock.calls[0][0].value);
+      expect(savedPayload).toEqual({
+        itemName: 'Zbroja',
+        studentNickname: 'Tomek',
+        studentName: 'Tomasz',
+        studentSurname: 'Lis',
+      });
+    });
+
+    it('should populate identity when value is null and fail safely when account lookup rejects', async () => {
+      // Arrange
+      accountRepository.findOne.mockResolvedValueOnce({ userId: 50 });
+      userRepository.findOne.mockResolvedValueOnce({ nickname: 'Ola', name: 'Aleksandra', surname: 'Maj' });
+      backlogRepository.create.mockImplementation((entry: any) => entry);
+      backlogRepository.save.mockImplementation(async (entry: any) => entry);
+
+      // Act
+      await service.logEvent(5, 20, 'STUDENT_JOINED', null);
+
+      // Assert
+      expect(JSON.parse(backlogRepository.create.mock.calls[0][0].value)).toEqual({
+        studentNickname: 'Ola',
+        studentName: 'Aleksandra',
+        studentSurname: 'Maj',
+      });
+
+      // Arrange DB error fallback
+      accountRepository.findOne.mockRejectedValueOnce(new Error('DB temporarily unavailable'));
+
+      // Act
+      await service.logEvent(5, 21, 'SHOP_PURCHASE', { itemName: 'Mikstura' });
+
+      // Assert
+      expect(JSON.parse(backlogRepository.create.mock.calls[1][0].value)).toEqual({
+        itemName: 'Mikstura',
+      });
     });
   });
 
@@ -421,6 +525,8 @@ describe('BacklogService', () => {
         take: 50,
         skip: 0,
       });
+      expect(accountRepository.find).not.toHaveBeenCalled();
+      expect(userRepository.find).not.toHaveBeenCalled();
       expect(result).toEqual([
         { id: 1, type: 'STAGE_ADDED', date: mockDate.toISOString(), value: '{"message":"Nowy etap"}', accountId: studentAccountId, isRead: false },
       ]);
@@ -494,6 +600,150 @@ describe('BacklogService', () => {
       });
       expect(result).toEqual([
         { id: 1, type: 'SHOP_PURCHASE', date: mockDate.toISOString(), value: 'item_1', accountId: 10, isRead: false },
+      ]);
+    });
+
+    it('should batch-enrich historical and new entries with student nickname, name, and surname', async () => {
+      // Arrange
+      const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 5;
+      const mockDate = new Date();
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('lecturer');
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.exist.mockResolvedValue(true);
+
+      backlogRepository.find.mockResolvedValue([
+        {
+          id: 1,
+          groupId: 5,
+          accountId: 101,
+          type: 'SHOP_PURCHASE',
+          date: mockDate,
+          value: JSON.stringify({ itemName: 'Mikstura', studentNickname: 'OldNick' }),
+          isRead: false,
+        },
+        {
+          id: 2,
+          groupId: 5,
+          accountId: 0,
+          type: 'STUDENT_JOINED',
+          date: mockDate,
+          value: JSON.stringify({ message: 'Uczeń dołączył do grupy.', studentAccountId: 102 }),
+          isRead: false,
+        },
+        {
+          id: 3,
+          groupId: 5,
+          accountId: 999,
+          type: 'ITEM_USED',
+          date: mockDate,
+          value: JSON.stringify({ itemName: 'Zwój', studentNickname: 'Usunięty' }),
+          isRead: true,
+        },
+      ]);
+      accountRepository.find.mockResolvedValue([
+        { id: 101, userId: 201 },
+        { id: 102, userId: 202 },
+      ]);
+      userRepository.find.mockResolvedValue([
+        { id: 201, nickname: 'Marek', name: 'Marek', surname: 'Nowak' },
+        { id: 202, nickname: 'Ania', name: 'Anna', surname: 'Kowalska' },
+      ]);
+
+      // Act
+      const result = await service.getGroupBacklog({} as Request, publicGroupId, 50, 0);
+
+      // Assert — exactly one batch lookup per table
+      expect(accountRepository.find).toHaveBeenCalledWith({ where: { id: In([101, 102, 999]) }, select: ['id', 'userId'] });
+      expect(userRepository.find).toHaveBeenCalledWith({
+        where: { id: In([201, 202]) },
+        select: ['id', 'nickname', 'name', 'surname'],
+      });
+      expect(Array.isArray(result)).toBe(true);
+      if (Array.isArray(result)) {
+        expect(result[0]).toMatchObject({
+          id: 1,
+          studentNickname: 'Marek',
+          studentName: 'Marek',
+          studentSurname: 'Nowak',
+        });
+        expect(JSON.parse(result[0].value ?? '{}')).toMatchObject({
+          itemName: 'Mikstura',
+          studentNickname: 'Marek',
+          studentName: 'Marek',
+          studentSurname: 'Nowak',
+        });
+        expect(result[1]).toMatchObject({
+          id: 2,
+          studentNickname: 'Ania',
+          studentName: 'Anna',
+          studentSurname: 'Kowalska',
+        });
+        expect(result[2]).toMatchObject({
+          id: 3,
+          studentNickname: 'Usunięty',
+        });
+      }
+    });
+
+    it('should attach top-level identity to non-JSON or null entries and skip lookups when no accountId exists', async () => {
+      // Arrange
+      const publicGroupId = GROUP_RESPONSE_GROUP_ID_OFFSET + 5;
+      const mockDate = new Date();
+      sessionService.resolveSubjectFromRequest.mockResolvedValue({ userId: 1 });
+      userRolesService.resolvePrimaryRoleForUser.mockResolvedValue('lecturer');
+      userRolesService.findAccountIdForRole.mockResolvedValue(10);
+      groupRepository.exist.mockResolvedValue(true);
+
+      backlogRepository.find.mockResolvedValue([
+        { id: 1, groupId: 5, accountId: 101, type: 'ITEM_USED', date: mockDate, value: 'item_1', isRead: false },
+        { id: 2, groupId: 5, accountId: 101, type: 'STUDENT_JOINED', date: mockDate, value: null, isRead: false },
+      ]);
+      accountRepository.find.mockResolvedValue([{ id: 101, userId: 201 }]);
+      userRepository.find.mockResolvedValue([{ id: 201, nickname: 'Marek', name: 'Marek', surname: 'Nowak' }]);
+
+      // Act
+      const withIdentity = await service.getGroupBacklog({} as Request, publicGroupId, 50, 0);
+
+      // Assert
+      expect(withIdentity).toEqual([
+        {
+          id: 1,
+          type: 'ITEM_USED',
+          date: mockDate.toISOString(),
+          value: 'item_1',
+          accountId: 101,
+          isRead: false,
+          studentNickname: 'Marek',
+          studentName: 'Marek',
+          studentSurname: 'Nowak',
+        },
+        {
+          id: 2,
+          type: 'STUDENT_JOINED',
+          date: mockDate.toISOString(),
+          value: null,
+          accountId: 101,
+          isRead: false,
+          studentNickname: 'Marek',
+          studentName: 'Marek',
+          studentSurname: 'Nowak',
+        },
+      ]);
+
+      // Arrange zero accountId without studentAccountId
+      accountRepository.find.mockClear();
+      backlogRepository.find.mockResolvedValue([
+        { id: 3, groupId: 5, accountId: 0, type: 'SHOP_PURCHASE', date: mockDate, value: '{}', isRead: false },
+      ]);
+
+      // Act
+      const withoutAccountId = await service.getGroupBacklog({} as Request, publicGroupId, 50, 0);
+
+      // Assert
+      expect(accountRepository.find).not.toHaveBeenCalled();
+      expect(withoutAccountId).toEqual([
+        { id: 3, type: 'SHOP_PURCHASE', date: mockDate.toISOString(), value: '{}', accountId: 0, isRead: false },
       ]);
     });
   });
